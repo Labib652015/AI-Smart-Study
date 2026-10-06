@@ -4,6 +4,7 @@ import os
 import fitz  # PyMuPDF
 import google.generativeai as genai
 from datetime import datetime
+import re
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(
@@ -48,16 +49,246 @@ PREDEFINED_SYLLABUS = {
     6: {
         "বাংলা ১ম": [
             "১. গদ্য - সততার পুরস্কার", "২. গদ্য - মিনু", "৩. গদ্য - নীল নদ আর পিরামিডের দেশ", 
-            "৪. গদ্য - তোলপাড়", "৫. গদ্য - অমর একুশে", "৬. গদ্য - পিছু ডাক", 
-            "৭. গদ্য - কতকাল ধরে", "৮. গদ্য - মাদার তেরেসা", "৯. গদ্য - লিখন", 
-            "১০. পদ্য - জন্মভূমি", "১১. পদ্য - তিঁতিঁড়", "১২. পদ্য - মানুষ জাতি", 
-            "১৩. পদ্য - ঝিঙে ফুল", "১৪. পদ্য - বাঁশী", "১৫. পদ্য - বাঁচতে দাও", 
-            "১৬. পদ্য - সুখ", "১৭. পদ্য - আমার বাড়ি", "১৮. পদ্য - ফাগুন মাস", 
-            "১৯. আনন্দপাঠ - রবিনসন ক্রুসো", "২০. আনন্দপাঠ - মার্চেন্ট অব ভেনিস", 
-            "২১. আনন্দপাঠ - রিপ ভ্যান উইঙ্কল", "২২. আনন্দপাঠ - দ্য জঙ্গল বুক", "২৩. আনন্দপাঠ - কালো হীরা"
-        ],
-        "বাংলা ২য়": ["১. ভাষা ও বাংলা ভাষা", "২. ধ্বনিতত্ত্ব", "৩. রূপতত্ত্ব"],
-        "English 1st": ["1. Going to a new school", "2. Congratulations!", "3. At a railway station"],
+            "৪. গদ্য - তোলপাড়", "৫. গদ্য - আকাশ", "৬. গদ্য - মাদার তেরেসা", 
+            "৭. গদ্য - আমাদের লোকশিল্প", "৮. গদ্য - কত কাল ধরে", "৯. গদ্য - কার্টুন, ব্যাঙ্গচিত্র ও পোস্টারের ভাষা", 
+            "১০. পদ্য - জন্মভূমি", "১১. পদ্য - সুখ", "১২. পদ্য - মানুষ জাতি", 
+            "১৩. পদ্য - ঝিঙে ফুল", "১৪. পদ্য - আসমানি", "১৫. পদ্য - চিঠি বিলি", 
+            "১৬. পদ্য - বাঁচতে দাও", "১৭. পদ্য - পাখির কাছে ফুলের কাছে", "১৮. পদ্য - ফাগুন মাস", 
+            "১৯. আনন্দপাঠ - সাত ভাই চম্পা", "২০. আনন্দপাঠ - আলাউদ্দিনের চেরাগ", 
+            "২১. আনন্দপাঠ - আষারের এক রাতে", "২২. আনন্দপাঠ - মামার বিয়ের বরযাত্রী", "২৩. আনন্দপাঠ - আদু ভাই"
+            "২৪. আনন্দপাঠ - অমল ও দইওয়ালা(নাটিকা)", "২৫. আনন্দপাঠ - হলুদ টিয়া সাদা টিয়া", "২৬. আনন্দপাঠ - একটি সুখী গাছের গল্প"
+            "২৭. আনন্দপাঠ - অতিথি", "২৮. আনন্দপাঠ - বিলাতের প্রকৃতি"
+               
+                ],
+        "বাংলা ২য়": [
+            "১.ব্যাকরণ- ভাষা ও বাংলা ভাষা", "২.ব্যাকরণ- ধ্বনিতত্ত্ব", "৩.ব্যাকরণ- রূপতত্ত্ব"
+            "৪.ব্যাকরণ- বাক্যতত্ত্ব", "৫.ব্যাকরণ- বাগর্থ", "৬.ব্যাকরণ- বানান"
+            "৭.ব্যাকরণ- বিরামচিহ্ন", "৮.ব্যাকরণ- অভিধান"
+            ],
+        "English 1st": [
+       
+    "1. Vocabulary - Going to a New School",
+    "2. Vocabulary - Congratulations! Well Done!",
+    "3. Vocabulary - At a Railway Station",
+    "4. Vocabulary - Where are You From?",
+    "5. Vocabulary - Thanks for Your Work",
+    "6. Vocabulary - It Smells Good!",
+    "7. Vocabulary - Holding Hands",
+    "8. Vocabulary - Grocery Shopping",
+    "9. Vocabulary - Health is Wealth",
+    "10. Vocabulary - Remedies: Modern and Traditional",
+    "11. Vocabulary - Are You Listening?-1",
+    "12. Vocabulary - An Unseen Beauty of Bangladesh",
+    "13. Vocabulary - Our Pride",
+    "14. Vocabulary - The Lion's Mane",
+    "15. Vocabulary - An Old People's Home",
+    "16. Vocabulary - Boats Sail on the Rivers",
+    "17. Vocabulary - Are You Listening?-2",
+    "18. Vocabulary - Make Your Snacks",
+    "19. Vocabulary - Stop, Look and Listen",
+    "20. Vocabulary - Hason Raja: The Mystic Bard of Bangladesh",
+    "21. Vocabulary - Wonders of the World-1",
+    "22. Vocabulary - Wonders of the World-2",
+    "23. Vocabulary - We Live in a Global Village",
+    "24. Vocabulary - Our Wage Earners",
+    "25. Vocabulary - The Concert for Bangladesh",
+    "26. Vocabulary - Buying Clothes",
+    "27. Vocabulary - Andre",
+    "28. Vocabulary - Are You Listening?-3",
+    "29. Vocabulary - Taking a Test",
+    "30. Vocabulary - What Should We do?",
+    "31. Vocabulary - Too Much or Too Little Water",
+    "32. Vocabulary - An Invitation for Robin",
+    "33. Vocabulary - The Garden",
+    "34. Seen(1) - Going to a New School",
+    "35. Seen(1) - Congratulations! Well Done!",
+    "36. Seen(1) - At a Railway Station",
+    "37. Seen(1) - Where are You From?",
+    "38. Seen(1) - Thanks for Your Work",
+    "39. Seen(1) - It Smells Good!",
+    "40. Seen(1) - Holding Hands",
+    "41. Seen(1) - Grocery Shopping",
+    "42. Seen(1) - Health is Wealth",
+    "43. Seen(1) - Remedies: Modern and Traditional",
+    "44. Seen(1) - Are You Listening?-1",
+    "45. Seen(1) - An Unseen Beauty of Bangladesh",
+    "46. Seen(1) - Our Pride",
+    "47. Seen(1) - The Lion's Mane",
+    "48. Seen(1) - An Old People's Home",
+    "49. Seen(1) - Boats Sail on the Rivers",
+    "50. Seen(1) - Are You Listening?-2",
+    "51. Seen(1) - Make Your Snacks",
+    "52. Seen(1) - Stop, Look and Listen",
+    "53. Seen(1) - Hason Raja: The Mystic Bard of Bangladesh",
+    "54. Seen(1) - Wonders of the World-1",
+    "55. Seen(1) - Wonders of the World-2",
+    "56. Seen(1) - We Live in a Global Village",
+    "57. Seen(1) - Our Wage Earners",
+    "58. Seen(1) - The Concert for Bangladesh",
+    "59. Seen(1) - Buying Clothes",
+    "60. Seen(1) - Andre",
+    "61. Seen(1) - Are You Listening?-3",
+    "62. Seen(1) - Taking a Test",
+    "63. Seen(1) - What Should We do?",
+    "64. Seen(1) - Too Much or Too Little Water",
+    "65. Seen(1) - An Invitation for Robin",
+    "66. Seen(1) - The Garden",
+    "67. Unseen-1",
+    "68. Unseen-2",
+    "69. Unseen-3",
+    "70. Unseen-4",
+    "71. Unseen-5",
+    "72. Unseen-6",
+    "73. Unseen-7",
+    "74. Unseen-8",
+    "75. Unseen-9",
+    "76. Unseen-10",
+    "77. Unseen-11",
+    "78. Unseen-12",
+    "79. Unseen-13",
+    "80. Unseen-14",
+    "81. Unseen-15",
+    "82. Unseen-16",
+    "83. Unseen-17",
+    "84. Unseen-18",
+    "85. Unseen-19",
+    "86. Unseen-20",
+    "87. Unseen-21",
+    "88. Unseen-22",
+    "89. Unseen-23",
+    "90. Unseen-24",
+    "91. Unseen-25",
+    "92. Unseen-26",
+    "93. Unseen-27",
+    "94. Unseen-28",
+    "95. Unseen-29",
+    "96. Unseen-30",
+    "97. Unseen-31",
+    "98. Unseen-32",
+    "99. Unseen-33",
+    "100. Unseen-34",
+    "101. Unseen-35",
+    "102. Unseen-36",
+    "103. Unseen-37",
+    "104. Unseen-38",
+    "105. Unseen-39",
+    "106. Unseen-40",
+    "107. Unseen-41",
+    "108. Unseen-42",
+    "109. Unseen-43",
+    "110. Unseen-44",
+    "111. Unseen-45",
+    "112. Unseen-46",
+    "113. Unseen-47",
+    "114. Unseen-48",
+    "115. Unseen-49",
+    "116. Unseen-50",
+    "117. Rearrangement-1",
+    "118. Rearrangement-2",
+    "119. Rearrangement-3",
+    "120. Rearrangement-4",
+    "121. Rearrangement-5",
+    "122. Rearrangement-6",
+    "123. Rearrangement-7",
+    "124. Rearrangement-8",
+    "125. Rearrangement-9",
+    "126. Rearrangement-10",
+    "127. Rearrangement-11",
+    "128. Rearrangement-12",
+    "129. Rearrangement-13",
+    "130. Rearrangement-14",
+    "131. Rearrangement-15",
+    "132. Rearrangement-16",
+    "133. Rearrangement-17",
+    "134. Rearrangement-18",
+    "135. Rearrangement-19",
+    "136. Rearrangement-20",
+    "137. Rearrangement-21",
+    "138. Rearrangement-22",
+    "139. Rearrangement-23",
+    "140. Rearrangement-24",
+    "141. Rearrangement-25",
+    "142. Matching-1",
+    "143. Matching-2",
+    "144. Matching-3",
+    "145. Matching-4",
+    "146. Matching-5",
+    "147. Matching-6",
+    "148. Matching-7",
+    "149. Matching-8",
+    "150. Matching-9",
+    "151. Matching-10",
+    "152. Matching-11",
+    "153. Matching-12",
+    "154. Matching-13",
+    "155. Matching-14",
+    "156. Matching-15",
+    "157. Matching-16",
+    "158. Matching-17",
+    "159. Matching-18",
+    "160. Matching-19",
+    "161. Matching-20",
+    "162. Matching-21",
+    "163. Matching-22",
+    "164. Matching-23",
+    "165. Matching-24",
+    "166. Matching-25",
+    "167. Little Things",
+    "168. Holding Hands",
+    "169. Boats Sail on the Rivers",
+    "170. Story - The Honest Woodcutter",
+    "171. Story - A Thirsty Crow",
+    "172. Story - The Boy Who Cried Wolf",
+    "173. Story - The Hare and the Tortoise",
+    "174. Story - A Fox and a Grapes",
+    "175. Story - The Lion and the Mouse",
+    "176. Story - A Clever Crow",
+    "177. Story - Slow and Steady Wins the Race",
+    "178. Story - Unity is Strength",
+    "179. Story - A Greedy Farmer and the Goose",
+    "180. Story - The Ant and the Dove",
+    "181. Story - Robert Bruce and the Spider",
+    "182. Story - Sheikh Saadi and his Simple Dress",
+    "183. Story - Bayazid Bostami's Devotion to Mother",
+    "184. Story - Kazi Nazrul Islam: The Rebel Poet",
+    "185. Story - Abraham Lincoln's Childhood",
+    "186. Story - The Story of King Solomon and the Queen of Sheba",
+    "187. Story - A Poor Shoemaker and the Elves",
+    "188. Story - The Pied Piper of Hamelin",
+    "189. Story - Sindbad the Sailor",
+    "190. Dialogue - Importance of reading newspapers",
+    "191. Dialogue - Tree plantation and its benefits",
+    "192. Dialogue - Physical exercise and health",
+    "193. Dialogue - Merits and demerits of mobile phone",
+    "194. Dialogue - Preparation for the annual examination",
+    "195. Dialogue - Early rising and its benefits",
+    "196. Dialogue - Importance of learning English",
+    "197. Dialogue - Hobbies and leisure time activities",
+    "198. Dialogue - Flood situation or natural disasters",
+    "199. Dialogue - Duties and responsibilities towards parents",
+    "200. Dialogue - A journey by train or bus",
+    "201. Paragraph - A School Library",
+    "202. Paragraph - A Railway Station",
+    "203. Paragraph - A Winter Morning",
+    "204. Paragraph - A Rainy Day",
+    "205. Paragraph - Traffic Rules",
+    "206. Paragraph - Our National Flag",
+    "207. Paragraph - A Village Fair",
+    "208. Paragraph - Early Rising",
+    "209. Paragraph - Tree Plantation",
+    "210. Paragraph - A School Magazine",
+    "211. Paragraph - Physical Exercise",
+    "212. Paragraph - The Life of a Farmer",
+    "213. Paragraph - A Book Fair",
+    "214. Paragraph - Environment Pollution",
+    "215. Paragraph - Food Adulteration",
+    "216. Paragraph - Digital Bangladesh",
+    "217. Paragraph - A Street Beggar",
+    "218. Paragraph - Independence Day",
+    "219. Paragraph - International Mother Language Day",
+    "220. Paragraph - My Hobby"
+
+            ],
         "English 2nd": ["1. Parts of Speech", "2. Tense", "3. Articles"],
         "গণিত": ["১. স্বাভাবিক সংখ্যা ও ভগ্নাংশ", "২. অনুপাত ও শতাংশ", "৩. বীজগণিতীয় রাশি"],
         "বিজ্ঞান": ["১. বৈজ্ঞানিক প্রক্রিয়া ও পরিমাপ", "২. জীবজগত", "৩. উদ্ভিদ ও প্রাণীর কোষীয় সংগঠন"],
@@ -131,7 +362,7 @@ def login_page():
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        with st.form("login_form"):
+        with st.form(key="unique_login_form_key"):
             school = st.text_input("স্কুলের নাম ও ঠিকানা")
             name = st.text_input("শিক্ষার্থীর নাম")
             student_class = st.selectbox("শ্রেণি নির্বাচন করুন", [6, 7, 8])
@@ -282,18 +513,20 @@ def home_page():
         st.write("আজ কোনো পড়াশোনার বিষয় রুটিনে যুক্ত করা নেই।")
 
 # --- HELPER FUNCTION FOR SIMULATED SYSTEM PDF DOWNLOAD ---
+# --- HELPER FUNCTION FOR SIMULATED SYSTEM PDF DOWNLOAD ---
 def get_system_file_bytes(sub, chap, file_type):
     folder = "study_materials/board_pdfs" if file_type == "board" else "study_materials/practice_pdfs"
-    safe_chap = chap.replace(" ", "_").replace(".", "")
+    safe_chap = re.sub(r'[\\/*?:"<>|]', "", chap).replace(" ", "_")
     file_path = os.path.join(folder, f"{sub}_{safe_chap}_{file_type}.pdf")
     
+    # যদি ফাইল না থাকে, তবে একটি মিনিমাল লিগ্যাল PDF বাইনারি স্ট্রাকচার তৈরি করা হবে
     if not os.path.exists(file_path):
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(f"--- AI SMART STUDY OFFICIAL MATERIAL ---\nSubject: {sub}\nChapter: {chap}\nType: {file_type.upper()}")
+        minimal_pdf_content = b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj 3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Resources<<>>/Contents 4 0 R>>endobj 4 0 R<</Length 20>>stream\nBT /F1 12 Tf 100 700 Td (AI Smart Study Material) Tj ET\nendstream\nendobj\nxref\n0 5\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000215 00000 n \ntrailer<</Size 5/Root 1 0 R>>\nstartbxref\n300\n%%EOF"
+        with open(file_path, "wb") as f:
+            f.write(minimal_pdf_content)
             
     with open(file_path, "rb") as f:
         return f.read(), os.path.basename(file_path)
-
 # --- 4. MY BOOKS & READING ---
 def my_books_page():
     st.markdown("## 📖 My Books & Reading")
@@ -475,13 +708,6 @@ elif not st.session_state.setup_complete:
     setup_wizard_page()
 else:
     st.sidebar.markdown("### 🤖 AI Smart Study")
-    
-    if st.session_state.profile_pic is not None:
-        st.sidebar.image(st.session_state.profile_pic, width=80)
-    
-    st.sidebar.markdown(f"স্বাগতম, **{st.session_state.user_info['name']}**")
-    st.sidebar.markdown(f"<small>স্কুল: {st.session_state.user_info['school']}</small>", unsafe_allow_html=True)
-    st.sidebar.markdown(f"<small>শ্রেণি: {st.session_state.user_info['class']} | রোল: {st.session_state.user_info['roll']}</small>", unsafe_allow_html=True)
     st.sidebar.markdown("---")
     
     menu = st.sidebar.radio(
@@ -517,5 +743,5 @@ else:
         routine_page()
     elif menu == "📝 Notes":
         notes_page()
-    elif menu == "⚙️️ Settings":
+    elif menu == "⚙️ Settings":
         settings_page()
