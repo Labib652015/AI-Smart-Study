@@ -1964,7 +1964,7 @@ def render_notes():
                 box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.15) !important;
             }
         </style>
-        <h2 style='color: #1E3A8A; font-weight: 700; margin-bottom: 5px;'> নিচে তোমার জন্য একটি নোট এডিটর দেওয়া হলো </h2>
+        <h2 style='color: #1E3A8A; font-weight: 700; margin-bottom: 5px;'> নিচে তোমার জন্য একটি ওয়ার্ড এডিটর দেওয়া হলো </h2>
         <p style='color: #475569; font-size: 15px;'>এখানে তুমি টেক্সট ফরম্যাটিং, টেবিল তৈরি, বিষয়ভিত্তিক নোট সংরক্ষণ, সার্চসহ তোমার নোটটি বিভিন্ন ফরম্যাটে ডাউনলোড করতে পারবে।</p>
     """, unsafe_allow_html=True)
 
@@ -2168,7 +2168,8 @@ def render_notes():
                 st.error("অনুগ্রহ করে নোটের শিরোনাম এবং নোটের বিষয়বস্তু উভয়ই প্রদান করো।")
 
         # ফাইল ডাউনলোড অপশন
-        st.markdown("### 📥 অথবা Save As")
+        st.markdown("###  অথবা ")
+        st.markdown("### 📥 Save As (ফানাইল নোট পিডিএফ/ওয়ার্ড ফাইল ইত্যাদি ডাউনলোড করতে চাইল...)")
         download_text_data = backup_body if backup_body else st.session_state["current_content"]
 
         if download_text_data:
@@ -2212,7 +2213,7 @@ def render_notes():
         # সংরক্ষিত নোট তালিকা ও সার্চ অপশন
         if db_notes:
             st.markdown("---")
-            st.markdown("### 📚 সেভ করা নোটসমূহ")
+            st.markdown("### 📚 তোমার সেভ করা নোটসমূহ")
 
             filter_subject = st.selectbox(
                 "বিষয় অনুযায়ী নোট ফিল্টার করো:",
@@ -2221,7 +2222,7 @@ def render_notes():
             )
 
             search_query = st.text_input(
-                "🔍 নোট খোঁজ (শিরোনাম বা শব্দ দিয়ে সার্চ করো):",
+                "🔍 নোট খোঁজ (শিরোনাম বা যেকোন শব্দ দিয়ে):",
                 placeholder="এখানে নোটের নাম লিখ...",
                 key="search_notes_input"
             )
@@ -2273,7 +2274,7 @@ def render_notes():
         st.markdown("### 📖 আমার পাঠাগার")
         st.info("তোমার পছন্দের বই পড়তে বাঁ পাশের মূল মেনু থেকে 'আমার পাঠাগার' অপশনে ক্লিক করো।")
         st.markdown("---")
-        st.markdown("### 🤖 কোনো প্রশ্ন থাকলে নিচে Gemini-কে জিজ্ঞেস করো")
+        st.markdown("### 🤖 কোনো প্রশ্ন থাকলে নিচে Gemini-কে জিজ্ঞেস করো এবং তোমার নোট খাতায় নোট করে রাখো।")
         st.markdown(
             '<a href="https://gemini.google.com" target="_blank"><button style="width: 100%; background-color: #1E3A8A; color: white; padding: 10px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; margin-bottom: 10px;"> Open Gemini Chatbot</button></a>',
             unsafe_allow_html=True
@@ -2302,356 +2303,1474 @@ def render_progress():
     st.progress(0.75, text="Mathematics - 75%")
     st.progress(0.70, text="Science - 70%")
 
-import streamlit as st
-import pandas as pd
 
+import sqlite3
 import streamlit as st
-import pandas as pd
+from datetime import datetime, date
+
+# --- ডেটাবেজ ইনিশিয়ালাইজেশন ---
+def init_school_syllabus_db():
+    conn = sqlite3.connect("smart_school_syllabus.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS school_syllabus (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_class TEXT,
+            subject_name TEXT,
+            category TEXT,
+            topic_name TEXT,
+            exam_term TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+import sqlite3
+import streamlit as st
+
+def init_school_syllabus_db():
+    conn = sqlite3.connect("smart_school_syllabus.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS school_syllabus (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_class TEXT,
+            subject_name TEXT,
+            category TEXT,
+            topic_name TEXT,
+            exam_term TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+init_school_syllabus_db()
+
+import sqlite3
+import json
+import streamlit as st
 
 def render_study_planner():
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #10B981 0%, #059669 100%); padding: 25px; border-radius: 12px; color: white; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-        <h2 style="margin: 0; color: white;">📚 AI Advanced Study Planner & Routine Hub</h2>
-        <p style="margin: 5px 0 0 0; font-size: 16px; opacity: 0.9;">আপনার সিলেবাস তৈরি করুন, রুটিন সাজান এবং নিজের পছন্দমতো বা এআই এর সাহায্যে স্টাডি প্ল্যান তৈরি করুন!</p>
+    <div style="background: linear-gradient(135deg, #1E3A8A 0%, #3882F6 100%); padding: 25px; border-radius: 12px; color: white; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <h2 style="margin: 0; color: white;">ক্লাস সেভেন স্মার্ট স্কুল সিলেবাস ও ডিজিটাল বই হাব</h2>
+        <p style="margin: 5px 0 0 0; font-size: 16px; opacity: 0.9;">একাধিক বিষয় ও অধ্যায় সিলেক্ট করে আপনার সুশৃঙ্খল ডিজিটাল সিলেবাস তৈরি করুন!</p>
     </div>
     """, unsafe_allow_html=True)
 
-    # সেশন স্টেট ইনিশিয়ালাইজ করা
-    if "saved_syllabi" not in st.session_state:
-        st.session_state["saved_syllabi"] = []
-    if "syllabus_saved" not in st.session_state:
-        st.session_state["syllabus_saved"] = False
-    if "syllabus_editing" not in st.session_state:
-        st.session_state["syllabus_editing"] = False
+    tab1, tab2, tab3 = st.tabs(["📚 সিলেবাস ক্রিয়েটর ও ডিজিটাল বুক", "⏰ স্মার্ট স্টাডি প্লান", "📝 মডেল টেস্ট প্রস্তুতি"])
 
-    if "weekly_routine_data" not in st.session_state:
-        st.session_state["weekly_routine_data"] = {}
-    if "routine_saved" not in st.session_state:
-        st.session_state["routine_saved"] = False
-    if "routine_editing" not in st.session_state:
-        st.session_state["routine_editing"] = False
-
-    if "saved_study_plans" not in st.session_state:
-        st.session_state["saved_study_plans"] = []
-    if "manual_plan_saved" not in st.session_state:
-        st.session_state["manual_plan_saved"] = False
-    if "manual_plan_editing" not in st.session_state:
-        st.session_state["manual_plan_editing"] = False
-    if "final_plan_saved_status" not in st.session_state:
-        st.session_state["final_plan_saved_status"] = False
-
-    # মাস্টার সিলেবাস ডাটাবেজ
-    master_syllabus_db = {
-        "Class 6": {
-            "বাংলা": ["অধ্যায় ১: মিনু", "অধ্যায় ২: সততার পুরষ্কার", "অধ্যায় ৩: জন্মভূমি", "অধ্যায় ৪: মাদার তেরেসা"],
-            "ইংরেজি": ["Unit 1: Attending a new school", "Unit 2: Congratulation well done", "Unit 3: Exploring useful things"],
-            "গণিত": ["অধ্যায় ১: স্বাভাবিক সংখ্যা ও ভগ্নাংশ", "অধ্যায় ২: অনুপাত ও শতকরা", "অধ্যায় ৩: বীজগণীয় রাশি"]
+    # --- ক্লাস সেভেনের সমন্বিত সিলেবাস ডিকশনারি (Original Structure) ---
+    unified_syllabus_dictionary = {
+        "বাংলা প্রথম পত্র": {
+            "গদ্যাংশ": [
+                "কাবুলিওয়ালা", "লখার একুশে", "মরু-ভাস্কর", "শব্দ থেকে কবিতা", 
+                "পাখি", "পিতৃ পুরুষের গল্প", "ছবির রং", "সেই ছেলেটি", "বহু জাতিসত্তার দেশ বাংলাদেশ"
+            ],
+            "কবিতাংশ": [
+                "নতুন দেশ", "কুলি-মজুর", "সাম্য", "মেলা", "এই অক্ষরে", "সিঁথি", "কোকিল", "কিং লিয়ার", "যুদ্ধক্ষেত্রে পিতাপুত্র", "নাটিকা: জাগো সুন্দর"
+            ],
+            "আনন্দপাঠ": [
+                "তোতা কাহিনী", "জিদ", "খুদে গোয়েন্দার অভিযান", "দীক্ষা", "পদ্য লেখার জোড়ে"
+            ]
         },
-        "Class 7": {
-            "বাংলা": ["অধ্যায় ১: বাঙালি সংস্কৃতি", "অধ্যায় ২: লখার একুশে", "অধ্যায় ৩: মিনু"],
-            "ইংরেজি": ["Unit 1: Voices of change", "Unit 2: Exploring ambitions", "Unit 3: Environment and us"],
-            "গণিত": ["অধ্যায় ১: মূলদ ও অমূলদ সংখ্যা", "অধ্যায় ২: অনুপাত ও সমানুপাত", "অধ্যায় ৩: পরিমাপ"]
+        "বাংলা দ্বিতীয় পত্র": {
+            "ব্যাকরণ ও নির্মিতি": [
+                "ভাষা, ব্যাকরণ, ধ্বনি ও বর্ণ, সন্ধি, শব্দ ও পদ, কারক ও বিভক্তি, সম্বন্ধ ও সম্বোধন পদ, শব্দরূপ, বিশেষণের 'তর' ও 'তম'",
+                "শব্দ গঠন (উপসর্গ ও প্রত্যয় যোগে), বাক্য, বিরামচিহ্ন, বানান",
+                "একই শব্দের বিভিন্ন অর্থে প্রয়োগ (অঙ্ক থেকে চোখ এবং 'ছাড়া' থেকে 'হাত')",
+                "বিপরীত শব্দ ('অগ্র' থেকে 'জোয়ার' এবং 'তিরস্কার' থেকে 'হলন্ত')",
+                "সমোচ্চারিত ভিন্নার্থক শব্দ ('অংশ' থেকে 'গাঁ' এবং 'জ্যেষ্ঠ' থেকে 'সাক্ষর')",
+                "এক কথায় প্রকাশ ('প্রত্যক্ষ' থেকে 'ভূতপূর্ব' এবং 'দেদীপ্যমান' থেকে 'জিঘাংসা')",
+                "বাগধারা ('অরণ্যে রোদন' থেকে 'টনক নড়া' এবং 'ঠোঁট কাটা' থেকে 'হাতের পাঁচ')"
+            ],
+            "নির্মিতি অংশ": [
+                "অনুবাদ (বাংলা ব্যাকরণ ও নির্মিতি বইয়ের ১১১ পৃষ্ঠা)",
+                "সারাংশ ও সারমর্ম অনুশীলন",
+                "ভাব-সম্প্রসারণ (পিতা মাতা গুরুজনে দেবতুল্য, নানান দেশের নানান ভাষা, পুষ্প আপনার জন্য ফোটে না, ইটের পর ইট মধ্যে মানুষ কীট ইত্যাদি)",
+                "পত্র / দরখাস্ত (ছাত্রাবাস জীবনের অভিজ্ঞতা জানিয়ে মাকে পত্র, জীবনের লক্ষ্য জানিয়ে বড় ভাইকে চিঠি, অনুপস্থিতি ছুটি ও জরিমানা মওকুফের আবেদন, পাঠাগার স্থাপনের জন্য আবেদন, লোকজ উৎসবের বর্ণনা দিয়ে প্রবাসী বন্ধুকে পত্র ইত্যাদি)",
+                "প্রবন্ধ রচনা (আমাদের জাতীয় পতাকা, দর্শনীয় স্থান, জাতীয় কবি কাজী নজরুল ইসলাম, আমার ভালো-লাগা বই, আমার চারপাশের প্রকৃতি, বাংলাদেশের নদনদী, একটি দিনের দিনলিপি, শহিদ মিনার, টেলিভিশন, শৃঙ্খলাবোধ, সুন্দরবন)"
+            ]
         },
-        "Class 8": {
-            "বাংলা": ["অধ্যায় ১: অতিথির স্মৃতি", "অধ্যায় ২: তৈলসর্বস্ব", "অধ্যায় ৩: পাছে লোকে কিছু বলে"],
-            "ইংরেজি": ["Unit 1: Tropic of happiness", "Unit 2: Past present future", "Unit 3: Glimpse of culture"],
-            "গণিত": ["অধ্যায় ১: প্যাটার্ন", "অধ্যায় ২: মুনাফা", "অধ্যায় ৩: পরিমাপ"]
+        "ইংরেজি প্রথম পত্র (English 1st Paper)": {
+            "Part A: Reading": [
+                "Unit: 1, 2, 3, 4, 5",
+                "Unit: 6, 7, 8, 9"
+            ],
+            "Completing Stories": [
+                "An Ant and a Dove", "The Clever Astrologer", "A Little Learning is a Dangerous Thing", 
+                "Money Cannot Bring Happiness", "None is Contented in the World", "Solomon's Wisdom", 
+                "Misers are Never Happy", "An Ant and a Grasshopper"
+            ],
+            "Paragraphs": [
+                "Your Daily Routine", "A School Library", "Early Rising", "A Tea Stall", 
+                "Patriotism", "Traffic Jam", "A Winter Morning", "Your Best Friend"
+            ],
+            "Dialogues": [
+                "Punctuality (teacher and student)", "Importance of learning English (two friends)", 
+                "Dream (student and TV reporter)", "First day at school (two friends)", 
+                "Prize-giving ceremony", "Merits and demerits of using Internet", 
+                "Likes and dislikes regarding sports", "Patient and doctor"
+            ]
+        },
+        "ইংরেজি দ্বিতীয় পত্র (English 2nd Paper)": {
+            "Grammar Part": [
+                "Gap filling (Person, Number, Sentence, Parts of Speech, Articles, Conjugation of Verbs, Tense)",
+                "Substitution Table",
+                "Changing Sentences (Assertive, Interrogative, Imperative, Optative, Exclamatory, Voice)",
+                "Right forms of verbs",
+                "Narration (Individual sentences, Imperative, Optative, Exclamatory)",
+                "Punctuation and Capitalization"
+            ],
+            "Writing Part (Letters & E-mails)": [
+                "Leave in advance", "Common room facilities", "School hostel seat", 
+                "Increase library facilities", "Open a bank account", "Destroy Aedes mosquitoes", 
+                "Native village letter", "Condoling on father's death", "Progress in studies letter", 
+                "Inviting friend to visit Bangladesh", "Consoling for failure in exam", "Describing book fair visit"
+            ],
+            "Short Composition": [
+                "Your Village or Town", "Tree Plantation", "A Village Doctor", 
+                "The Life of a Farmer", "Our National Flag", "My Hobby", "Deforestation", "A Street Hawker"
+            ]
+        },
+        "গণিত": {
+            "পাটিগণিত": [
+                "প্রথম অধ্যায়: মূলদ ও অমূলদ সংখ্যা (অনুশীলনী: ১.১, ১.২)",
+                "দ্বিতীয় অধ্যায়: সমানুপাত ও লাভ ক্ষতি (অনুশীলনী: ২.১, ২.২, ২.৩)",
+                "তৃতীয় অধ্যায়: পরিমাপ (অনুশীলনী ৩)"
+            ],
+            "বীজগণিত": [
+                "চতুর্থ অধ্যায়: বীজগণিতীয় রাশির গুণ ও ভাগ (অনুশীলনী ৪.১, ৪.২, ৪.৩)",
+                "পঞ্চম অধ্যায়: বীজগণিতীয় সূত্রাবলী ও প্রয়োগ (অনুশীলনী ৫.১, ৫.২, ৫.৩, ৫.৪)",
+                "ষষ্ঠ অধ্যায়: বীজগণিতীয় ভগ্নাংশ (অনুশীলনী ৬.১, ৬.২)",
+                "সপ্তম অধ্যায়: সরল সমীকরণ (অনুশীলনী ৭.১, ৭.২, ৭.৩)"
+            ],
+            "জ্যামিতি": [
+                "অষ্টম অধ্যায়: সমান্তরাল সরলরেখা",
+                "নবম অধ্যায়: ত্রিভুজ, উপপাদ্য (১, ২, ৩, ৪, ৫), সম্পাদ্য (১, ২, ৩, ৪, ৫, ৬), অনুশীলনী ৯.১, ৯.২, ৯.৩ (১-১৩)",
+                "দশম অধ্যায়: সর্বসমতা ও সদৃশতা, অনুশীলনী (১০.১, ১০.২, ১০.৩)"
+            ],
+            "পরিসংখ্যান": [
+                "একাদশ অধ্যায়: তথ্য ও উপাত্ত (অনুশীলনী ১১ সম্পূর্ণ)"
+            ]
+        },
+        "বিজ্ঞান": {
+            "অধ্যায়সমূহ": [
+                "প্রথম অধ্যায়: নিম্নশ্রেণির জীব", "দ্বিতীয় অধ্যায়: উদ্ভিদ ও প্রাণীর কোষীয় সংগঠন", 
+                "তৃতীয় অধ্যায়: উদ্ভিদের বাহ্যিক বৈশিষ্ট্য", "চতুর্থ অধ্যায়: শ্বসন", 
+                "পঞ্চম অধ্যায়: পরিপাকতন্ত্র এবং রক্ত সংবহনতন্ত্র", "ষষ্ঠ অধ্যায়: পদার্থের গঠন", 
+                "সপ্তম অধ্যায়: শক্তির ব্যবহার", "অষ্টম অধ্যায়: শব্দের কথা", 
+                "নবম অধ্যায়: তাপ ও তাপমাত্রা", "দশম অধ্যায়: বিদ্যুৎ ও চুম্বকের ঘটনা", 
+                "একাদশ অধ্যায়: পারিপার্শ্বিক পরিবর্তন ও বিভিন্ন ঘটনা", "দ্বাদশ অধ্যায়: সৌরজগৎ ও আমাদের পৃথিবী", 
+                "ত্রয়োদশ অধ্যায়: প্রাকৃতিক পরিবেশ ও দূষণ", "চতুর্দশ অধ্যায়: জলবায়ু পরিবর্তন"
+            ]
+        },
+        "বাংলাদেশ ও বিশ্বপরিচয়": {
+            "অধ্যায়সমূহ": [
+                "প্রথম অধ্যায়: বাংলাদেশের মুক্তিসংগ্রাম ও গণআন্দোলন", "দ্বিতীয় অধ্যায়: বাংলাদেশের সংস্কৃতি ও সাংস্কৃতিক বৈচিত্র্য", 
+                "তৃতীয় অধ্যায়: পরিবারে শিশুর বেড়ে ওঠা", "চতুর্থ অধ্যায়: বাংলাদেশের অর্থনীতি", 
+                "পঞ্চম অধ্যায়: বাংলাদেশ ও বাংলাদেশের নাগরিক", "ষষ্ঠ অধ্যায়: বাংলাদেশের জলবায়ু", 
+                "সপ্তম অধ্যায়: বাংলাদেশের জনসংখ্যা পরিচিতি", "অষ্টম অধ্যায়: বাংলাদেশের সামাজিক সমস্যা", 
+                "নবম অধ্যায়: বাংলাদেশে প্রবীণ ব্যক্তি ও নারীর অধিকার", "দশম অধ্যায়: এশিয়ার কয়েকটি দেশ", 
+                "একাদশ অধ্যায়: বাংলাদেশ ও আন্তর্জাতিক সহযোগিতা"
+            ]
+        },
+        "ইসলাম শিক্ষা": {
+            "অধ্যায়সমূহ": [
+                "প্রথম অধ্যায়: আকাইদ", "দ্বিতীয় অধ্যায়: ইবাদত", 
+                "তৃতীয় অধ্যায়: কুরআন ও হাদিস শিক্ষা", "চতুর্থ অধ্যায়: আখলাক", "পঞ্চম অধ্যায়: আদর্শ জীবনচরিত"
+            ]
+        },
+        "তথ্য ও যোগাযোগ প্রযুক্তি (আইসিটি)": {
+            "অধ্যায়সমূহ": [
+                "প্রথম অধ্যায়: প্রাত্যহিক জীবনে তথ্য ও যোগাযোগ প্রযুক্তি", "দ্বিতীয় অধ্যায়: কম্পিউটার সংশ্লিষ্ট যন্ত্রপাতি", 
+                "তৃতীয় অধ্যায়: নিরাপদ ও নৈতিক ব্যবহার", "চতুর্থ অধ্যায়: ওয়ার্ড প্রসেসিং", "পঞ্চম অধ্যায়: শিক্ষায় ইন্টারনেটের ব্যবহার"
+            ]
         }
     }
 
-    # --- ১. সিলেবাস তৈরি বা এডিট করার অংশ ---
-    if not st.session_state["syllabus_saved"] or st.session_state["syllabus_editing"]:
-        form_title = "✏️ সিলেবাস এডিট করুন" if st.session_state["syllabus_editing"] else "১. শ্রেণি এবং সমস্ত বিষয়ের সিলেবাস নির্বাচন করুন"
-        st.markdown(f"### {form_title}")
-        
-        plan_class = st.selectbox("শ্রেণি নির্বাচন করুন:", list(master_syllabus_db.keys()), key="plan_class_sel")
-        
-        st.markdown("#### প্রতিটি বিষয়ের অধ্যায়সমূহ সিলেক্ট করুন (আপনার স্কুলের সিলেবাস অনুযায়ী টিক দিন বা বাদ দিন):")
-        
-        selected_subjects_data = {}
-        subjects_in_class = master_syllabus_db[plan_class]
-        
-        for subj, chapters in subjects_in_class.items():
-            default_val = chapters
-            if st.session_state["syllabus_editing"] and st.session_state["saved_syllabi"]:
-                for item in st.session_state["saved_syllabi"]:
-                    if item["বিষয়"] == subj:
-                        saved_list = [c.strip() for c in item["নির্বাচিত অধ্যাসমূহ"].split(",")]
-                        default_val = [c for c in saved_list if c in chapters]
+    with tab1:
+        conn = sqlite3.connect("smart_school_syllabus.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS school_syllabus_multi (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_class TEXT,
+                exam_term TEXT,
+                syllabus_json TEXT
+            )
+        """)
+        conn.commit()
+
+        cursor.execute("SELECT id, student_class, exam_term, syllabus_json FROM school_syllabus_multi ORDER BY id DESC LIMIT 1")
+        saved_record = cursor.fetchone()
+        conn.close()
+
+        if "edit_mode" not in st.session_state:
+            st.session_state.edit_mode = False
+
+        if not saved_record or st.session_state.edit_mode:
+            st.markdown("### 📝 ক্লাস সেভেন মাল্টি-সাবজেক্ট সিলেবাস ইনপুট দিন")
+            
+            default_class = "সপ্তম শ্রেণি (Class 7)"
+            default_term = "সাপ্তাহিক কুইজ"
+            parsed_saved_data = {}
+
+            if saved_record and st.session_state.edit_mode:
+                default_class = saved_record[1]
+                default_term = saved_record[2]
+                parsed_saved_data = json.loads(saved_record[3])
+
+            col1, col2 = st.columns(2)
+            with col1:
+                student_class = st.selectbox("শ্রেণি নির্বাচন করুন:", ["সপ্তম শ্রেণি (Class 7)"], index=0, key="sel_class_multi")
+                exam_terms_list = ["সাপ্তাহিক কুইজ", "অর্ধ-বার্ষিক", "বার্ষিক", "মডেল টেস্ট", "প্রি-টেস্ট", "সিটি", "অন্যান্য মূল্যায়ন"]
+                term_idx = exam_terms_list.index(default_term) if default_term in exam_terms_list else 0
+                exam_term = st.selectbox("পরীক্ষার নাম:", exam_terms_list, index=term_idx, key="sel_term_multi")
+                
+            with col2:
+                available_subjects = list(unified_syllabus_dictionary.keys())
+                default_subjs = list(parsed_saved_data.keys()) if parsed_saved_data else []
+                selected_subjects = st.multiselect("একাধিক বিষয় নির্বাচন করুন:", available_subjects, default=default_subjs, key="sel_subjects_multi")
+
+            selected_syllabus_data = {}
+            if selected_subjects:
+                st.markdown("#### নির্বাচিত বিষয়গুলোর অধ্যায়সমূহ নির্ধারণ করুন:")
+                for subj in selected_subjects:
+                    with st.expander(f"📖 বিষয়: {subj}", expanded=True):
+                        categories_dict = unified_syllabus_dictionary.get(subj, {})
+                        available_categories = list(categories_dict.keys())
+                        
+                        chosen_cat_topics = {}
+                        for cat in available_categories:
+                            available_topics = categories_dict.get(cat, [])
+                            default_topics = parsed_saved_data.get(subj, {}).get(cat, []) if parsed_saved_data else []
+                            
+                            selected_topics = st.multiselect(
+                                f"{subj} -> {cat} (বিভাগ):", 
+                                available_topics, 
+                                default=[t for t in default_topics if t in available_topics],
+                                key=f"topics_{subj}_{cat}"
+                            )
+                            if selected_topics:
+                                chosen_cat_topics[cat] = selected_topics
+                        
+                        if chosen_cat_topics:
+                            selected_syllabus_data[subj] = chosen_cat_topics
+
+            col_btn_s1, col_btn_s2 = st.columns(2)
+            with col_btn_s1:
+                btn_text = "💾 ফাইল আপডেট করুন" if st.session_state.edit_mode else "নির্ধারিত সিলেবাস ছক আকারে সেভ করুন"
+                if st.button(btn_text, use_container_width=True, type="primary"):
+                    if selected_syllabus_data:
+                        syllabus_str = json.dumps(selected_syllabus_data, ensure_ascii=False)
+                        
+                        conn = sqlite3.connect("smart_school_syllabus.db")
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM school_syllabus_multi")
+                        cursor.execute("""
+                            INSERT INTO school_syllabus_multi (student_class, exam_term, syllabus_json)
+                            VALUES (?, ?, ?)
+                        """, (student_class, exam_term, syllabus_str))
+                        conn.commit()
+                        conn.close()
+                        
+                        st.session_state.edit_mode = False
+                        st.success("সিলেবাস সফলভাবে সেভ করা হয়েছে!")
+                        st.rerun()
+                    else:
+                        st.error("দয়া করে অন্তত একটি বিষয় এবং তার অধ্যায় সিলেক্ট করুন।")
+
+            if st.session_state.edit_mode:
+                with col_btn_s2:
+                    if st.button("❌ Cancel (বাতিল)", use_container_width=True):
+                        st.session_state.edit_mode = False
+                        st.rerun()
+
+        else:
+            rec_id, r_class, r_term, r_json = saved_record
+            parsed_syllabus = json.loads(r_json)
+
+            st.markdown(f"### 📋 আপনার সাজানো ডিজিটাল সিলেবাস ছক ({r_class} - {r_term})")
+
+            table_rows = []
+            for subj, cats in parsed_syllabus.items():
+                first_row = True
+                cat_count = len(cats)
+                for cat, topics in cats.items():
+                    topics_str = ", ".join(topics)
+                    if first_row:
+                        row_html = f'<tr><td rowspan="{cat_count}" style="padding: 10px; border: 1px solid #cbd5e1; font-weight: bold; vertical-align: top;">{subj}</td><td style="padding: 10px; border: 1px solid #cbd5e1; font-weight: 500;">{cat}</td><td style="padding: 10px; border: 1px solid #cbd5e1;">{topics_str}</td></tr>'
+                        first_row = False
+                    else:
+                        row_html = f'<tr><td style="padding: 10px; border: 1px solid #cbd5e1; font-weight: 500;">{cat}</td><td style="padding: 10px; border: 1px solid #cbd5e1;">{topics_str}</td></tr>'
+                    table_rows.append(row_html)
+
+            all_rows = "".join(table_rows)
+            table_html = f'<table style="width:100%; border-collapse: collapse; margin-top: 10px; font-family: sans-serif;"><thead><tr style="background-color: #1E3A8A; color: white; text-align: left;"><th style="padding: 12px; border: 1px solid #cbd5e1;">বিষয় (Subject)</th><th style="padding: 12px; border: 1px solid #cbd5e1;">বিভাগ (Category)</th><th style="padding: 12px; border: 1px solid #cbd5e1;">নির্বাচিত অধ্যায়সমূহ (Selected Topics)</th></tr></thead><tbody>{all_rows}</tbody></table>'
+            
+            st.markdown(table_html, unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            col_btn1, col_btn2 = st.columns(2)
+            with col_btn1:
+                if st.button("✏️ এডিট করুন", use_container_width=True):
+                    st.session_state.edit_mode = True
+                    st.rerun()
+            with col_btn2:
+                if st.button("🗑️ ডিলেট করুন", use_container_width=True):
+                    conn = sqlite3.connect("smart_school_syllabus.db")
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM school_syllabus_multi")
+                    conn.commit()
+                    conn.close()
+                    st.session_state.edit_mode = False
+                    st.success("সিলেবাস সফলভাবে বাতিল ও মুছে ফেলা হয়েছে! পুনরায় সিলেবাস তৈরি করুন।")
+                    st.rerun()
+
+
+# --- ২. স্মার্ট স্টাডি প্লান ও টাইমলাইন সেকশন ---
+    with tab2:
+        st.markdown("### ⏰ স্মার্ট স্টাডি প্লান ও টাইমলাইন")
+
+        # ডাটাবেজ টেবিল নিশ্চিতকরণ
+        conn = sqlite3.connect("smart_school_syllabus.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS study_plans_multi (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                plan_title TEXT,
+                plan_type TEXT,
+                start_date TEXT,
+                end_date TEXT,
+                daily_hours TEXT,
+                plan_json TEXT
+            )
+        """)
+        # প্রতিদিনের কাস্টম নোটের জন্য টেবিল
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS daily_study_notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                plan_id INTEGER,
+                day_number INTEGER,
+                note_text TEXT,
+                status_text TEXT
+            )
+        """)
+        conn.commit()
+
+        # ডাটাবেজ থেকে সমস্ত সেভ করা প্ল্যান ফেচ করা
+        cursor.execute("SELECT id, plan_title, plan_type, start_date, end_date, daily_hours, plan_json FROM study_plans_multi ORDER BY id DESC")
+        all_saved_plans = cursor.fetchall()
+        conn.close()
+
+        if "plan_edit_id" not in st.session_state:
+            st.session_state.plan_edit_id = None
+        if "create_new_plan" not in st.session_state:
+            st.session_state.create_new_plan = False
+
+        # --- ১. নতুন প্ল্যান তৈরি বা বিদ্যমান প্ল্যান এডিট করার ফর্ম ---
+        if not all_saved_plans or st.session_state.create_new_plan or st.session_state.plan_edit_id is not None:
+            
+            editing_record = None
+            if st.session_state.plan_edit_id is not None:
+                for p in all_saved_plans:
+                    if p[0] == st.session_state.plan_edit_id:
+                        editing_record = p
                         break
 
-            chosen_chaps = st.multiselect(
-                f"{subj} বিষয়ের অধ্যাসমূহ:",
-                chapters,
-                default=default_val,
-                key=f"multiselect_{plan_class}_{subj}"
-            )
-            if chosen_chaps:
-                selected_subjects_data[subj] = chosen_chaps
+            form_header = "✏️ স্টাডি প্ল্যান এডিট করুন" if editing_record else "➕ নতুন স্মার্ট স্টাডি প্ল্যান তৈরি করুন"
+            st.markdown(f"#### {form_header}")
+            st.markdown("আপনার সিলেবাস থেকে বিষয় ও অধ্যায়সমূহ বাছাই করে নির্দিষ্ট মেয়াদের সমন্বিত রুটিন তৈরি করুন:")
 
-        col_b1, col_b2 = st.columns(2)
-        with col_b1:
-            if st.button("💾 সিলেবাস সেভ করুন", key="save_all_syllabus_btn"):
-                if selected_subjects_data:
-                    st.session_state["saved_syllabi"] = [
-                        {
-                            "শ্রেণি": plan_class,
-                            "বিষয়": subj,
-                            "নির্বাচিত অধ্যাসমূহ": ", ".join(chaps)
-                        }
-                        for subj, chaps in selected_subjects_data.items()
-                    ]
-                    st.session_state["syllabus_saved"] = True
-                    st.session_state["syllabus_editing"] = False
-                    st.success("সিলেবাস সফলভাবে সেভ করা হয়েছে!")
-                    st.rerun()
-                else:
-                    st.warning("দয়া করে অন্তত একটি বিষয়ের অধ্যায় সিলেক্ট করুন।")
-        
-        with col_b2:
-            if st.session_state["syllabus_editing"]:
-                if st.button("❌ Cancel (সিলেবাস)", key="cancel_syllabus_edit"):
-                    st.session_state["syllabus_editing"] = False
-                    st.rerun()
-    else:
-        st.markdown("### 📋 আপনার সংরক্ষিত সিলেবাস তালিকা:")
-        df_syllabus = pd.DataFrame(st.session_state["saved_syllabi"])
-        st.table(df_syllabus)
+            conn = sqlite3.connect("smart_school_syllabus.db")
+            cursor = conn.cursor()
+            cursor.execute("SELECT syllabus_json FROM school_syllabus_multi ORDER BY id DESC LIMIT 1")
+            saved_plan_record = cursor.fetchone()
+            conn.close()
 
-        col_act1, col_act2 = st.columns(2)
-        with col_act1:
-            if st.button("✏️ Edit সিলেবাস", key="edit_syllabus_btn"):
-                st.session_state["syllabus_editing"] = True
-                st.rerun()
-        with col_act2:
-            if st.button("🗑️ Delete সিলেবাস", key="delete_syllabus_btn"):
-                st.session_state["saved_syllabi"] = []
-                st.session_state["syllabus_saved"] = False
-                st.session_state["syllabus_editing"] = False
-                st.success("সিলেবাস ডিলিট করা হয়েছে।")
-                st.rerun()
+            saved_syllabus_dict = {}
+            if saved_plan_record:
+                saved_syllabus_dict = json.loads(saved_plan_record[0])
 
-    st.markdown("---")
-
-    # --- ২. সাপ্তাহিক পড়ার রুটিন ও সময় নির্ধারণ ---
-    days_of_week = ["শনিবার", "রবিবার", "সোমবার", "মঙ্গলবার", "বুধবার", "বৃহস্পতিবার", "শুক্রবার"]
-
-    if not st.session_state["routine_saved"] or st.session_state["routine_editing"]:
-        routine_title = "✏️ সাপ্তাহিক রুটিন এডিট করুন" if st.session_state["routine_editing"] else "২. সাপ্তাহিক পড়ার রুটিন ও সময় নির্ধারণ"
-        st.markdown(f"### {routine_title}")
-        st.markdown("সপ্তাহের ৭ দিনের জন্য বাংলা, ইংরেজি ও গণিত পড়ার সময় স্লাইডার টেনে নির্ধারণ করুন:")
-        
-        tab_days = st.tabs(days_of_week)
-        temp_routine = {}
-        for idx, day in enumerate(days_of_week):
-            with tab_days[idx]:
-                st.markdown(f"**{day} এর পড়ার সময় নির্ধারণ:**")
-                def_b = st.session_state["weekly_routine_data"].get(day, {}).get("বাংলা", 1.0) if st.session_state["routine_editing"] else 1.0
-                def_e = st.session_state["weekly_routine_data"].get(day, {}).get("ইংরেজি", 1.0) if st.session_state["routine_editing"] else 1.0
-                def_m = st.session_state["weekly_routine_data"].get(day, {}).get("গণিত", 1.0) if st.session_state["routine_editing"] else 1.0
-
-                b_time = st.slider(f"বাংলা ({day}) - ঘণ্টা", 0.0, 5.0, float(def_b), 0.5, key=f"r_b_{idx}")
-                e_time = st.slider(f"ইংরেজি ({day}) - ঘণ্টা", 0.0, 5.0, float(def_e), 0.5, key=f"r_e_{idx}")
-                m_time = st.slider(f"গণিত ({day}) - ঘণ্টা", 0.0, 5.0, float(def_m), 0.5, key=f"r_m_{idx}")
-                temp_routine[day] = {"বাংলা": b_time, "ইংরেজি": e_time, "গণিত": m_time}
-
-        col_rb1, col_rb2 = st.columns(2)
-        with col_rb1:
-            if st.button("💾 রুটিন সেভ করুন", key="save_routine_btn"):
-                st.session_state["weekly_routine_data"] = temp_routine
-                st.session_state["routine_saved"] = True
-                st.session_state["routine_editing"] = False
-                st.success("সাপ্তাহিক রুটিন সফলভাবে সেভ করা হয়েছে!")
-                st.rerun()
-        with col_rb2:
-            if st.session_state["routine_editing"]:
-                if st.button("❌ Cancel (রুটিন)", key="cancel_routine_edit"):
-                    st.session_state["routine_editing"] = False
-                    st.rerun()
-    else:
-        st.markdown("### 📋 আপনার সংরক্ষিত সাপ্তাহিক রুটিন তালিকা:")
-        routine_table_data = []
-        for day, hours in st.session_state["weekly_routine_data"].items():
-            routine_table_data.append({
-                "বার": day,
-                "বাংলা (ঘণ্টা)": hours["বাংলা"],
-                "ইংরেজি (ঘণ্টা)": hours["ইংরেজি"],
-                "গণিত (ঘণ্টা)": hours["গণিত"]
-            })
-        df_routine_saved = pd.DataFrame(routine_table_data)
-        st.table(df_routine_saved)
-
-        col_rat1, col_rat2 = st.columns(2)
-        with col_rat1:
-            if st.button("✏️ Edit রুটিন", key="edit_routine_btn"):
-                st.session_state["routine_editing"] = True
-                st.rerun()
-        with col_rat2:
-            if st.button("🗑️ Delete রুটিন", key="delete_routine_btn"):
-                st.session_state["weekly_routine_data"] = {}
-                st.session_state["routine_saved"] = False
-                st.session_state["routine_editing"] = False
-                st.success("রুটিন ডিলিট করা হয়েছে।")
-                st.rerun()
-
-    st.markdown("---")
-
-    # --- ৩. প্লান তৈরির মোড সিলেকশন ---
-    st.markdown("### ৩. স্টাডি প্লান তৈরির পদ্ধতি নির্বাচন করুন")
-    plan_mode = st.radio("পদ্ধতি বেছে নিন:", ["Generate with AI", "Make by yourself"], key="study_plan_mode_radio")
-
-    all_available_chapters = []
-    if st.session_state["saved_syllabi"]:
-        for item in st.session_state["saved_syllabi"]:
-            subj_name = item['বিষয়']
-            chaps = [c.strip() for c in item["নির্বাচিত অধ্যাসমূহ"].split(",")]
-            for c in chaps:
-                all_available_chapters.append(f"{subj_name} - {c}")
-    else:
-        all_available_chapters = ["দয়া করে আগে সিলেবাস সেভ করুন"]
-
-    # --- অপশন ক: Generate with AI ---
-    if plan_mode == "Generate with AI":
-        col_p1, col_p2 = st.columns(2)
-        with col_p1:
-            plan_duration_ai = st.selectbox("প্ল্যানের মেয়াদ বেছে নিন:", ["১ সপ্তাহ", "১৫ দিন", "১ মাস", "২ মাস"], key="ai_dur_sel")
-        with col_p2:
-            target_syllabus_options = all_available_chapters if st.session_state["saved_syllabi"] else ["সাধারণ রিভিশন ও প্র্যাকটিস"]
-            target_syllabus_ai = st.selectbox("টার겟 অধ্যায় নির্বাচন করুন:", target_syllabus_options, key="ai_target_sel")
-
-        if st.button("🚀 Generate Smart Study Plan (AI)", key="gen_ai_plan_btn"):
-            with st.spinner("এআই বিশ্লেষণ করছে..."):
-                routine_source = st.session_state["weekly_routine_data"] if st.session_state["routine_saved"] else {d: {"বাংলা": 1.0, "ইংরেজি": 1.0, "গণিত": 1.0} for d in days_of_week}
-                plan_summary_data = []
-                for day, hours in routine_source.items():
-                    total_hrs = hours['বাংলা'] + hours['ইংরেজি'] + hours['গণিত']
-                    plan_summary_data.append({
-                        "বার": day,
-                        "বাংলা সময়": f"{hours['বাংলা']} ঘণ্টা",
-                        "ইংরেজি সময়": f"{hours['ইংরেজি']} ঘণ্টা",
-                        "গণিত সময়": f"{hours['গণিত']} ঘণ্টা",
-                        "মোট সময়": f"{total_hrs} ঘণ্টা",
-                        "টার겟": target_syllabus_ai,
-                        "স্ট্যাটাস": "সম্পূর্ণ 🟢"
-                    })
-                df_plan = pd.DataFrame(plan_summary_data)
-                st.session_state["current_generated_plan"] = df_plan
-                st.session_state["final_plan_saved_status"] = False
-                st.success("এআই প্লান তৈরি হয়েছে!")
-
-    # --- অপশন খ: Make by yourself ---
-    else:
-        st.markdown("#### 🛠️ নিজে কাস্টম প্লান তৈরি করুন (প্রতি অধ্যায়ের জন্য সর্বনিম্ন ১.৫ ঘণ্টা প্রয়োজন)")
-        
-        col_m1, col_m2 = st.columns(2)
-        with col_m1:
-            manual_duration = st.selectbox("সময়কাল বেছে নিন:", ["৭ দিন", "১৫ দিন", "৩০ দিন", "৬০ দিন"], key="manual_dur_sel")
-        with col_m2:
-            num_days_map = {"৭ দিন": 7, "১৫ দিন": 15, "৩০ দিন": 30, "৬০ দিন": 60}
-            total_days_count = num_days_map[manual_duration]
-
-        if not st.session_state["manual_plan_saved"] or st.session_state["manual_plan_editing"]:
-            st.markdown(f"**প্রতিদিনের জন্য আলাদা আলাদা লাইনে থাকা অধ্যায়গুলো সিলেক্ট করুন (মেয়াদ: {manual_duration}):**")
-            
-            sample_days = [f"দিন {i}" for i in range(1, min(total_days_count + 1, 8))]
-            
-            selected_chaps_per_day = {}
-            for d_name in sample_days:
-                selected_chaps_per_day[d_name] = st.multiselect(
-                    f"{d_name} এ পড়তে চান এমন অধ্যায়সমূহ:",
-                    all_available_chapters,
-                    key=f"manual_chaps_{d_name}"
-                )
-
-            if st.button("💾 ম্যানুয়াল প্লান সেভ করুন", key="save_manual_plan_btn"):
-                avg_daily_hours = 2.5 
-                min_chapter_hours = 1.5
+            if saved_syllabus_dict:
+                available_saved_subjects = list(saved_syllabus_dict.keys())
                 
-                evaluated_schedule = []
-                carry_over_chapters = []
+                import datetime
+                today = datetime.date.today()
+                
+                default_title = editing_record[1] if editing_record else "আমার সমন্বিত স্টাডি প্ল্যান"
+                default_start = datetime.datetime.strptime(editing_record[3], "%Y-%m-%d").date() if editing_record else today
+                default_end = datetime.datetime.strptime(editing_record[4], "%Y-%m-%d").date() if editing_record else (today + datetime.timedelta(days=7))
+                default_hrs = float(editing_record[5].replace(" ঘণ্টা", "")) if editing_record else 3.0
+                
+                parsed_edit_topics = []
+                if editing_record:
+                    edit_json_data = json.loads(editing_record[6])
+                    parsed_edit_topics = edit_json_data.get("topics", [])
 
-                for d_name, chaps in selected_chaps_per_day.items():
-                    all_assigned_today = chaps + carry_over_chapters
-                    carry_over_chapters = [] 
-                    
-                    required_time = len(all_assigned_today) * min_chapter_hours
-                    if required_time > avg_daily_hours and len(all_assigned_today) > 1:
-                        completed_today = all_assigned_today[:1] 
-                        carry_over_chapters = all_assigned_today[1:] 
-                        status_str = "অসম্পূর্ণ (পরের দিনের জন্য রোলওভার 🟡)"
-                    else:
-                        completed_today = all_assigned_today
-                        status_str = "সম্পূর্ণভাবে সম্পন্ন হবে 🟢"
+                plan_title_input = st.text_input("স্টাডি প্ল্যানের নাম/শিরোনাম দিন:", default_title, key="plan_title_in")
+                
+                col_d1, col_d2, col_d3 = st.columns(3)
+                with col_d1:
+                    start_date = st.date_input("শুরুর তারিখ:", default_start, key="plan_start_date_in")
+                with col_d2:
+                    end_date = st.date_input("শেষের তারিখ:", default_end, key="plan_end_date_in")
+                with col_d3:
+                    daily_hrs = st.slider("প্রতিদিনের পড়ার সময় (ঘণ্টা):", 1.0, 8.0, default_hrs, 0.5, key="daily_hrs_slider_in")
 
-                    evaluated_schedule.append({
-                        "দিন": d_name,
-                        "নির্ধারিত অধ্যায়সমূহ": ", ".join(completed_today) if completed_today else "কোনো অধ্যায় নেই",
-                        "রোলওভার অধ্যায়": ", ".join(carry_over_chapters) if carry_over_chapters else "নেই",
-                        "স্ট্যাটাস": status_str
-                    })
+                calc_days = (end_date - start_date).days + 1
+                if calc_days == 7:
+                    p_type_label = "সাপ্তাহিক প্ল্যান (৭ দিন)"
+                elif calc_days in [28, 29, 30, 31]:
+                    p_type_label = "মাসিক প্ল্যান (১ মাস)"
+                elif calc_days in [14, 15]:
+                    p_type_label = "পাক্ষিক প্ল্যান (১৫ দিন)"
+                elif calc_days in [180, 182, 183]:
+                    p_type_label = "ষান্মাসিক প্ল্যান (৬ মাস)"
+                elif calc_days in [365, 366]:
+                    p_type_label = "বার্ষিক প্ল্যান (১ বছর)"
+                else:
+                    p_type_label = f"কাস্টম প্ল্যান ({calc_days} দিন)"
 
-                df_manual = pd.DataFrame(evaluated_schedule)
-                st.session_state["current_generated_plan"] = df_manual
-                st.session_state["manual_plan_saved"] = True
-                st.session_state["manual_plan_editing"] = False
-                st.session_state["final_plan_saved_status"] = False
-                st.success("আপনার কাস্টম স্টাডি প্লান সফলভাবে ভ্যালিড ও সেভ হয়েছে!")
-                st.rerun()
+                st.info(f"💡 নির্ণীত মেয়াদ: **{p_type_label}**")
+
+                default_selected_subjs = list(set([t[0] for t in parsed_edit_topics])) if parsed_edit_topics else available_saved_subjects
+                target_subjects = st.multiselect("কমপ্লিট করার জন্য বিষয়সমূহ সিলেক্ট করুন:", available_saved_subjects, default=default_selected_subjs, key="target_subjects_multi_in")
+
+                selected_comprehensive_topics = []
+                if target_subjects:
+                    st.markdown("##### 📚 বিষয় ভিত্তিক অধ্যায় ও টপিকসমূহ নির্ধারণ করুন:")
+                    for subj in target_subjects:
+                        with st.expander(f"📖 বিষয়: {subj}", expanded=True):
+                            categories_dict = saved_syllabus_dict.get(subj, {})
+                            for cat, topics in categories_dict.items():
+                                default_t_sel = [t[2] for t in parsed_edit_topics if t[0] == subj and t[1] == cat] if parsed_edit_topics else topics
+                                chosen_topics = st.multiselect(
+                                    f"{subj} -> {cat}:",
+                                    topics,
+                                    default=[t for t in default_t_sel if t in topics],
+                                    key=f"plan_topics_form_{subj}_{cat}"
+                                )
+                                for t in chosen_topics:
+                                    selected_comprehensive_topics.append((subj, cat, t))
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                col_b1, col_b2 = st.columns(2)
+                with col_b1:
+                    save_btn_txt = "💾 স্টাডি প্ল্যান আপডেট করুন" if editing_record else "🚀 স্টাডি প্ল্যান তৈরি ও সংরক্ষণ করুন"
+                    if st.button(save_btn_txt, use_container_width=True, type="primary", key="save_plan_action_btn"):
+                        if start_date > end_date:
+                            st.error("দয়া করে সঠিক তারিখ দিন (শুরুর তারিখ শেষের তারিখের পরে হতে পারে না)।")
+                        elif not selected_comprehensive_topics:
+                            st.error("দয়া করে অন্তত একটি বিষয় বা টপিক সিলেক্ট করুন।")
+                        else:
+                            plan_data = {
+                                "title": plan_title_input,
+                                "type": p_type_label,
+                                "start_date": str(start_date),
+                                "end_date": str(end_date),
+                                "total_days": calc_days,
+                                "daily_hours": f"{daily_hrs} ঘণ্টা",
+                                "topics": selected_comprehensive_topics
+                            }
+                            plan_str = json.dumps(plan_data, ensure_ascii=False)
+
+                            conn = sqlite3.connect("smart_school_syllabus.db")
+                            cursor = conn.cursor()
+                            
+                            if editing_record:
+                                cursor.execute("""
+                                    UPDATE study_plans_multi 
+                                    SET plan_title=?, plan_type=?, start_date=?, end_date=?, daily_hours=?, plan_json=?
+                                    WHERE id=?
+                                """, (plan_title_input, p_type_label, str(start_date), str(end_date), f"{daily_hrs} ঘণ্টা", plan_str, editing_record[0]))
+                            else:
+                                cursor.execute("""
+                                    INSERT INTO study_plans_multi (plan_title, plan_type, start_date, end_date, daily_hours, plan_json)
+                                    VALUES (?, ?, ?, ?, ?, ?)
+                                """, (plan_title_input, p_type_label, str(start_date), str(end_date), f"{daily_hrs} ঘণ্টা", plan_str))
+                            
+                            conn.commit()
+                            conn.close()
+
+                            st.session_state.create_new_plan = False
+                            st.session_state.plan_edit_id = None
+                            st.success("স্টাডি প্ল্যান সফলভাবে সংরক্ষণ করা হয়েছে!")
+                            st.rerun()
+                
+                if st.session_state.create_new_plan or st.session_state.plan_edit_id is not None:
+                    with col_b2:
+                        if st.button("❌ বাতিল (Cancel)", use_container_width=True, key="cancel_form_action_btn"):
+                            st.session_state.create_new_plan = False
+                            st.session_state.plan_edit_id = None
+                            st.rerun()
+            else:
+                st.warning("⚠️ অনুগ্রহ করে প্রথমে 'সিলেবাস ক্রিয়েটর ও ডিজিটাল বুক' ট্যাব থেকে সিলেবাস ইনপুট ও সেভ করুন, তবেই এখানে স্টাডি প্ল্যান তৈরি করতে পারবেন।")
+
+        # --- ২. যদি সেভ করা প্ল্যান থাকে ---
         else:
-            st.markdown("### 📋 আপনার সংরক্ষিত কাস্টম প্লান:")
-            if "current_generated_plan" in st.session_state:
-                st.table(st.session_state["current_generated_plan"])
+            plan_options = {}
+            for p in all_saved_plans:
+                p_id_val, p_title_val, p_type_val, p_start_val, p_end_val = p[0], p[1], p[2], p[3], p[4]
+                label_str = f"📌 {p_title_val} [{p_type_val}] ({p_start_val} হতে {p_end_val})"
+                plan_options[label_str] = p
 
-            col_m_act1, col_m_act2 = st.columns(2)
-            with col_m_act1:
-                if st.button("✏️ Edit কাস্টম প্লান", key="edit_manual_plan_btn"):
-                    st.session_state["manual_plan_editing"] = True
+            selected_plan_label = st.selectbox(
+                "আপনার সংরক্ষিত স্টাডি প্ল্যানগুলো থেকে বেছে নিন (সবগুলো প্ল্যান সেভ থাকবে):", 
+                list(plan_options.keys()), 
+                key="select_saved_plan_main_dropdown"
+            )
+            
+            selected_record = plan_options[selected_plan_label]
+            p_id, p_title, p_type, p_start, p_end, p_hrs, p_json = selected_record
+            plan_data = json.loads(p_json)
+            raw_topics_list = plan_data.get("topics", [])
+            total_days = plan_data.get("total_days", 7)
+
+            # ডাটাবেজ থেকে এই প্ল্যানের সেভ করা নোটস লোড করা
+            conn = sqlite3.connect("smart_school_syllabus.db")
+            cursor = conn.cursor()
+            cursor.execute("SELECT day_number, note_text, status_text FROM daily_study_notes WHERE plan_id = ?", (p_id,))
+            existing_notes_rows = cursor.fetchall()
+            conn.close()
+
+            saved_notes_dict = {}
+            for row in existing_notes_rows:
+                saved_notes_dict[row[0]] = {"note": row[1], "status": row[2]}
+
+            st.markdown(f"### 📋 {p_title} <span style='font-size:14px; background:#e0e7ff; color:#1e3a8a; padding:3px 10px; border-radius:12px; margin-left:10px;'>{p_type}</span>", unsafe_allow_html=True)
+            st.markdown(f"📅 **তারিখ:** {p_start} হতে {p_end} (মোট {total_days} দিন) | ⏰ **দৈনিক পড়ার সময়:** {p_hrs}")
+
+            import datetime
+            import math
+            start_dt = datetime.datetime.strptime(p_start, "%Y-%m-%d").date()
+
+            subject_grouped = {}
+            for item in raw_topics_list:
+                subj, cat, t = item[0], item[1], item[2]
+                if subj not in subject_grouped:
+                    subject_grouped[subj] = []
+                subject_grouped[subj].append((subj, cat, t))
+
+            interleaved_topics = []
+            max_len = max([len(v) for v in subject_grouped.values()]) if subject_grouped else 0
+            subj_keys = list(subject_grouped.keys())
+
+            for i in range(max_len):
+                for sk in subj_keys:
+                    if i < len(subject_grouped[sk]):
+                        interleaved_topics.append(subject_grouped[sk][i])
+
+            num_items = len(interleaved_topics)
+            items_per_day = max(1, math.ceil(num_items / total_days))
+            
+            item_index = 0
+
+            # --- সলিড অল-বর্ডার (Solid All Border) সিএসএস স্টাইল ---
+            st.markdown("""
+            <style>
+            .clean-grid-table {
+                width: 100%;
+                border-collapse: collapse !important;
+                border: 2px solid #2563eb !important;
+                margin-top: 15px;
+                font-family: sans-serif;
+            }
+            .clean-grid-table th {
+                background-color: #1e3a8a;
+                color: white;
+                padding: 12px 10px;
+                border: 2px solid #2563eb !important;
+                text-align: left;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            .clean-grid-table td {
+                border: 2px solid #2563eb !important;
+                padding: 8px 10px;
+                background-color: #ffffff;
+                vertical-align: top;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+
+            # টেবিলের মূল হেডার
+            st.markdown("""
+            <table class="clean-grid-table">
+                <thead>
+                    <tr>
+                        <th style="width: 12%;">দিন ও তারিখ</th>
+                        <th style="width: 19%;">বিষয়সমূহ</th>
+                        <th style="width: 39%;">নির্ধারিত পড়ার টপিকসমূহ</th>
+                        <th style="width: 18%;">নোট / খসড়া ইনপুট</th>
+                        <th style="width: 12%; text-align: center;">স্ট্যাটাস ও সেভ</th>
+                    </tr>
+                </thead>
+            </table>
+            """, unsafe_allow_html=True)
+
+            for day in range(1, total_days + 1):
+                current_day_date = start_dt + datetime.timedelta(days=day - 1)
+                date_str = current_day_date.strftime("%d %b, %Y")
+
+                day_note_info = saved_notes_dict.get(day, {"note": "", "status": "⏳ বাকি আছে"})
+                current_note = day_note_info["note"]
+                current_status = day_note_info["status"]
+
+                if item_index >= num_items:
+                    day_subjs = "রিভিশন ও প্র্যাকটিস"
+                    formatted_topics_html = "<span style='color:#059669; font-weight:bold;'>✨ পূর্বে পঠিত সকল টপিকের সম্যক রিভিশন ও মডেল টেস্ট অনুশীলন</span>"
+                else:
+                    assigned_items = interleaved_topics[item_index : item_index + items_per_day]
+                    item_index += items_per_day
+                    
+                    unique_subjs = list(dict.fromkeys([item[0] for item in assigned_items]))
+                    day_subjs = ", ".join(unique_subjs)
+                    
+                    formatted_topic_list = []
+                    for item in assigned_items:
+                        s_name, c_name, t_name = item[0], item[1], item[2]
+                        badge_html = f"""<div style="margin-bottom: 5px; line-height: 1.4;">
+                            <span style="background-color: #e0e7ff; color: #1e3a8a; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; border: 1px solid #c7d2fe;">{s_name}</span> 
+                            <span style="font-size: 12px; color: #1e293b; font-weight: 500;">🔹 {t_name}</span>
+                        </div>"""
+                        formatted_topic_list.append(badge_html)
+                    
+                    formatted_topics_html = "".join(formatted_topic_list)
+
+                # চারপাশের অল-বর্ডার (All Borders: 2px solid #2563eb) সহ প্রতিটি গ্রিড রো
+                st.markdown("<div style='border: 2px solid #2563eb; border-top: none; background-color: #ffffff; margin-bottom: 0px;'>", unsafe_allow_html=True)
+                
+                col1, col2, col3, col4, col5 = st.columns([1.2, 1.9, 3.9, 1.8, 1.2])
+
+                with col1:
+                    st.markdown(f"<div style='border-right: 2px solid #2563eb; padding: 8px; min-height: 90px;'><b>দিন - {day}</b><br><span style='font-size:11px; color:#475569;'>({date_str})</span></div>", unsafe_allow_html=True)
+
+                with col2:
+                    st.markdown(f"<div style='border-right: 2px solid #2563eb; padding: 8px; min-height: 90px;'><span style='color:#1e3a8a; font-weight:bold; font-size:13px;'>{day_subjs}</span></div>", unsafe_allow_html=True)
+
+                with col3:
+                    st.markdown(f"<div style='border-right: 2px solid #2563eb; padding: 8px; min-height: 90px; background: #ffffff;'>{formatted_topics_html}</div>", unsafe_allow_html=True)
+
+                with col4:
+                    st.markdown("<div style='border-right: 2px solid #2563eb; padding: 6px; min-height: 90px;'>", unsafe_allow_html=True)
+                    user_entry_note = st.text_input(
+                        f"নোট লিখুন (দিন {day}):", 
+                        value=current_note, 
+                        key=f"direct_note_{p_id}_{day}",
+                        label_visibility="collapsed",
+                        placeholder="আজকের খসড়া নোট..."
+                    )
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+                with col5:
+                    st.markdown("<div style='padding: 6px; min-height: 90px;'>", unsafe_allow_html=True)
+                    status_opts = ["⏳ বাকি আছে", "✅ সম্পন্ন"]
+                    s_idx = status_opts.index(current_status) if current_status in status_opts else 0
+                    selected_st = st.selectbox(
+                        f"স্ট্যাটাস {day}", 
+                        status_opts, 
+                        index=s_idx, 
+                        key=f"direct_status_{p_id}_{day}",
+                        label_visibility="collapsed"
+                    )
+                    
+                    if st.button("💾 সেভ", key=f"save_row_btn_{p_id}_{day}", use_container_width=True):
+                        conn = sqlite3.connect("smart_school_syllabus.db")
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM daily_study_notes WHERE plan_id = ? AND day_number = ?", (p_id, day))
+                        cursor.execute("""
+                            INSERT INTO daily_study_notes (plan_id, day_number, note_text, status_text)
+                            VALUES (?, ?, ?, ?)
+                        """, (p_id, day, user_entry_note.strip(), selected_st))
+                        conn.commit()
+                        conn.close()
+                        
+                        st.toast(f"🎉 দিন - {day}-এর তথ্য সংরক্ষিত হয়েছে!", icon="✅")
+                        import time
+                        time.sleep(0.5)
+                        st.rerun()
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+                st.markdown("</div>", unsafe_allow_html=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # --- ৩টি মূল বাটন: এডিট, ডিলেট, নতুন যোগ ---
+            col_opt1, col_opt2, col_opt3 = st.columns(3)
+            with col_opt1:
+                if st.button("✏️ বর্তমান প্ল্যান এডিট করুন", use_container_width=True, key=f"edit_plan_btn_{p_id}"):
+                    st.session_state.plan_edit_id = p_id
                     st.rerun()
-            with col_m_act2:
-                if st.button("🗑️ Delete কাস্টম প্লান", key="delete_manual_plan_btn"):
-                    st.session_state["manual_plan_saved"] = False
-                    st.session_state["manual_plan_editing"] = False
-                    st.session_state["current_generated_plan"] = None
-                    st.success("কাস্টম প্লান ডিলিট করা হয়েছে।")
+            with col_opt2:
+                if st.button("🗑️ বর্তমান প্ল্যানটি ডিলেট করুন", use_container_width=True, key=f"delete_plan_btn_{p_id}"):
+                    conn = sqlite3.connect("smart_school_syllabus.db")
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM study_plans_multi WHERE id = ?", (p_id,))
+                    cursor.execute("DELETE FROM daily_study_notes WHERE plan_id = ?", (p_id,))
+                    conn.commit()
+                    conn.close()
+                    st.success("নির্বাচিত স্টাডি প্ল্যানটি সফলভাবে মুছে ফেলা হয়েছে!")
+                    st.rerun()
+            with col_opt3:
+                if st.button("➕ নতুন আরেকটি স্টাডি প্ল্যান তৈরি করুন", use_container_width=True, type="primary", key=f"add_another_new_plan_btn_{p_id}"):
+                    st.session_state.create_new_plan = True
+                    st.session_state.plan_edit_id = None
                     st.rerun()
 
-    # --- চূড়ান্ত প্ল্যান সেভ করার বাটন (সেভ করার পর এটি ও ইনপুট অপশনগুলো লুকিয়ে যাবে) ---
-    if "current_generated_plan" in st.session_state and st.session_state["current_generated_plan"] is not None and not st.session_state["final_plan_saved_status"]:
+            st.info("💡 পরামর্শ: আপনি চাইলে ব্রাউজার থেকে সরাসরি প্রিন্ট (Ctrl + P) করে আপনার যেকোনো সংরক্ষিত রুটিন ও নোট কাগজের মতো সংগ্রহ করতে পারেন।")
+
+
+    
+# --- ৩. মডেল টেস্ট প্রস্তুতি সেকশন ---
+    with tab3:
+        st.markdown("### 📝 মডেল টেস্ট ও প্রস্তুতি প্ল্যানার")
+        st.markdown("আপনার কাস্টমাইজ করা নম্বর, সময় এবং নিখুঁত অটো-সাবমিট কাউন্টডাউন সিস্টেমের মাধ্যমে মডেল টেস্ট দিন:")
+
+        # ডাটাবেজ টেবিল নিশ্চিতকরণ
+        conn = sqlite3.connect("smart_school_syllabus.db")
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS model_test_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                test_title TEXT,
+                test_date TEXT,
+                total_marks INTEGER,
+                allocated_time INTEGER,
+                obtained_score INTEGER,
+                correct_count INTEGER,
+                wrong_count INTEGER,
+                details_json TEXT
+            )
+        """)
+        conn.commit()
+        conn.close()
+
+        # প্রশ্ন ব্যাংক ডিকশনারি
+        library_question_bank = {
+            "Class 6": {
+                "বাংলা (চারুপাঠ)": {
+                    "অধ্যায় ১: মাদার তেরেসা": [
+                        {"q": "মাদার তেরেসা কত সালে জন্মগ্রহণ করেন?", "options": ["ক) ১৯১০ সালের ২৬ আগস্ট", "খ) ১৯১২ সালের ২৭ আগস্ট", "গ) ১৯১৪ সালের ২৮ আগস্ট", "ঘ) ১৯১৬ সালের ২৯ আগস্ট"], "answer": "ক) ১৯১০ সালের ২৬ আগস্ট"},
+                        {"q": "মাদার তেরেসার জন্মস্থান কোথায়?", "options": ["ক) ভারত", "খ) যুগোস্লাভিয়ার স্কোপিয়ে", "গ) ফ্রান্স", "ঘ) ইংল্যান্ড"], "answer": "খ) যুগোস্লাভিয়ার স্কোপিয়ে"},
+                        {"q": "মাদার তেরেসার আসল নাম কী ছিল?", "options": ["ক) মার্গারেট", "খ) অ্যাগনেস গোনহেক্সা বোয়াযু", "গ) এলিজাবেথ", "ঘ) ক্যাথরিন"], "answer": "খ) অ্যাগনেস গোনহেক্সা বোয়াযু"},
+                        {"q": "কত বছর বয়সে মাদার তেরেসা ঘরের মায়া ত্যাগ করে নান হওয়ার সিদ্ধান্ত নেন?", "options": ["ক) ১৫ বছর বয়সে", "খ) ১৮ বছর বয়সে", "গ) ২০ বছর বয়সে", "ঘ) ২২ বছর বয়সে"], "answer": "খ) ১৮ বছর বয়সে"},
+                        {"q": "মাদার তেরেসা কোন ধর্মীয় মিশনারিতে যোগ দেন?", "options": ["ক) লরেট সিস্টার্স", "খ) সিস্টার্স অব চ্যারিটি", "গ) সেন্ট মেরি সংঘ", "ঘ) আসিসি সংঘ"], "answer": "ক) লরেট সিস্টার্স"},
+                        {"q": "মাদার তেরেসা শিক্ষকতা করার জন্য প্রথম কোন দেশে আসেন?", "options": ["ক) পাকিস্তান", "খ) ভারত", "গ) বাংলাদেশ", "ঘ) মায়ানমার"], "answer": "খ) ভারত"},
+                        {"q": "ভারতের কোন শহরে মাদার তেরেসা লরেট কনভেন্ট স্কুলের শিক্ষিকা হিসেবে যোগ দেন?", "options": ["ক) মুম্বাই", "খ) দিল্লি", "গ) কলকাতা", "ঘ) চেন্নাই"], "answer": "গ) কলকাতা"},
+                        {"q": "কলকাতায় এসে মাদার তেরেসা কোন ভাষা খুব ভালোভাবে আয়ত্ত করেছিলেন?", "options": ["ক) হিন্দি ও ইংরেজি", "খ) বাংলা ও ইংরেজি", "গ) উর্দু ও ফার্সি", "ঘ) মারাঠি"], "answer": "খ) বাংলা ও ইংরেজি"},
+                        {"q": "মাদার তেরেসা কলকাতার সেন্ট মেরি স্কুলে কত বছর শিক্ষকতা করেন?", "options": ["ক) প্রায় ১০ বছর", "খ) প্রায় ১৫ বছর", "গ) প্রায় ১৭ বছর", "ঘ) প্রায় ২০ বছর"], "answer": "গ) প্রায় ১৭ বছর"},
+                        {"q": "কলকাতার কোন ঘটনার পর মাদার তেরেসা কনভেন্ট ছেড়ে সাধারণ মানুষের সেবায় নেমে পড়েন?", "options": ["ক) মহামারী", "খ) ১৯৪৬ সালের ভয়াবহ দাঙ্গা", "গ) বন্যা", "ঘ) দুর্ভিক্ষ"], "answer": "খ) ১৯৪৬ সালের ভয়াবহ দাঙ্গা"},
+                        {"q": "কত সালে মাদার তেরেসা কলকাতার বস্তিবাসীদের সেবার জন্য নতুন সংগঠন গড়ে তোলেন?", "options": ["ক) ১৯৪৮ সালে", "খ) ১৯৫০ সালে", "গ) ১৯৫২ সালে", "ঘ) ১৯৫৫ সালে"], "answer": "খ) ১৯৫০ সালে"},
+                        {"q": "মাদার তেরেসার গড়া সেবামূলক প্রতিষ্ঠানের নাম কী?", "options": ["ক) সেবা সংঘ", "খ) মিশনারিজ অব চ্যারিটি", "গ) চ্যারিটি হোম", "ঘ) নির্মল হৃদয়"], "answer": "খ) মিশনারিজ অব চ্যারিটি"}
+                    ],
+                    "অধ্যায় ২: চিঠি বিলি": [
+                        {"q": "'চিঠি বিলি' কবিতার রচয়িতা কে?", "options": ["ক) সুকুমার রায়", "খ) রোকনুজ্জামান খান", "গ) শামসুর রাহমান", "ঘ) জসীমউদ্দীন"], "answer": "খ) রোকনুজ্জামান খান"},
+                        {"q": "রোকনুজ্জামান খান কী নামে বেশি পরিচিত?", "options": ["ক) দাদাভাই", "খ) চাচাভাই", "গ) নানুভাই", "ঘ) খোকাভাই"], "answer": "ক) দাদাভাই"},
+                        {"q": "'চিঠি বিলি' কবিতায় চিঠি বিলি করতে কে ছুটে চলেছে?", "options": ["ক) চিংড়ি মাছ", "খ) ব্যাঙ", "গ) খলসে মাছ", "ঘ) কাতলা মাছ"], "answer": "খ) ব্যাঙ"},
+                        {"q": "চিঠি বিলি করতে যাওয়ার সময় ব্যাঙের মাথায় কী ছিল?", "options": ["ক) টুপি", "খ) ছাতা", "গ) পাতার মুকুট", "ঘ) গামছা"], "answer": "খ) ছাতা"},
+                        {"q": "খেয়ানৌকার মাঝি কে?", "options": ["ক) পুঁটি মাছ", "খ) চিংড়ির বাচ্চা", "গ) খলসে মাছ", "ঘ) ভেটকি মাছ"], "answer": "খ) চিংড়ির বাচ্চা"},
+                        {"q": "রোকনুজ্জামান খান দাদাভাই কোথায় জন্মগ্রহণ করেন?", "options": ["ক) ঢাকা জেলায়", "খ) ফরিদপুর জেলার পাংশায়", "গ) কুষ্টিয়া জেলায়", "ঘ) বরিশাল জেলায়"], "answer": "খ) ফরিদপুর জেলার পাংশায়"},
+                        {"q": "শিশুদের সংগঠন 'কচিকাঁচার মেলা' কে প্রতিষ্ঠা করেন?", "options": ["ক) সুকুমার রায়", "খ) রোকনুজ্জামান খান দাদাভাই", "গ) শামসুর রাহমান", "ঘ) কাজী নজরুল ইসলাম"], "answer": "খ) রোকনুজ্জামান খান দাদাভাই"}
+                    ]
+                },
+                "গণিত": {
+                    "অধ্যায় ৫: সরল সমীকরণ": [
+                        {"q": "সরল সমীকরণে চলকের সর্বোচ্চ ঘাত বা শক্তি কত হয়?", "options": ["ক) ১", "খ) ২", "গ) ৩", "ঘ) ৪"], "answer": "ক) ১"},
+                        {"q": "x + 5 = 10 সমীকরণে x এর মান কত?", "options": ["ক) ৩", "খ) ৪", "গ) ৫", "ঘ) ৬"], "answer": "গ) ৫"},
+                        {"q": "2x = 12 হলে, x এর মান কত?", "options": ["ক) ৪", "খ) ৫", "গ) ৬", "ঘ) ৭"], "answer": "গ) ৬"},
+                        {"q": "কোনো সমীকরণের সমান চিহ্নের বাম দিকের রাশিকে কী বলা হয়?", "options": ["ক) ডানপক্ষ", "খ) বামপক্ষ", "গ) চলক", "ঘ) ধ্রুবক"], "answer": "খ) বামপক্ষ"},
+                        {"q": "সমীকরণের মূল বা বীজ বলতে কী বোঝায়?", "options": ["ক) চলকের মান", "খ) ধ্রুবকের মান", "গ) পক্ষের মান", "ঘ) গুণের মান"], "answer": "ক) চলকের মান"}
+                    ],
+                    "অধ্যায় ৮: তথ্য ও উপাত্ত": [
+                        {"q": "উপাত্ত প্রধানত কত প্রকার?", "options": ["ক) ১ প্রকার", "খ) ২ প্রকার", "গ) ৩ প্রকার", "ঘ) ৪ প্রকার"], "answer": "খ) ২ প্রকার"},
+                        {"q": "সরাসরি উৎস থেকে সংগৃহীত উপাত্তকে কী বলা হয়?", "options": ["ক) প্রাথমিক উপাত্ত", "খ) মাধ্যমিক উপাত্ত", "গ) বিন্যস্ত উপাত্ত", "ঘ) অবিন্যস্ত উপাত্ত"], "answer": "ক) প্রাথমিক উপাত্ত"},
+                        {"q": "যে উপাত্তগুলো মানের ক্রমানুসারে সাজানো থাকে না, তাকে কী বলে?", "options": ["ক) বিন্যস্ত উপাত্ত", "খ) অবিন্যস্ত উপাত্ত", "গ) প্রাথমিক উপাত্ত", "ঘ) মাধ্যমিক উপাত্ত"], "answer": "খ) অবিন্যস্ত উপাত্ত"}
+                    ]
+                }
+            },
+            "Class 7": {
+                "গণিত": {
+                    "অধ্যায় ৩": [
+                        {"q": "শূন্য (০) কোন ধরনের সংখ্যা?", "options": ["ক) ধনাত্মক সংখ্যা", "খ) ঋণাত্মক সংখ্যা", "গ) অঋণাত্মক পূর্ণসংখ্যা", "ঘ) ভগ্নাংশ সংখ্যা"], "answer": "গ) অঋণাত্মক পূর্ণসংখ্যা"},
+                        {"q": "-৫ এর বিপরীত সংখ্যা কোনটি?", "options": ["ক) -৫", "খ) ৫", "গ) ০", "ঘ) ১/৫"], "answer": "খ) ৫"},
+                        {"q": "সংখ্যাতালিকায় মূলবিন্দুর ডান দিকের সংখ্যাগুলো কেমন হয়?", "options": ["ক) ঋণাত্মক", "খ) ধনাত্মক", "গ) শূন্য", "ঘ) সমান"], "answer": "খ) ধনাত্মক"}
+                    ]
+                },
+                "বাংলা": {
+                    "পিতৃপুরুষের গল্প": [
+                        {"q": "'পিতৃপুরুষের গল্প' রচনাটির লেখক কে?", "options": ["ক) হারুন হাবীব", "খ) সেলিনা হোসেন", "গ) শওকত ওসমান", "ঘ) রাবেয়া খাতুন"], "answer": "ক) হারুন হাবীব"},
+                        {"q": "'পিতৃপুরুষের গল্প' মূলত কোন পটভূমিতে রচিত?", "options": ["ক) ভাষা আন্দোলন", "খ) মুক্তিযুদ্ধ", "গ) বায়ান্নর একুশে ফেব্রুয়ারি", "ঘ) বাষ্পীয় বিপ্লব"], "answer": "খ) মুক্তিযুদ্ধ"}
+                    ]
+                }
+            }
+        }
+
+        # সেশন স্টেট ইনিশিয়ালাইজেশন
+        if "exam_started" not in st.session_state:
+            st.session_state.exam_started = False
+        if "exam_questions" not in st.session_state:
+            st.session_state.exam_questions = []
+        if "user_answers" not in st.session_state:
+            st.session_state.user_answers = {}
+        if "exam_title_str" not in st.session_state:
+            st.session_state.exam_title_str = "মডেল টেস্ট"
+        if "exam_submitted" not in st.session_state:
+            st.session_state.exam_submitted = False
+        if "is_saved_to_db" not in st.session_state:
+            st.session_state.is_saved_to_db = False
+        if "exam_deadline" not in st.session_state:
+            st.session_state.exam_deadline = 0.0
+
+        # --- ১. কনফিগারেশন ফর্ম ---
+        if not st.session_state.exam_started:
+            
+            with st.form("model_test_custom_config_form"):
+                st.markdown("#### ⚙️ কাস্টম মডেল টেস্ট কনফিগার করুন")
+                
+                sel_class = st.selectbox("ক্লাস নির্বাচন করুন:", list(library_question_bank.keys()), key="m_class_select")
+                
+                available_subjects = list(library_question_bank[sel_class].keys())
+                sel_subjects = st.multiselect("বিষয়সমূহ নির্বাচন করুন:", available_subjects, default=available_subjects[:1], key="m_subjects_select")
+                
+                all_available_chapters = []
+                for sub in sel_subjects:
+                    for ch in library_question_bank[sel_class][sub].keys():
+                        all_available_chapters.append(f"{sub} -> {ch}")
+
+                sel_chapters = st.multiselect("অধ্যায়সমূহ নির্বাচন করুন:", all_available_chapters, default=all_available_chapters, key="m_chapters_select")
+                
+                test_name_input = st.text_input("মডেল টেস্টের নাম/শিরোনাম দিন:", value="আমার কাস্টম মডেল টেস্ট", key="m_test_name_input_val")
+
+                col_e1, col_e2, col_e3 = st.columns(3)
+                with col_e1:
+                    exam_type = st.selectbox("পরীক্ষার ধরন:", ["MCQ (বহুনির্বাচনি)", "সৃজনশীল (CQ) - অচিরেই আসছে"], key="m_type_select")
+                with col_e2:
+                    custom_marks = st.number_input("পূর্ণমান / নম্বর:", min_value=1, max_value=200, value=10, step=1, key="m_custom_marks_input")
+                with col_e3:
+                    custom_time = st.number_input("নির্ধারিত সময় (মিনিট):", min_value=1, max_value=300, value=1, step=1, key="m_custom_time_input")
+
+                start_exam_btn = st.form_submit_button("🚀 মডেল টেস্ট শুরু করুন", use_container_width=True, type="primary")
+
+                if start_exam_btn:
+                    if not sel_subjects or not sel_chapters:
+                        st.error("দয়া করে কমপক্ষে একটি বিষয় এবং অধ্যায় সিলেক্ট করুন।")
+                    elif "সৃজনশীল" in exam_type:
+                        st.warning("সৃজনশীল প্রশ্ন ব্যাংক সংযোজন চলছে। দয়া করে বর্তমানে MCQ পরীক্ষা দিন।")
+                    else:
+                        import random, time
+                        pool_questions = []
+                        for item in sel_chapters:
+                            sub_name, ch_name = item.split(" -> ")
+                            ch_q_list = library_question_bank[sel_class][sub_name].get(ch_name, [])
+                            pool_questions.extend(ch_q_list)
+
+                        if not pool_questions:
+                            st.error("নির্বাচিত অধ্যায়গুলোতে পর্যাপ্ত প্রশ্ন পাওয়া যায়নি।")
+                        else:
+                            num_q_needed = min(len(pool_questions), int(custom_marks))
+                            selected_qs = random.sample(pool_questions, num_q_needed)
+
+                            st.session_state.exam_questions = selected_qs
+                            st.session_state.exam_started = True
+                            st.session_state.exam_submitted = False
+                            st.session_state.is_saved_to_db = False
+                            st.session_state.user_answers = {}
+                            st.session_state.exam_title_str = test_name_input
+                            st.session_state.exam_total_marks = int(custom_marks)
+                            st.session_state.exam_time_allocated = int(custom_time)
+                            # সঠিক ডেডলাইন টাইম সেট করা (বর্তমান সময় + মিনিট)
+                            st.session_state.exam_deadline = time.time() + (int(custom_time) * 60)
+                            st.rerun()
+
+        else:
+            import time
+            current_time = time.time()
+            time_left = int(st.session_state.exam_deadline - current_time)
+
+            # যদি সময় শেষ হয়ে যায় এবং ইতিমধ্যে সাবমিট না হয়ে থাকে
+            if time_left <= 0 and not st.session_state.exam_submitted:
+                st.session_state.exam_submitted = True
+                st.rerun()
+
+            # --- ২. পরীক্ষা চলাকালীন লাইভ কাউন্টডাউন ও কুইজ ইন্টারফেস ---
+            st.markdown("---")
+            
+            # হেডার ও রিয়েল-টাইম কাউন্টডাউন বার
+            m_left = max(0, time_left // 60)
+            s_left = max(0, time_left % 60)
+            time_str_display = f"{m_left:02d}:{s_left:02d}"
+
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); color: white; padding: 15px 20px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+                <div style="font-size: 18px; font-weight: bold;">
+                    ⏱️ পরীক্ষা চলছে: <span style="color: #fef08a;">{st.session_state.exam_title_str}</span>
+                </div>
+                <div style="background-color: #ef4444; color: white; padding: 8px 16px; border-radius: 8px; font-size: 22px; font-weight: bold; font-family: monospace; letter-spacing: 2px;">
+                    ⏳ বাকি সময়: {time_str_display}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.warning(f"⏰ নির্ধারিত সময়: {st.session_state.exam_time_allocated} মিনিট। সময় শেষ হলে খাতা স্বয়ংক্রিয়ভাবে জমা হয়ে যাবে।")
+
+            with st.form("active_custom_exam_form"):
+                for idx, q_data in enumerate(st.session_state.exam_questions):
+                    st.markdown(f"**প্রশ্ন {idx + 1}: {q_data['q']}**")
+                    options = q_data['options']
+                    ans_key = f"q_ans_live_{idx}"
+                    
+                    user_choice = st.radio(f"উত্তর সিলেক্ট করুন ({idx + 1}):", options, key=ans_key, index=None)
+                    st.session_state.user_answers[idx] = user_choice
+                    st.markdown("<hr style='margin: 10px 0; border: 0.5px solid #e2e8f0;'>", unsafe_allow_html=True)
+
+                submit_test = st.form_submit_button("✅ পরীক্ষা সম্পন্ন ও খাতা জমা দিন", use_container_width=True, type="primary")
+
+                if submit_test:
+                    st.session_state.exam_submitted = True
+                    st.rerun()
+
+            # অটো-রিফ্রেশ ট্রিগার করার জন্য যাতে টাইমার প্রতি সেকেন্ডে কমে
+            if time_left > 0 and not st.session_state.exam_submitted:
+                time.sleep(1)
+                st.rerun()
+
+            # --- ৩. ফলাফল মূল্যায়ন ও ডাবল সেভ রোধ ---
+            if st.session_state.get("exam_submitted", False):
+                score = 0
+                total_q = len(st.session_state.exam_questions)
+                correct_cnt = 0
+                wrong_cnt = 0
+                
+                for idx, q_data in enumerate(st.session_state.exam_questions):
+                    user_ans = st.session_state.user_answers.get(idx)
+                    correct_ans = q_data['answer']
+                    if user_ans == correct_ans:
+                        score += 1
+                        correct_cnt += 1
+                    else:
+                        wrong_cnt += 1
+
+                percentage = (score / total_q) * 100 if total_q > 0 else 0
+                
+                if not st.session_state.is_saved_to_db:
+                    import datetime
+                    current_date_str = datetime.datetime.now().strftime("%Y-%m-%d %I:%M %p")
+                    details_data = json.dumps(st.session_state.exam_questions, ensure_ascii=False)
+
+                    conn = sqlite3.connect("smart_school_syllabus.db")
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        INSERT INTO model_test_history (test_title, test_date, total_marks, allocated_time, obtained_score, correct_count, wrong_count, details_json)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        st.session_state.exam_title_str, 
+                        current_date_str, 
+                        st.session_state.exam_total_marks, 
+                        st.session_state.exam_time_allocated, 
+                        score, 
+                        correct_cnt, 
+                        wrong_cnt, 
+                        details_data
+                    ))
+                    conn.commit()
+                    conn.close()
+                    
+                    st.session_state.is_saved_to_db = True
+
+                if time_left <= 0:
+                    st.error("⏰ নির্ধারিত সময় শেষ! আপনার খাতা স্বয়ংক্রিয়ভাবে জমা নেওয়া হয়েছে।")
+                else:
+                    st.success("✅ আপনার পরীক্ষা সফলভাবে জমা দেওয়া হয়েছে!")
+
+                st.markdown("### 📊 পরীক্ষার ফলাফল ও মূল্যায়ন")
+                st.success(f"🎉 **প্রাপ্ত স্কোর:** {score} / {st.session_state.exam_total_marks} | **সঠিক:** {correct_cnt} টি | **ভুল/অনুত্তীর্ণ:** {wrong_cnt} টি ({percentage:.1f}%)")
+
+                with st.expander("🔍 উত্তরপত্র ও সঠিক উত্তরসমূহ দেখে নিন", expanded=True):
+                    for idx, q_data in enumerate(st.session_state.exam_questions):
+                        user_ans = st.session_state.user_answers.get(idx)
+                        correct_ans = q_data['answer']
+                        if user_ans == correct_ans:
+                            st.markdown(f"✅ **প্রশ্ন {idx + 1}:** সঠিক (আপনার উত্তর: {user_ans})")
+                        else:
+                            st.markdown(f"❌ **প্রশ্ন {idx + 1}:** ভুল (আপনার উত্তর: {user_ans if user_ans else 'উত্তর দেননি'} | সঠিক উত্তর: **{correct_ans}**)")
+
+                if st.button("🔄 নতুন মডেল টেস্টে ফিরে যান", use_container_width=True, type="primary"):
+                    st.session_state.exam_started = False
+                    st.session_state.exam_submitted = False
+                    st.session_state.is_saved_to_db = False
+                    st.session_state.exam_questions = []
+                    st.session_state.user_answers = {}
+                    st.rerun()
+
+        # --- ৪. সংরক্ষিত ইতিহাস ও রিটেস্ট (Retest) অপশন ---
         st.markdown("---")
-        st.markdown("#### 📥 জেনারেটেড স্টাডি প্লান প্রিভিউ:")
-        st.table(st.session_state["current_generated_plan"])
-        
-        if st.button("📥 চূড়ান্ত প্ল্যান ড্যাশবোর্ডে সেভ করুন", key="save_final_plan_btn"):
-            st.session_state["saved_study_plans"].append({
-                "পদ্ধতি": plan_mode,
-                "প্ল্যানের বিবরণ": st.session_state["current_generated_plan"]
-            })
-            st.session_state["final_plan_saved_status"] = True
-            st.balloons()
-            st.success("স্টাডি প্ল্যান সফলভাবে আপনার ড্যাশবোর্ডে সংরক্ষণ করা হয়েছে!")
+        st.markdown("### 📂 সংরক্ষিত মডেল টেস্টের ইতিহাস ও রিটেস্ট (History & Retest)")
+
+        conn = sqlite3.connect("smart_school_syllabus.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, test_title, test_date, total_marks, allocated_time, obtained_score, correct_count, wrong_count, details_json FROM model_test_history ORDER BY id DESC")
+        past_tests = cursor.fetchall()
+        conn.close()
+
+        if past_tests:
+            for pt in past_tests:
+                t_id, t_title, t_date, t_total, t_time, t_score, t_correct, t_wrong, t_json = pt
+                
+                with st.expander(f"📌 {t_title} | তারিখ: {t_date} | প্রাপ্ত স্কোর: {t_score}/{t_total}"):
+                    col_hs1, col_hs2 = st.columns(2)
+                    with col_hs1:
+                        st.markdown(f"- **পূর্ণমান:** {t_total}")
+                        st.markdown(f"- **নির্ধারিত সময়:** {t_time} মিনিট")
+                    with col_hs2:
+                        st.markdown(f"- **সঠিক উত্তর:** {t_correct} টি")
+                        st.markdown(f"- **ভুল উত্তর:** {t_wrong} টি")
+
+                    col_h1, col_h2 = st.columns(2)
+                    with col_h1:
+                        if st.button(f"🔄 পুনরায় এই টেস্টটি দিন (Retest)", key=f"retest_btn_{t_id}", use_container_width=True, type="primary"):
+                            st.session_state.exam_questions = json.loads(t_json)
+                            st.session_state.exam_started = True
+                            st.session_state.exam_submitted = False
+                            st.session_state.is_saved_to_db = False
+                            st.session_state.user_answers = {}
+                            st.session_state.exam_title_str = f"পুনরায় পরীক্ষা: {t_title}"
+                            st.session_state.exam_total_marks = t_total
+                            st.session_state.exam_time_allocated = t_time
+                            st.session_state.exam_deadline = time.time() + (t_time * 60)
+                            st.rerun()
+                    with col_h2:
+                        if st.button(f"🗑️ হিস্ট্রি ডিলেট করুন", key=f"del_history_btn_{t_id}", use_container_width=True):
+                            conn = sqlite3.connect("smart_school_syllabus.db")
+                            cursor = conn.cursor()
+                            cursor.execute("DELETE FROM model_test_history WHERE id = ?", (t_id,))
+                            conn.commit()
+                            conn.close()
+                            st.success("হিস্ট্রি সফলভাবে মুছে ফেলা হয়েছে!")
+                            st.rerun()
+        else:
+            st.info("💡 এখনও কোনো মডেল টেস্ট দেওয়া হয়নি। উপরে কাস্টম কনফিগার করে আপনার প্রথম মডেল টেস্ট শুরু করুন।")
+
+
+   
+import sqlite3
+import streamlit as st
+import streamlit.components.v1 as components
+from datetime import datetime, date
+
+# --- পরীক্ষার ডেটাবেজ ইনিশিয়ালাইজেশন ---
+def init_exam_db():
+    conn = sqlite3.connect("exam_schedule.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS exams (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            exam_name TEXT,
+            exam_type TEXT,
+            exam_date TEXT,
+            description TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+init_exam_db()
+
+# --- বাংলা ফন্ট ফ্রেন্ডলি HTML/PDF প্রিন্ট টেমপ্লেট জেনারেটর ---
+def generate_printable_html(exams_data):
+    rows_html = ""
+    for idx, row in enumerate(exams_data, start=1):
+        e_id, e_name, e_type, e_date, e_desc = row
+        rows_html += f"""
+        <tr>
+            <td style="text-align: center;">{idx}</td>
+            <td style="text-align: center;">{e_date}</td>
+            <td><b>{e_name}</b></td>
+            <td style="text-align: center;">{e_type}</td>
+            <td>{e_desc if e_desc else '—'}</td>
+        </tr>
+        """
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>Exam Routine Summary</title>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Kalpurush&family=SolaimanLipi&display=swap');
+            body {{
+                font-family: 'Kalpurush', 'SolaimanLipi', Arial, sans-serif;
+                padding: 20px;
+                color: #1e293b;
+            }}
+            .header {{
+                text-align: center;
+                color: #1E3A8A;
+                margin-bottom: 20px;
+            }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 10px;
+            }}
+            th, td {{
+                border: 1px solid #cbd5e1;
+                padding: 10px 12px;
+                font-size: 14px;
+            }}
+            th {{
+                background-color: #1E3A8A;
+                color: white;
+                font-weight: bold;
+            }}
+            tr:nth-child(even) {{
+                background-color: #f8fafc;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h2>AI Smart Study - পরীক্ষার রুটিন ও সময়সূচী</h2>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 8%;">ক্রমিক</th>
+                    <th style="width: 15%;">তারিখ</th>
+                    <th style="width: 35%;">পরীক্ষা/অ্যাসাইনমেন্টের নাম</th>
+                    <th style="width: 17%;">পরীক্ষার ধরণ</th>
+                    <th style="width: 25%;">নোট / সিলেবাস</th>
+                </tr>
+            </thead>
+            <tbody>
+                {rows_html}
+            </tbody>
+        </table>
+    </body>
+    </html>
+    """
+    return html_content
+
+
+# --- পপআপ সামারি টেবিল ডায়ালগ ফাংশন ---
+@st.dialog("📊 পরীক্ষার রুটিন ও সামারি টেবিল (এক নজরে)", width="large")
+def show_exam_summary_dialog(exams_data):
+    st.markdown("""
+        <style>
+            div[data-testid="stDialog"] div[role="dialog"] {
+                width: 90vw !important;
+                max-width: 950px !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown("এখানে তোমার সমস্ত আসন্ন পরীক্ষা ও অ্যাসাইনমেন্টের একটি সম্পূর্ণ তালিকা দেওয়া হলো। এটি সরাসরি প্রিন্ট বা সেভ করে নিতে পারো:")
+
+    table_rows = []
+    for idx, row in enumerate(exams_data, start=1):
+        e_id, e_name, e_type, e_date, e_desc = row
+        table_rows.append({
+            "ক্রমিক": idx,
+            "তারিখ": e_date,
+            "পরীক্ষা/অ্যাসাইনমেন্টের নাম": e_name,
+            "পরীক্ষার ধরণ": e_type,
+            "নোট / সিলেবাস": e_desc if e_desc else "—"
+        })
+
+    st.dataframe(
+        table_rows,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "ক্রমিক": st.column_config.NumberColumn(width="small"),
+            "তারিখ": st.column_config.TextColumn(width="medium"),
+            "পরীক্ষা/অ্যাসাইনমেন্টের নাম": st.column_config.TextColumn(width="large"),
+            "পরীক্ষার ধরণ": st.column_config.TextColumn(width="medium"),
+            "নোট / সিলেবাস": st.column_config.TextColumn(width="large"),
+        }
+    )
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    col_d1, col_d2 = st.columns(2)
+    with col_d1:
+        printable_html = generate_printable_html(exams_data)
+        st.download_button(
+            label="📄 সেভ / প্রিন্ট করুন (Printable HTML/PDF)",
+            data=printable_html,
+            file_name="Exam_Routine_Summary.html",
+            mime="text/html",
+            use_container_width=True,
+            type="primary"
+        )
+    with col_d2:
+        if st.button("বন্ধ করো", use_container_width=True):
             st.rerun()
 
-    # ড্যাশবোর্ডে সেভ হওয়া স্টাডি প্ল্যানগুলোর তালিকা প্রদর্শন
-    if st.session_state["saved_study_plans"]:
-        st.markdown("---")
-        st.markdown("### 📂 ড্যাশবোর্ডে সংরক্ষিত স্টাডি প্ল্যানসমূহ:")
-        for idx, saved_plan in enumerate(st.session_state["saved_study_plans"], 1):
-            with st.expander(f"সংরক্ষিত প্ল্যান #{idx} (পদ্ধতি: {saved_plan['পদ্ধতি']})"):
-                st.table(saved_plan["প্ল্যানের বিবরণ"])
 
-
+# --- এক্সাম শিডিউল ম্যানেজমেন্ট পেজ রেন্ডার ফাংশন ---
 def render_exams():
-    st.markdown("## 📋 Exam & Assignment Schedule")
-    st.markdown("Stay ahead of deadlines with upcoming exams and homework assignments.")
-    st.info("⚠️ Next Exam: Mathematics on 15 Oct 2025 (12 Days Left)")
-    st.success("✅ Assignment Submitted: Science Lab Report (Status: Graded - A+)")
+    st.markdown("""
+        <h2 style='color: #1E3A8A; font-weight: 700; margin-bottom: 5px;'>📋 এক্সাম ও অ্যাসাইনমেন্ট শিডিউল ম্যানেজমেন্ট</h2>
+        <p style='color: #475569; font-size: 15px;'>তোমার আসন্ন পরীক্ষা, কুইজ এবং অ্যাসাইনমেন্টের সময়সূচী এখানে সাজিয়ে রাখো এবং এক নজরে সামারি টেবিল দেখে নাও।</p>
+    """, unsafe_allow_html=True)
+
+    if "edit_exam_id" not in st.session_state:
+        st.session_state["edit_exam_id"] = None
+
+    if st.session_state["edit_exam_id"] is not None:
+        conn = sqlite3.connect("exam_schedule.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, exam_name, exam_type, exam_date, description FROM exams WHERE id = ?", (st.session_state["edit_exam_id"],))
+        edit_data = cursor.fetchone()
+        conn.close()
+
+        if edit_data:
+            e_id, cur_name, cur_type, cur_date_str, cur_desc = edit_data
+            try:
+                parsed_date = datetime.strptime(cur_date_str, "%Y-%m-%d").date()
+            except ValueError:
+                parsed_date = date.today()
+
+            st.markdown("### ✏️ পরীক্ষার তথ্য সংশোধন করো (Edit Mode)")
+            with st.form("edit_exam_form"):
+                edit_name = st.text_input("পরীক্ষা বা অ্যাসাইনমেন্টের নাম:", value=cur_name)
+                
+                types_list = ["বার্ষিক পরীক্ষা", "অর্ধ-বার্ষিক পরীক্ষা", "সাপ্তাহিক কুইজ", "মাসিক পরীক্ষা", "অ্যাসাইনমেন্ট"]
+                try:
+                    type_idx = types_list.index(cur_type)
+                except ValueError:
+                    type_idx = 0
+
+                edit_type = st.selectbox("পরীক্ষার ধরন:", types_list, index=type_idx)
+                edit_date = st.date_input("পরীক্ষার তারিখ:", value=parsed_date)
+                edit_desc = st.text_input("সিলেবাস বা বিশেষ নোট:", value=cur_desc if cur_desc else "")
+
+                col_e1, col_e2 = st.columns(2)
+                with col_e1:
+                    update_btn = st.form_submit_button("আপডেট করো", use_container_width=True, type="primary")
+                with col_e2:
+                    cancel_btn = st.form_submit_button("বাতিল করো", use_container_width=True)
+
+                if update_btn:
+                    if edit_name:
+                        conn = sqlite3.connect("exam_schedule.db")
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            UPDATE exams SET exam_name = ?, exam_type = ?, exam_date = ?, description = ?
+                            WHERE id = ?
+                        """, (edit_name, edit_type, str(edit_date), edit_desc, e_id))
+                        conn.commit()
+                        conn.close()
+                        st.session_state["edit_exam_id"] = None
+                        st.success("🎉 পরীক্ষার রুটিন সফলভাবে আপডেট করা হয়েছে!")
+                        st.rerun()
+                    else:
+                        st.error("অনুগ্রহ করে পরীক্ষার নামটি প্রদান করো।")
+
+                if cancel_btn:
+                    st.session_state["edit_exam_id"] = None
+                    st.rerun()
+            
+            st.markdown("---")
+
+    with st.form("exam_input_form", clear_on_submit=True):
+        st.markdown("### ➕ নতুন পরীক্ষা বা অ্যাসাইনমেন্ট যুক্ত করো")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            exam_name = st.text_input("পরীক্ষা বা অ্যাসাইনমেন্টের নাম:", placeholder="যেমন: গণিত প্রথম পত্র পরীক্ষা")
+            exam_type = st.selectbox("পরীক্ষার ধরন:", ["বার্ষিক পরীক্ষা", "অর্ধ-বার্ষিক পরীক্ষা", "সাপ্তাহিক কুইজ", "মাসিক পরীক্ষা", "অ্যাসাইনমেন্ট"])
+
+        with col2:
+            exam_date = st.date_input("পরীক্ষার তারিখ:", date.today())
+            description = st.text_input("সিলেবাস বা বিশেষ নোট (ঐচ্ছিক):", placeholder="যেমন: অধ্যায় ১ থেকে ৩ পর্যন্ত")
+
+        submitted = st.form_submit_button("রুটিনে সেভ করো", use_container_width=True, type="primary")
+
+        if submitted:
+            if exam_name:
+                conn = sqlite3.connect("exam_schedule.db")
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO exams (exam_name, exam_type, exam_date, description)
+                    VALUES (?, ?, ?, ?)
+                """, (exam_name, exam_type, str(exam_date), description))
+                conn.commit()
+                conn.close()
+                st.success("🎉 তোমার পরীক্ষা বা অ্যাসাইনমেন্টের সময়সূচী সফলভাবে সেভ হয়েছে!")
+                st.rerun()
+            else:
+                st.error("অনুগ্রহ করে অন্তত পরীক্ষার নামটি প্রদান করো।")
+
+    st.markdown("---")
+
+    conn = sqlite3.connect("exam_schedule.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, exam_name, exam_type, exam_date, description FROM exams ORDER BY exam_date ASC")
+    exams_list = cursor.fetchall()
+    conn.close()
+
+    if exams_list:
+        col_head1, col_head2 = st.columns([2, 1])
+        with col_head1:
+            st.markdown("### 🗓️ তোমার সংরক্ষিত রুটিন ও সময়সূচী")
+        with col_head2:
+            if st.button("📊 সামারি টেবিল দেখাও (Popup)", use_container_width=True, type="primary"):
+                show_exam_summary_dialog(exams_list)
+
+        filter_type = st.selectbox("ধরন অনুযায়ী ফিল্টার করো:", ["সকল", "বার্ষিক পরীক্ষা", "অর্ধ-বার্ষিক পরীক্ষা", "সাপ্তাহিক কুইজ", "মাসিক পরীক্ষা", "অ্যাসাইনমেন্ট"])
+
+        for row in exams_list:
+            e_id, e_name, e_type, e_date, e_desc = row
+
+            if filter_type == "সকল" or e_type == filter_type:
+                st.markdown(f"""
+                    <div style="background-color: #ffffff; border: 1px solid #cbd5e1; border-left: 5px solid #1E3A8A; padding: 12px 15px; border-radius: 6px; margin-bottom: 8px;">
+                        <h4 style="color: #1E3A8A; margin: 0 0 5px 0;">📌 {e_name}</h4>
+                        <p style="margin: 0; color: #475569; font-size: 14px;">
+                            <b>ধরন:</b> {e_type} | <b>তারিখ:</b> {e_date}
+                        </p>
+                        <p style="margin: 5px 0 0 0; color: #64748b; font-size: 13px;">
+                            <b>নোট:</b> {e_desc if e_desc else "কোনো অতিরিক্ত নোট নেই"}
+                        </p>
+                    </div>
+                """, unsafe_allow_html=True)
+
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    if st.button("✏️ এডিট করো", key=f"edit_exam_{e_id}", use_container_width=True):
+                        st.session_state["edit_exam_id"] = e_id
+                        st.rerun()
+                with col_btn2:
+                    if st.button("🗑️ ডিলিট করো", key=f"del_exam_{e_id}", use_container_width=True):
+                        conn = sqlite3.connect("exam_schedule.db")
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM exams WHERE id = ?", (e_id,))
+                        conn.commit()
+                        conn.close()
+                        st.success("সময়সূচী থেকে এটি মুছে ফেলা হয়েছে!")
+                        st.rerun()
+                
+                st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
+    else:
+        st.info("এখনো কোনো পরীক্ষা বা অ্যাসাইনমেন্টের রুটিন যুক্ত করা হয়নি। উপরে ফর্ম থেকে নতুন রুটিন যোগ করো।")
+
+
+import sqlite3
+import streamlit as st
+from datetime import datetime, date
+
 
 def render_notifications():
-    st.markdown("## 🔔 Notifications Center")
-    st.markdown("All alerts, announcements, and teacher remarks.")
-    st.markdown("- **[2 hours ago]** Tomorrow is your Mathematics exam.")
-    st.markdown("- **[4 hours ago]** You have 2 unfinished chapters in Science.")
-    st.markdown("- **[1 day ago]** Science assignment is due tomorrow.")
+    st.markdown("""
+        <h2 style='color: #1E3A8A; font-weight: 700; margin-bottom: 5px;'>🔔 স্মার্ট নোটিফিকেশন ও এআই মেন্টর গাইড</h2>
+        <p style='color: #475569; font-size: 15px;'>তোমার আসন্ন পরীক্ষার প্রস্তুতি, রিমাইন্ডার এবং পড়াশোনার দিকনির্দেশনা এক নজরে দেখে নাও।</p>
+    """, unsafe_allow_html=True)
+
+    # ডেটাবেজ থেকে আসন্ন পরীক্ষাগুলোর ডেটা ফেচ করা
+    try:
+        conn = sqlite3.connect("exam_schedule.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, exam_name, exam_type, exam_date, description FROM exams ORDER BY exam_date ASC")
+        exams_list = cursor.fetchall()
+        conn.close()
+    except sqlite3.OperationalError:
+        exams_list = []
+
+    today = date.today()
+
+    # --- ১. শিক্ষকসুলভ এআই মেন্টর ওয়েলকাম ও রিমাইন্ডার কার্ড ---
+    st.markdown("""
+        <div style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); padding: 20px; border-radius: 12px; color: white; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <h3 style="margin: 0 0 8px 0; color: #ffffff;">👋 হ্যালো! আমি তোমার এআই স্টাডি গাইড ও মেন্টর</h3>
+            <p style="margin: 0; font-size: 15px; line-height: 1.6;">
+                পড়াশোনা কেমন চলছে? তোমার লক্ষ্য অর্জনে আমি সবসময় তোমার পাশে আছি। নিচে তোমার পরীক্ষার সময়সূচী এবং প্রস্তুতির বর্তমান অবস্থা বিশ্লেষণ করে গুরুত্বপূর্ণ গাইডলাইন দেওয়া হলো। নিয়মিত রিভিশন দাও এবং প্র্যাকটিস করো!
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("### ⏰ পরীক্ষার লাইভ কাউন্টডাউন ও রিমাইন্ডার")
+
+    if exams_list:
+        upcoming_found = False
+        for row in exams_list:
+            e_id, e_name, e_type, e_date_str, e_desc = row
+            try:
+                exam_date = datetime.strptime(e_date_str, "%Y-%m-%d").date()
+                delta_days = (exam_date - today).days
+
+                if delta_days >= 0:
+                    upcoming_found = True
+                    # ডায়নামিক কালার ও ম্যাসেজ সেট করা
+                    if delta_days == 0:
+                        urgency_color = "#991b1b" # লাল (আজকেই পরীক্ষা)
+                        time_msg = "⚠️ আজকেই তোমার পরীক্ষা! শেষ মুহূর্তের রিভিশন দ্রুত শেষ করো।"
+                    elif delta_days <= 3:
+                        urgency_color = "#c2410c" # কমলা (খুব কাছে)
+                        time_msg = f"🔥 আর মাত্র **{delta_days} দিন** বাকি! প্রস্তুতি জোরদার করো।"
+                    else:
+                        urgency_color = "#1e3a8a" # নীল
+                        time_msg = f"⏳ পরীক্ষার বাকি আছে **{delta_days} দিন**। পরিকল্পনা অনুযায়ী পড়াশোনা চালিয়ে যাও।"
+
+                    st.markdown(f"""
+                        <div style="background-color: #ffffff; border: 1px solid #cbd5e1; border-left: 6px solid {urgency_color}; padding: 15px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+                            <h4 style="color: #1E3A8A; margin: 0 0 5px 0;">📌 {e_name} ({e_type})</h4>
+                            <p style="margin: 0 0 5px 0; color: #334155; font-size: 14px;">
+                                <b>তারিখ:</b> {e_date_str} | <b>সিলেবাস/নোট:</b> {e_desc if e_desc else "নির্দিষ্ট সিলেবাস নেই"}
+                            </p>
+                            <p style="margin: 5px 0 0 0; color: {urgency_color}; font-size: 14px; font-weight: 600;">
+                                {time_msg}
+                            </p>
+                        </div>
+                    """, unsafe_allow_html=True)
+            except ValueError:
+                continue
+        
+        if not upcoming_found:
+            st.info("🎉 তোমার কোনো আসন্ন পরীক্ষা নেই। নতুন পরীক্ষার রুটিন শিডিউল অপশন থেকে যুক্ত করতে পারো।")
+    else:
+        st.info("📌 এখনো কোনো পরীক্ষার রুটিন যোগ করা হয়নি। এক্সাম শিডিউল অপশন থেকে রুটিন যুক্ত করলে এখানে লাইভ কাউন্টডাউন দেখতে পাবে।")
+
+    st.markdown("---")
+
+    # --- ২. সিলেবাস প্রোগ্রেস ও মেন্টরের পরামর্শ ---
+    st.markdown("### 📊 মেন্টর এনালিসিস ও প্রিপারেশন গাইডলাইন")
+    
+    col_m1, col_m2 = st.columns(2)
+    with col_m1:
+        st.markdown("""
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px;">
+                <p style="color: #1E3A8A; font-weight: bold; margin-bottom: 8px;">📖 দৈনিক স্টাডি গোল ও টার্গেট</p>
+                <p style="color: #475569; font-size: 13.5px; line-height: 1.5; margin: 0;">
+                    • প্রতিদিন অন্তত <b>৩ থেকে ৪ ঘণ্টা</b> ফোকাসড স্টাডি করো।<br>
+                    • কঠিন বিষয়গুলো সকালের দিকে পড়ার চেষ্টা করো।<br>
+                    • প্রতি ১ ঘণ্টা পড়ার পর ১০ মিনিট বিশ্রাম নাও।
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+
+    with col_m2:
+        st.markdown("""
+            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px;">
+                <p style="color: #1E3A8A; font-weight: bold; margin-bottom: 8px;">🎯 শিক্ষকসুলভ পরামর্শ ও প্র্যাকটিস</p>
+                <p style="color: #475569; font-size: 13.5px; line-height: 1.5; margin: 0;">
+                    • শুধু পড়ালেখা করলেই হবে না, যা পড়েছ তা খাতায় নোট করো বা লিখে প্র্যাকটিস করো।<br>
+                    • প্রস্তুতি যাচাই করতে নিজে নিজে মক টেস্ট বা কুইজ দাও।<br>
+                    • কোনো টপিক বুঝতে সমস্যা হলে নোট খাতা বা এআই অ্যাসিস্ট্যান্টের সাহায্য নাও।
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+
+    # --- ৩. শিক্ষক ও সিস্টেমের সাম্প্রতিক নোটিশ বোর্ড ---
+    st.markdown("---")
+    st.markdown("### 📢 শিক্ষক ও সিস্টেম অ্যানাউন্সমেন্ট")
+    st.markdown("- **[৫ মিনিট আগে]** এআই মেন্টর: আসন্ন গণিত ও বিজ্ঞান পরীক্ষার জন্য রিভিশন শিট দ্রুত সম্পন্ন করো।")
+    st.markdown("- **[২ ঘণ্টা আগে]** নোটিশ: পাঠাগারে নতুন রেফারেন্স বুক ও মডেল টেস্ট পেপার যুক্ত করা হয়েছে।")
+    st.markdown("- **[১ দিন আগে]** সিস্টেম আপডেট: নোট এডিটর থেকে সরাসরি পিডিএফ ও ওয়ার্ড ফাইল ডাউনলোডের ফিচার সক্রিয় রয়েছে।")
 
 def render_settings():
     st.markdown("## ⚙️ Profile & Settings")
@@ -2678,9 +3797,9 @@ else:
         nav_options = [
             ("📊 ড্যাশবোর্ড", "Dashboard"),
             ("📚 আমার পাঠাগার", "My Books"),
-            ("🎯 প্র্যাক্টিস ও প্রিপারেশন", "Quiz & Practice"),
+            ("🎯 প্র্যাক্টিস অ্যান্ড প্রিপারেশন", "Quiz & Practice"),
             ("📝 আমার নোট খাতা", "Notes"),
-            ("📅 পাঠ পরিকল্পনা", "Study Planner"),
+            ("📅 সিলেবাস ও পাঠ পরিকল্পনা", "Study Planner"),
             ("📋 পরীক্ষার রুটিন", "Exam & Assignment"),
             ("🔔 রিমাইন্ডার", "Notifications"),
             ("⚙️ সেটিংস", "Profile / Settings")
