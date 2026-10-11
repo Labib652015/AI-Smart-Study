@@ -1023,295 +1023,1102 @@ def render_my_books():
                     st.session_state.book_chat_messages.append({"role": "assistant", "content": ai_reply})
                     st.rerun()
 
+import json
+import random
+import sqlite3
+import time
+from datetime import datetime
 import streamlit as st
 
+
+# --- ডেটাবেজ ইনিশিয়ালাইজেশন ---
+def init_databases():
+    conn1 = sqlite3.connect("subject_notes.db")
+    cursor1 = conn1.cursor()
+    cursor1.execute("""
+        CREATE TABLE IF NOT EXISTS notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            content TEXT,
+            subject TEXT,
+            note_type TEXT
+        )
+    """)
+    conn1.commit()
+    conn1.close()
+
+    conn2 = sqlite3.connect("smart_school_syllabus.db")
+    cursor2 = conn2.cursor()
+    cursor2.execute("""
+        CREATE TABLE IF NOT EXISTS model_test_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            test_title TEXT,
+            test_date TEXT,
+            total_marks INTEGER,
+            allocated_time INTEGER,
+            obtained_score INTEGER,
+            correct_count INTEGER,
+            wrong_count INTEGER,
+            details_json TEXT
+        )
+    """)
+    conn2.commit()
+    conn2.close()
+
+
+init_databases()
+
+
 def render_quiz_practice():
-    # কাস্টম কালারফুল ও ইউনিক স্টাইল ডিজাইন (প্র্যাকটিস পেজের জন্য আলাদা ডাইমেনশন)
-    st.markdown("""
-        <style>
-        @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Outfit:wght@400;600;800&display=swap');
+    # --- কাস্টম স্টাইল ও ডিজাইন ---
+    st.markdown(
+        """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Outfit:wght@400;600;800&display=swap');
 
-        .practice-magic-wrapper {
-            font-family: 'Outfit', 'Hind Siliguri', sans-serif;
-            background: linear-gradient(135deg, #fef3c7 0%, #fae8ff 50%, #e0f2fe 100%);
-            padding: 32px;
-            border-radius: 28px;
-            border: 2px solid #f43f5e;
-            box-shadow: 0 20px 40px rgba(244, 63, 94, 0.12);
-            color: #1e293b;
-            margin-bottom: 25px;
-        }
-
-        .practice-banner {
-            background: linear-gradient(135deg, #f43f5e 0%, #fb7185 50%, #e11d48 100%);
-            padding: 24px;
-            border-radius: 20px;
-            color: white;
-            text-align: center;
-            margin-bottom: 25px;
-            box-shadow: 0 10px 25px rgba(244, 63, 94, 0.3);
-        }
-
-        .practice-quote-box {
-            background: #ffffff;
-            padding: 16px 20px;
-            border-radius: 16px;
-            border-left: 6px solid #f43f5e;
-            border: 1px solid #fbcfe8;
-            margin-bottom: 25px;
-            box-shadow: 0 8px 20px rgba(244, 63, 94, 0.08);
-        }
-
-        .practice-card {
-            background: #ffffff;
-            padding: 22px;
-            border-radius: 18px;
-            border: 1px solid #fbcfe8;
-            border-top: 5px solid #f43f5e;
-            box-shadow: 0 10px 25px rgba(244, 63, 94, 0.08);
-            margin-bottom: 18px;
-        }
-
-        /* নিজস্ব কালারফুল বাটন ডিজাইন */
-        .stButton button {
-            font-family: 'Outfit', 'Hind Siliguri', sans-serif !important;
-            border-radius: 12px !important;
-            font-weight: 700 !important;
-            background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%) !important;
-            color: white !important;
-            border: none !important;
-            box-shadow: 0 6px 15px rgba(244, 63, 94, 0.3) !important;
-            transition: all 0.3s ease !important;
-        }
-
-        .stButton button:hover {
-            background: linear-gradient(135deg, #e11d48 0%, #be123c 100%) !important;
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(244, 63, 94, 0.4) !important;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
-    # মূল প্র্যাকটিস পেজ কন্টেইনার শুরু
-    st.markdown("<div class='practice-magic-wrapper'>", unsafe_allow_html=True)
-
-    # আকর্ষণীয় হেডার ব্যানার
-    st.markdown("""
-        <div class="practice-banner">
-            <h1 style="margin: 0; font-size: 28px; font-weight: 800;">🎯 কুইজ ও অনুশীলন হাব (Quiz & Practice Hub)</h1>
-            <p style="margin: 6px 0 0 0; font-size: 15px; font-weight: 500; opacity: 0.95;">ভার্চুয়াল লাইব্রেরি থেকে নিজের মতো বিষয় ও অধ্যায় বেছে নিয়ে কুইজে অংশ নাও এবং নিজেকে ঝালাই করে নাও!</p>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # মোটিভেশনাল বা নীতিকথা বক্স
-    st.markdown("""
-        <div class="practice-quote-box">
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <span style="font-size: 28px;">🏆</span>
-                <div>
-                    <h4 style="margin: 0; color: #be123c; font-size: 15px; font-weight: 700;">শিক্ষার্থীদের জন্য আজকের উৎসাহবাণী:</h4>
-                    <p style="margin: 4px 0 0 0; color: #334155; font-size: 13px; font-weight: 500;">
-                        "ভুল করা মানেই শেখার পথে এক ধাপ এগিয়ে যাওয়া। যত বেশি অনুশীলন করবে, তোমার মেধা তত বেশি শাণিত হবে।" 💪✨
-                    </p>
-                </div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # প্রগ্রেস সংরক্ষণের জন্য সেশন স্টেট ইনিশিয়ালাইজ করা[cite: 26]
-    if "user_progress" not in st.session_state:
-        st.session_state["user_progress"] = []
-
-    # ক্লাস, বিষয়, অধ্যায় এবং নির্দিষ্ট প্রশ্ন সম্বলিত ডিকশনারি[cite: 26]
-    library_question_bank = {
-        "Class 6": {
-            "বাংলা (চারুপাঠ)": {
-                "অধ্যায় ১: মাদার তেরেসা": [
-                    {
-                        "q": "মাদার তেরেসা কত সালে জন্মগ্রহণ করেন?",
-                        "options": ["ক) ১৯১০ সালের ২৬ আগস্ট", "খ) ১৯১২ সালের ২৭ আগস্ট", "গ) ১৯১৪ সালের ২৮ আগস্ট", "ঘ) ১৯১৬ সালের ২৯ আগস্ট"],
-                        "answer": "ক) ১৯১০ সালের ২৬ আগস্ট"
-                    },
-                    {
-                        "q": "মাদার তেরেসার জন্মস্থান কোথায়?",
-                        "options": ["ক) ভারত", "খ) যুগোস্লাভিয়ার স্কোপিয়ে", "গ) ফ্রান্স", "ঘ) ইংল্যান্ড"],
-                        "answer": "খ) যুগোস্লাভিয়ার স্কোপিয়ে"
-                    },
-                    {
-                        "q": "মাদার তেরেসার আসল নাম কী ছিল?",
-                        "options": ["ক) মার্গারেট", "খ) অ্যাগনেস গোনহেক্সা বোয়াযু", "গ) এলিজাবেথ", "ঘ) ক্যাথরিন"],
-                        "answer": "খ) অ্যাগনেস গোনহেক্সা বোয়াযু"
-                    },
-                    {
-                        "q": "কলকাতায় এসে মাদার তেরেসা কোন ভাষা খুব ভালোভাবে আয়ত্ত করেছিলেন?",
-                        "options": ["ক) হিন্দি ও ইংরেজি", "খ) বাংলা ও ইংরেজি", "গ) উর্দু ও ফার্সি", "ঘ) মারাঠি"],
-                        "answer": "খ) বাংলা ও ইংরেজি"
-                    }
-                ],
-                "অধ্যায় ২: চিঠি বিলি": [
-                    {
-                        "q": "'চিঠি বিলি' কবিতার রচয়িতা কে?",
-                        "options": ["ক) সুকুমার রায়", "খ) রোকনুজ্জামান খান", "গ) শামসুর রাহমান", "ঘ) জসীমউদ্দীন"],
-                        "answer": "খ) রোকনুজ্জামান খান"
-                    },
-                    {
-                        "q": "'চিঠি বিলি' কবিতায় চিঠি বিলি করতে কে ছুটে চলেছে?",
-                        "options": ["ক) চিংড়ি মাছ", "খ) ব্যাঙ", "গ) খলসে মাছ", "ঘ) কাতলা মাছ"],
-                        "answer": "খ) ব্যাঙ"
-                    },
-                    {
-                        "q": "চিঠি বিলি করতে যাওয়ার সময় ব্যাঙের মাথায় কী ছিল?",
-                        "options": ["ক) টুপি", "খ) ছাতা", "গ) পাতার মুকুট", "ঘ) গামছা"],
-                        "answer": "খ) ছাতা"
-                    }
-                ]
-            },
-            "গণিত": {
-                "অধ্যায় ৫: সরল সমীকরণ": [
-                    {
-                        "q": "সরল সমীকরণে চলকের সর্বোচ্চ ঘাত বা শক্তি কত হয়?",
-                        "options": ["ক) ১", "খ) ২", "গ) ৩", "ঘ) ৪"],
-                        "answer": "ক) ১"
-                    },
-                    {
-                        "q": "x + 5 = 10 সমীকরণে x এর মান কত?",
-                        "options": ["ক) ৩", "খ) ৪", "গ) ৫", "ঘ) ৬"],
-                        "answer": "গ) ৫"
-                    },
-                    {
-                        "q": "2x = 12 হলে, x এর মান কত?",
-                        "options": ["ক) ৪", "খ) ৫", "গ) ৬", "ঘ) ৭"],
-                        "answer": "গ) ৬"
-                    }
-                ],
-                "অধ্যায় ৮: তথ্য ও উপাত্ত": [
-                    {
-                        "q": "উপাত্ত প্রধানত কত প্রকার?",
-                        "options": ["ক) ১ প্রকার", "খ) ২ প্রকার", "গ) ৩ প্রকার", "ঘ) ৪ প্রকার"],
-                        "answer": "খ) ২ প্রকার"
-                    },
-                    {
-                        "q": "সরাসরি উৎস থেকে সংগৃহীত উপাত্তকে কী বলা হয়?",
-                        "options": ["ক) প্রাথমিক উপাত্ত", "খ) মাধ্যমিক উপাত্ত", "গ) বিন্যস্ত উপাত্ত", "ঘ) অবিন্যস্ত উপাত্ত"],
-                        "answer": "ক) প্রাথমিক উপাত্ত"
-                    }
-                ]
-            }
-        },
-        "Class 7": {
-            "গণিত": {
-                "অধ্যায় ৩": [
-                    {
-                        "q": "শূন্য (০) কোন ধরনের সংখ্যা?",
-                        "options": ["ক) ধনাত্মক সংখ্যা", "খ) ঋণাত্মক সংখ্যা", "গ) অঋণাত্মক পূর্ণসংখ্যা", "ঘ) ভগ্নাংশ সংখ্যা"],
-                        "answer": "গ) অঋণাত্মক পূর্ণসংখ্যা"
-                    },
-                    {
-                        "q": "-৫ এর বিপরীত সংখ্যা কোনটি?",
-                        "options": ["ক) -৫", "খ) ৫", "গ) ০", "ঘ) ১/৫"],
-                        "answer": "খ) ৫"
-                    }
-                ]
-            }
-        }
+    .practice-magic-wrapper {
+        font-family: 'Outfit', 'Hind Siliguri', sans-serif;
+        background: linear-gradient(135deg, #fef3c7 0%, #fae8ff 50%, #e0f2fe 100%);
+        padding: 30px;
+        border-radius: 24px;
+        border: 2px solid #f43f5e;
+        box-shadow: 0 15px 35px rgba(244, 63, 94, 0.1);
+        color: #1e293b;
+        margin-bottom: 25px;
     }
 
-    st.markdown("<h3 style='color: #e11d48; font-size: 18px; font-weight: 700;'>📚 লাইব্রেরি থেকে শ্রেণি, বিষয় ও অধ্যায় নির্বাচন করুন:</h3>", unsafe_allow_html=True)
-    
-    col_11, col_12, col_13 = st.columns(3, gap="medium")
-    with col_11:
-        selected_class = st.selectbox("শ্রেণি বেছে নিন:", list(library_question_bank.keys()), key="quiz_class_sel")
-    with col_12:
-        available_books = list(library_question_bank[selected_class].keys())
-        selected_book = st.selectbox("বই বা বিষয় বেছে নিন:", available_books, key="quiz_book_sel")
-    with col_13:
-        available_chapters = list(library_question_bank[selected_class][selected_book].keys())
-        selected_chapter = st.selectbox("অধ্যায় বা টপিক বেছে নিন:", available_chapters, key="quiz_chap_sel")
+    .practice-banner {
+        background: linear-gradient(135deg, #f43f5e 0%, #fb7185 50%, #e11d48 100%);
+        padding: 22px;
+        border-radius: 18px;
+        color: white;
+        text-align: center;
+        margin-bottom: 22px;
+        box-shadow: 0 8px 20px rgba(244, 63, 94, 0.25);
+    }
 
-    st.markdown("<hr style='margin: 25px 0; border: 0; border-top: 2px dashed #fbcfe8;'>", unsafe_allow_html=True)
+    .practice-quote-box {
+        background: #ffffff;
+        padding: 15px 20px;
+        border-radius: 14px;
+        border-left: 6px solid #f43f5e;
+        border: 1px solid #fbcfe8;
+        margin-bottom: 22px;
+        box-shadow: 0 5px 15px rgba(244, 63, 94, 0.06);
+    }
 
-    # প্র্যাকটিস কনফিগারেশন
-    col_c1, col_c2 = st.columns(2, gap="medium")
-    with col_c1:
-        practice_mode = st.selectbox("অনুশীলনের মোড:", ["📝 MCQ কুইজ টেস্ট", "💡 ফ্ল্যাশকার্ড রিভিশন"], key="practice_mode_sel")
-    with col_c2:
-        study_hours = st.number_input("পড়াশোনার সময় (ঘণ্টা):", min_value=0.5, max_value=5.0, value=1.0, step=0.5, key="study_hours_input")
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    generate_btn = st.button("🚀 নির্বাচিত অধ্যায় থেকে কুইজ শুরু করুন", use_container_width=True)
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+    }
 
-    if generate_btn:
-        st.session_state["quiz_active"] = True
-        st.session_state["show_review"] = False 
-        st.session_state["generated_quiz"] = library_question_bank[selected_class][selected_book][selected_chapter]
-        st.rerun()
+    .stTabs [data-baseweb="tab"] {
+        height: 48px;
+        background-color: #ffffff;
+        border-radius: 12px;
+        color: #e11d48;
+        font-weight: 700;
+        border: 1px solid #fbcfe8;
+        padding: 8px 18px;
+    }
 
-    # কুইজ সচল থাকলে প্রশ্ন ও অপশন দেখাবে
-    if st.session_state.get("quiz_active", False) and "generated_quiz" in st.session_state:
-        st.markdown("---")
-        st.markdown(f"### ✨ কুইজ সেশন: {selected_class} - {selected_book}")
-        st.warning(f"নির্বাচিত অধ্যায়: **{selected_chapter}** | মোড: **{practice_mode}**")
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%) !important;
+        color: white !important;
+    }
 
-        # যদি সাবমিট করা হয়ে থাকে কিন্তু রিভিউ মোড চালু থাকে
-        if st.session_state.get("show_review", False):
-            st.markdown("### 📊 কুইজ ফলাফল ও সঠিক উত্তরসমূহ:")
-            for idx, item in enumerate(st.session_state["generated_quiz"], 1):
-                user_ans = st.session_state.get(f"lib_q_{idx}")
-                correct_ans = item["answer"]
-                st.markdown(f"**প্রশ্ন {idx}:** {item['q']}")
-                if user_ans == correct_ans:
-                    st.success(f"আপনার উত্তর: {user_ans} (সঠিক আছে ✅)")
-                else:
-                    st.error(f"আপনার উত্তর: {user_ans} (ভুল ❌)")
-                st.info(f"সঠিক উত্তর হবে: **{correct_ans}**")
-                st.markdown("---")
-            
-            if st.button("🔄 আবার নতুন করে কুইজ শুরু করুন", use_container_width=True):
-                st.session_state["quiz_active"] = False
-                st.session_state["show_review"] = False
-                st.rerun()
+    .stButton button {
+        font-family: 'Outfit', 'Hind Siliguri', sans-serif !important;
+        border-radius: 10px !important;
+        font-weight: 700 !important;
+        background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%) !important;
+        color: white !important;
+        border: none !important;
+        box-shadow: 0 4px 12px rgba(244, 63, 94, 0.25) !important;
+        transition: all 0.3s ease !important;
+    }
+
+    .stButton button:hover {
+        background: linear-gradient(135deg, #e11d48 0%, #be123c 100%) !important;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(244, 63, 94, 0.35) !important;
+    }
+    </style>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("<div class='practice-magic-wrapper'>", unsafe_allow_html=True)
+
+    st.markdown(
+        """
+    <div class="practice-banner">
+        <h1 style="margin: 0; font-size: 26px; font-weight: 800;">🎯 স্মার্ট ইংলিশ প্র্যাকটিস ও মডেল টেস্ট হাব</h1>
+        <p style="margin: 5px 0 0 0; font-size: 14px; font-weight: 500; opacity: 0.95;">
+            ক্লাস ৬, ৭ ও ৮ এর ইংরেজি ১ম ও ২য় পত্রের পূর্ণাঙ্গ সিলেবাসভিত্তিক প্রস্তুতি প্ল্যাটফর্ম!
+        </p>
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+    <div class="practice-quote-box">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 26px;">💡</span>
+            <div>
+                <h4 style="margin: 0; color: #be123c; font-size: 14px; font-weight: 700;">শিক্ষার্থীদের জন্য টিপস:</h4>
+                <p style="margin: 3px 0 0 0; color: #334155; font-size: 13px; font-weight: 500;">
+                    "নিয়মিত ভোকাবুলারি ও গ্রামার প্র্যাকটিস করলে ইংরেজি ভীতি দূর হয়ে আত্মবিশ্বাস বহুগুণ বেড়ে যায়।"
+                </p>
+            </div>
+        </div>
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    if "user_progress" not in st.session_state:
+        st.session_state["user_progress"] = []
+    if "exam_started" not in st.session_state:
+        st.session_state.exam_started = False
+    if "exam_questions" not in st.session_state:
+        st.session_state.exam_questions = []
+    if "user_answers" not in st.session_state:
+        st.session_state.user_answers = {}
+    if "exam_title_str" not in st.session_state:
+        st.session_state.exam_title_str = "মডেল টেস্ট"
+    if "exam_submitted" not in st.session_state:
+        st.session_state.exam_submitted = False
+    if "is_saved_to_db" not in st.session_state:
+        st.session_state.is_saved_to_db = False
+    if "exam_deadline" not in st.session_state:
+        st.session_state.exam_deadline = 0.0
+
+    # --- পূর্ণাঙ্গ প্রশ্ন ব্যাংক ডিকশনারি (ক্লাস ৬, ৭, ৮ - ইংরেজি ১ম ও ২য় পত্র) ---
+    library_question_bank = {
+        "Class 6": {
+            "English 1st Paper": {
+                "MCQ (Reading Comprehension)": [
+                    {
+                        "q": "What is the main topic of the lesson 'Fabiha's First Day at School'?",
+                        "options": [
+                            "a) Excitement and nervousness of a new school",
+                            "b) Playing football",
+                            "c) Shopping in a market",
+                            "d) Visiting a museum",
+                        ],
+                        "answer": "a) Excitement and nervousness of a new school",
+                    },
+                    {
+                        "q": "Where did the story 'At the Airport' take place?",
+                        "options": [
+                            "a) Railway station",
+                            "b) International Airport",
+                            "c) Bus terminal",
+                            "d) Launch ghat",
+                        ],
+                        "answer": "b) International Airport",
+                    },
+                    {
+                        "q": "Who is the central character in the lesson about 'A Clean Village'?",
+                        "options": [
+                            "a) Ratan",
+                            "b) Mina",
+                            "c) Raju",
+                            "d) Nobibur",
+                        ],
+                        "answer": "b) Mina",
+                    },
+                    {
+                        "q": "What do we learn from the story of 'The Shoemaker and the Elves'?",
+                        "options": [
+                            "a) Laziness",
+                            "b) Hard work and kindness",
+                            "c) Greed",
+                            "d) Dishonesty",
+                        ],
+                        "answer": "b) Hard work and kindness",
+                    },
+                    {
+                        "q": "International Mother Language Day is observed on—",
+                        "options": [
+                            "a) 21st February",
+                            "b) 26th March",
+                            "c) 16th December",
+                            "d) 1st May",
+                        ],
+                        "answer": "a) 21st February",
+                    },
+                ],
+                "Fill in the Blanks": [
+                    {
+                        "q": "Fill in the blank: Honesty is the best ____.",
+                        "options": [
+                            "a) policy",
+                            "b) habit",
+                            "c) duty",
+                            "d) wealth",
+                        ],
+                        "answer": "a) policy",
+                    },
+                    {
+                        "q": "Fill in the blank: Birds can fly ____ the sky.",
+                        "options": ["a) in", "b) on", "c) at", "d) by"],
+                        "answer": "a) in",
+                    },
+                    {
+                        "q": "Fill in the blank: Trees provide us with oxygen to ____.",
+                        "options": [
+                            "a) sleep",
+                            "b) breathe",
+                            "c) eat",
+                            "d) walk",
+                        ],
+                        "answer": "b) breathe",
+                    },
+                    {
+                        "q": "Fill in the blank: The Padma is a big ____.",
+                        "options": [
+                            "a) mountain",
+                            "b) river",
+                            "c) ocean",
+                            "d) desert",
+                        ],
+                        "answer": "b) river",
+                    },
+                ],
+                "Vocabulary": [
+                    {
+                        "q": "What is the synonym of the word 'Courage'?",
+                        "options": [
+                            "a) Fear",
+                            "b) Bravery",
+                            "c) Cowardice",
+                            "d) Weakness",
+                        ],
+                        "answer": "b) Bravery",
+                    },
+                    {
+                        "q": "What is the antonym of the word 'Ancient'?",
+                        "options": [
+                            "a) Old",
+                            "b) Modern",
+                            "c) Historic",
+                            "d) Aged",
+                        ],
+                        "answer": "b) Modern",
+                    },
+                    {
+                        "q": "What does the word 'Hospitality' mean?",
+                        "options": [
+                            "a) Treating guests with warmth and generosity",
+                            "b) Cruelty to animals",
+                            "c) Fighting enemies",
+                            "d) Ignoring people",
+                        ],
+                        "answer": "a) Treating guests with warmth and generosity",
+                    },
+                ],
+            },
+            "English 2nd Paper": {
+                "Right Forms of Verbs": [
+                    {
+                        "q": "Choose the correct form: 'Water (boil) at 100 degree centigrade.'",
+                        "options": [
+                            "a) boil",
+                            "b) boils",
+                            "c) boiled",
+                            "d) is boiling",
+                        ],
+                        "answer": "b) boils",
+                    },
+                    {
+                        "q": "Choose the correct form: 'Yesterday, he (go) to Dhaka.'",
+                        "options": ["a) goes", "b) went", "c) gone", "d) go"],
+                        "answer": "b) went",
+                    },
+                    {
+                        "q": "Choose the correct form: 'Look! The boy (play) football.'",
+                        "options": [
+                            "a) play",
+                            "b) plays",
+                            "c) is playing",
+                            "d) played",
+                        ],
+                        "answer": "c) is playing",
+                    },
+                ],
+                "Parts of Speech": [
+                    {
+                        "q": "Identify the part of speech of the underlined word: 'She runs *fast*.'",
+                        "options": [
+                            "a) Noun",
+                            "b) Adjective",
+                            "c) Adverb",
+                            "d) Verb",
+                        ],
+                        "answer": "c) Adverb",
+                    },
+                    {
+                        "q": "Identify the noun in the sentence: 'Honesty is the best policy.'",
+                        "options": [
+                            "a) Honesty",
+                            "b) Best",
+                            "c) Policy",
+                            "d) Both a and c",
+                        ],
+                        "answer": "d) Both a and c",
+                    },
+                ],
+                "Changing Sentences & Narration": [
+                    {
+                        "q": "Make it negative: 'He is an honest man.'",
+                        "options": [
+                            "a) He is not a dishonest man.",
+                            "b) He is not an honest man.",
+                            "c) He never honest.",
+                            "d) None",
+                        ],
+                        "answer": "a) He is not a dishonest man.",
+                    },
+                    {
+                        "q": "Change into Indirect: Rahim said, 'I am reading a book.'",
+                        "options": [
+                            "a) Rahim said that he was reading a book.",
+                            "b) Rahim said that I am reading a book.",
+                            "c) Rahim told that he is reading.",
+                            "d) Rahim says he reads.",
+                        ],
+                        "answer": "a) Rahim said that he was reading a book.",
+                    },
+                ],
+            },
+        },
+        "Class 7": {
+            "English 1st Paper": {
+                "MCQ (Reading Comprehension)": [
+                    {
+                        "q": "Begum Rokeya fought all her life for—",
+                        "options": [
+                            "a) Women's rights and education",
+                            "b) Political power",
+                            "c) Wealth",
+                            "d) Sports development",
+                        ],
+                        "answer": "a) Women's rights and education",
+                    },
+                    {
+                        "q": "Where did the Tagore's family live?",
+                        "options": [
+                            "a) Jorasanko, Kolkata",
+                            "b) Sylhet",
+                            "c) Chattogram",
+                            "d) Rajshahi",
+                        ],
+                        "answer": "a) Jorasanko, Kolkata",
+                    },
+                    {
+                        "q": "What is 'Heritage'?",
+                        "options": [
+                            "a) Traditions and qualities passed down through generations",
+                            "b) Modern gadgets",
+                            "c) Foreign cultures",
+                            "d) Plastic goods",
+                        ],
+                        "answer": (
+                            "a) Traditions and qualities passed down through"
+                            " generations"
+                        ),
+                    },
+                ],
+                "Fill in the Blanks": [
+                    {
+                        "q": "Fill in the blank: Prevention is ____ than cure.",
+                        "options": [
+                            "a) better",
+                            "b) worse",
+                            "c) good",
+                            "d) best",
+                        ],
+                        "answer": "a) better",
+                    },
+                    {
+                        "q": "Fill in the blank: The sun sets in the ____.",
+                        "options": ["a) East", "b) West", "c) North", "d) South"],
+                        "answer": "b) West",
+                    },
+                ],
+                "Vocabulary": [
+                    {
+                        "q": "Synonym of 'Enormous' is—",
+                        "options": [
+                            "a) Tiny",
+                            "b) Huge / Massive",
+                            "c) Little",
+                            "d) Short",
+                        ],
+                        "answer": "b) Huge / Massive",
+                    },
+                    {
+                        "q": "Antonym of 'Transparent' is—",
+                        "options": [
+                            "a) Clear",
+                            "b) Opaque",
+                            "c) Bright",
+                            "d) Clean",
+                        ],
+                        "answer": "b) Opaque",
+                    },
+                ],
+            },
+            "English 2nd Paper": {
+                "Right Forms of Verbs": [
+                    {
+                        "q": "Choose the correct form: 'If you come, I (go) with you.'",
+                        "options": ["a) went", "b) will go", "c) go", "d) gone"],
+                        "answer": "b) will go",
+                    },
+                    {
+                        "q": "Choose the correct form: 'He speaks as though he (know) everything.'",
+                        "options": [
+                            "a) knows",
+                            "b) knew",
+                            "c) had known",
+                            "d) has known",
+                        ],
+                        "answer": "b) knew",
+                    },
+                ],
+                "Punctuation & Capitalization": [
+                    {
+                        "q": "Which punctuation mark is used at the end of an interrogative sentence?",
+                        "options": [
+                            "a) Full stop (.)",
+                            "b) Question mark (?)",
+                            "c) Exclamation (!)",
+                            "d) Comma (,)",
+                        ],
+                        "answer": "b) Question mark (?)",
+                    }
+                ],
+            },
+        },
+        "Class 8": {
+            "English 1st Paper": {
+                "MCQ (Reading Comprehension)": [
+                    {
+                        "q": "What is ethnic people's culture mostly based on?",
+                        "options": [
+                            "a) Agriculture and nature",
+                            "b) Industrial technology",
+                            "c) Space science",
+                            "d) Corporate business",
+                        ],
+                        "answer": "a) Agriculture and nature",
+                    },
+                    {
+                        "q": "Shat Gambuj Mosque is located in—",
+                        "options": [
+                            "a) Bagerhat",
+                            "b) Sylhet",
+                            "c) Cumilla",
+                            "d) Cox's Bazar",
+                        ],
+                        "answer": "a) Bagerhat",
+                    },
+                ],
+                "Fill in the Blanks": [
+                    {
+                        "q": "Fill in the blank: Industry is the key to ____.",
+                        "options": [
+                            "a) success",
+                            "b) failure",
+                            "c) poverty",
+                            "d) laziness",
+                        ],
+                        "answer": "a) success",
+                    }
+                ],
+                "Vocabulary": [
+                    {
+                        "q": "Synonym of 'Significant' is—",
+                        "options": [
+                            "a) Important",
+                            "b) Trivial",
+                            "c) Minor",
+                            "d) Useless",
+                        ],
+                        "answer": "a) Important",
+                    }
+                ],
+            },
+            "English 2nd Paper": {
+                "Right Forms of Verbs": [
+                    {
+                        "q": "Choose the correct form: 'It is high time we (change) our bad habits.'",
+                        "options": [
+                            "a) change",
+                            "b) changed",
+                            "c) changing",
+                            "d) have changed",
+                        ],
+                        "answer": "b) changed",
+                    }
+                ],
+                "Narration": [
+                    {
+                        "q": "Change into Indirect: 'What is your name?' he said to me.",
+                        "options": [
+                            "a) He asked me what my name was.",
+                            "b) He told me what is my name.",
+                            "c) He asked what is your name.",
+                            "d) None",
+                        ],
+                        "answer": "a) He asked me what my name was.",
+                    }
+                ],
+            },
+        },
+    }
+
+    # --- ৪টি সুন্দর ট্যাব তৈরি ---
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📖 প্র্যাকটিস ও রিভিশন",
+        "📝 কুইজ ও প্র্যাকটিস টেস্ট",
+        "🏆 মডেল টেস্ট কনফিগার ও পরীক্ষা",
+        "📊 পরীক্ষার ইতিহাস ও রিটেস্ট",
+    ])
+
+    # ================= TAB 1: প্র্যাকটিস ও রিভিশন =================
+    with tab1:
+        st.markdown(
+            "### 📖 ক্লাস ও টপিকভিত্তিক ইংরেজি অনুশীলন (Vocabulary, Grammar & MCQ)"
+        )
+
+        c1, c2, c3 = st.columns(3, gap="medium")
+        with c1:
+            p_class = st.selectbox(
+                "শ্রেণি বেছে নিন:",
+                list(library_question_bank.keys()),
+                key="p_class_sel",
+            )
+        with c2:
+            p_books = list(library_question_bank[p_class].keys())
+            p_book = st.selectbox(
+                "বই বা পেপার বেছে নিন:", p_books, key="p_book_sel"
+            )
+        with c3:
+            p_chapters = list(library_question_bank[p_class][p_book].keys())
+            p_chap = st.selectbox(
+                "টপিক / ক্যাটাগরি বেছে নিন:", p_chapters, key="p_chap_sel"
+            )
+
+        st.markdown(
+            "<hr style='margin: 15px 0; border: 0; border-top: 2px dashed"
+            " #fbcfe8;'>",
+            unsafe_allow_html=True,
+        )
+
+        q_list = library_question_bank[p_class][p_book][p_chap]
+        for idx, item in enumerate(q_list, 1):
+            with st.expander(f"📌 প্রশ্ন {idx}: {item['q']}"):
+                st.write("**বিকল্পসমূহ:**")
+                for opt in item["options"]:
+                    st.write(f"- {opt}")
+                st.success(f"**সঠিক উত্তর:** {item['answer']}")
+
+    # ================= TAB 2: কুইজ ও প্র্যাকটিস টেস্ট =================
+    with tab2:
+        st.markdown("### 📝 ইন্টারঅ্যাক্টিভ প্র্যাকটিস টেস্ট জেনারেটর")
+
+        q_c1, q_c2, q_c3 = st.columns(3, gap="medium")
+        with q_c1:
+            q_sel_class = st.selectbox(
+                "শ্রেণি বেছে নিন:",
+                list(library_question_bank.keys()),
+                key="quiz_class_sel",
+            )
+        with q_c2:
+            q_available_books = list(
+                library_question_bank[q_sel_class].keys()
+            )
+            q_selected_book = st.selectbox(
+                "পেপার বেছে নিন:", q_available_books, key="quiz_book_sel"
+            )
+        with q_c3:
+            q_available_chapters = list(
+                library_question_bank[q_sel_class][q_selected_book].keys()
+            )
+            q_selected_chapter = st.selectbox(
+                "টপিক বেছে নিন:", q_available_chapters, key="quiz_chap_sel"
+            )
+
+        st.markdown(
+            "<hr style='margin: 15px 0; border: 0; border-top: 2px dashed"
+            " #fbcfe8;'>",
+            unsafe_allow_html=True,
+        )
+
+        qc1, qc2 = st.columns(2, gap="medium")
+        with qc1:
+            question_count = st.number_input(
+                "প্রশ্ন সংখ্যা নির্ধারণ করুন:",
+                min_value=1,
+                max_value=50,
+                value=3,
+                step=1,
+                key="quiz_q_count_input",
+            )
+        with qc2:
+            study_hours = st.number_input(
+                "পড়াশোনার সময় (ঘণ্টা):",
+                min_value=0.5,
+                max_value=5.0,
+                value=1.0,
+                step=0.5,
+                key="study_hours_input",
+            )
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("🚀 প্র্যাকটিস টেস্ট শুরু করুন", use_container_width=True):
+            st.session_state["quiz_active"] = True
+            st.session_state["show_review"] = False
+
+            raw_questions = library_question_bank[q_sel_class][
+                q_selected_book
+            ][q_selected_chapter]
+            selected_subset = random.sample(
+                raw_questions, min(len(raw_questions), int(question_count))
+            )
+            st.session_state["generated_quiz"] = selected_subset
+            st.rerun()
+
+        if st.session_state.get(
+            "quiz_active", False
+        ) and "generated_quiz" in st.session_state:
+            st.markdown("---")
+            st.markdown(
+                f"### 📋 প্র্যাকটিস সেশন: {q_sel_class} - {q_selected_book} ({q_selected_chapter})"
+            )
+
+            if st.session_state.get("show_review", False):
+                st.markdown("### 📊 ফলাফল ও সঠিক উত্তরসমূহ:")
+                for idx, item in enumerate(
+                    st.session_state["generated_quiz"], 1
+                ):
+                    user_ans = st.session_state.get(f"lib_q_{idx}")
+                    correct_ans = item["answer"]
+                    st.markdown(f"**প্রশ্ন {idx}:** {item['q']}")
+                    if user_ans == correct_ans:
+                        st.success(f"আপনার উত্তর: {user_ans} (সঠিক আছে)")
+                    else:
+                        st.error(f"আপনার উত্তর: {user_ans} (ভুল ❌)")
+                        st.info(f"সঠিক উত্তর হবে: **{correct_ans}**")
+                    st.markdown("---")
+
+                if st.button(
+                    "🔄 আবার নতুন করে প্র্যাকটিস শুরু করুন",
+                    use_container_width=True,
+                ):
+                    st.session_state["quiz_active"] = False
+                    st.session_state["show_review"] = False
+                    st.rerun()
+            else:
+                for idx, item in enumerate(
+                    st.session_state["generated_quiz"], 1
+                ):
+                    st.markdown(f"**প্রশ্ন {idx}:** {item['q']}")
+                    st.radio(
+                        f"উত্তর নির্বাচন করুন (প্রশ্ন {idx}):",
+                        item["options"],
+                        key=f"lib_q_{idx}",
+                    )
+                    st.markdown("")
+
+                if st.button(
+                    "📥 উত্তর জমা দিন ও প্রগ্রেস সেভ করুন",
+                    key="submit_quiz_btn",
+                    use_container_width=True,
+                ):
+                    correct_count = 0
+                    total_q = len(st.session_state["generated_quiz"])
+
+                    for idx, item in enumerate(
+                        st.session_state["generated_quiz"], 1
+                    ):
+                        u_ans = st.session_state.get(f"lib_q_{idx}")
+                        c_ans = item["answer"]
+                        if u_ans == c_ans:
+                            correct_count += 1
+
+                    percentage = (
+                        (correct_count / total_q) * 100 if total_q > 0 else 0
+                    )
+                    score_str = f"{correct_count}/{total_q} ({percentage:.0f}%)"
+                    performance = (
+                        "Excellent (চমৎকার)"
+                        if percentage >= 80
+                        else (
+                            "Very Good (খুব ভালো)"
+                            if percentage >= 50
+                            else "Good (চেষ্টা চালিয়ে যাও)"
+                        )
+                    )
+
+                    progress_record = {
+                        "class": q_sel_class,
+                        "subject": q_selected_book,
+                        "chapter": q_selected_chapter,
+                        "mode": "Topic Practice",
+                        "study_hours": study_hours,
+                        "score": score_str,
+                        "performance": performance,
+                    }
+                    st.session_state["user_progress"].append(progress_record)
+
+                    st.balloons()
+                    st.success(
+                        f"অভিনন্দন! আপনার স্কোর: **{score_str}** | পারফরম্যান্স:"
+                        f" **{performance}**"
+                    )
+                    st.session_state["show_review"] = True
+                    st.rerun()
+
+    # ================= TAB 3: মডেল টেস্ট কনফিগার ও পরীক্ষা =================
+    with tab3:
+        st.markdown(
+            "### 🏆 কাস্টম মডেল টেস্ট ও লাইভ কাউন্টডাউন পরীক্ষা (ইংরেজি)"
+        )
+
+        if not st.session_state.exam_started:
+            with st.form("model_test_custom_config_form"):
+                st.markdown("#### পরীক্ষার কনফিগারেশন সেটআপ করুন")
+                sel_class = st.selectbox(
+                    "ক্লাস নির্বাচন করুন:",
+                    list(library_question_bank.keys()),
+                    key="m_class_select",
+                )
+                available_subjects = list(
+                    library_question_bank[sel_class].keys()
+                )
+                sel_subjects = st.multiselect(
+                    "পেপার নির্বাচন করুন:",
+                    available_subjects,
+                    default=available_subjects[:1],
+                    key="m_subjects_select",
+                )
+
+                all_available_chapters = []
+                for sub in sel_subjects:
+                    for ch in library_question_bank[sel_class][sub].keys():
+                        all_available_chapters.append(f"{sub} -> {ch}")
+
+                sel_chapters = st.multiselect(
+                    "টপিকসমূহ নির্বাচন করুন:",
+                    all_available_chapters,
+                    default=all_available_chapters,
+                    key="m_chapters_select",
+                )
+                test_name_input = st.text_input(
+                    "মডেল টেস্টের শিরোনাম:",
+                    value="ইংরেজি মডেল টেস্ট পরীক্ষা",
+                    key="m_test_name_input_val",
+                )
+
+                col_el, col_e2 = st.columns(2)
+                with col_el:
+                    custom_marks = st.number_input(
+                        "প্রশ্ন সংখ্যা / পূর্ণমান:",
+                        min_value=1,
+                        max_value=100,
+                        value=5,
+                        step=1,
+                        key="m_custom_marks_input",
+                    )
+                with col_e2:
+                    custom_time = st.number_input(
+                        "নির্ধারিত সময় (মিনিট):",
+                        min_value=1,
+                        max_value=100,
+                        value=5,
+                        step=1,
+                        key="m_custom_time_input",
+                    )
+
+                start_exam_btn = st.form_submit_button(
+                    "🚀 মডেল টেস্ট শুরু করুন",
+                    use_container_width=True,
+                    type="primary",
+                )
+
+                if start_exam_btn:
+                    if not sel_subjects or not sel_chapters:
+                        st.error(
+                            "দয়া করে কমপক্ষে একটি পেপার এবং টপিক সিলেক্ট করুন।"
+                        )
+                    else:
+                        pool_questions = []
+                        for item in sel_chapters:
+                            sub_name, ch_name = item.split(" -> ")
+                            ch_q_list = library_question_bank[sel_class][
+                                sub_name
+                            ].get(ch_name, [])
+                            pool_questions.extend(ch_q_list)
+
+                        if not pool_questions:
+                            st.error(
+                                "নির্বাচিত টপিকগুলোতে পর্যাপ্ত প্রশ্ন পাওয়া"
+                                " যায়নি।"
+                            )
+                        else:
+                            num_q_needed = min(
+                                len(pool_questions), int(custom_marks)
+                            )
+                            selected_qs = random.sample(
+                                pool_questions, num_q_needed
+                            )
+
+                            st.session_state.exam_questions = selected_qs
+                            st.session_state.exam_started = True
+                            st.session_state.exam_submitted = False
+                            st.session_state.is_saved_to_db = False
+                            st.session_state.user_answers = {}
+                            st.session_state.exam_title_str = test_name_input
+                            st.session_state.exam_total_marks = int(
+                                custom_marks
+                            )
+                            st.session_state.exam_time_allocated = int(
+                                custom_time
+                            )
+                            st.session_state.exam_deadline = time.time() + (
+                                int(custom_time) * 60
+                            )
+                            st.rerun()
         else:
-            for idx, item in enumerate(st.session_state["generated_quiz"], 1):
-                st.markdown(f"**প্রশ্ন {idx}:** {item['q']}")
-                st.radio(f"উত্তর নির্বাচন করুন (প্রশ্ন {idx}):", item["options"], key=f"lib_q_{idx}")
-                st.markdown("")
+            current_time = time.time()
+            time_left = int(st.session_state.exam_deadline - current_time)
 
-            if st.button("🚀 উত্তর জমা দিন ও প্রগ্রেস সেভ করুন", key="submit_quiz_btn", use_container_width=True):
-                correct_count = 0
-                total_q = len(st.session_state["generated_quiz"])
-                for idx, item in enumerate(st.session_state["generated_quiz"], 1):
-                    u_ans = st.session_state.get(f"lib_q_{idx}")
-                    c_ans = item["answer"]
-                    if u_ans == c_ans:
-                        correct_count += 1
-                
-                percentage = (correct_count / total_q) * 100 if total_q > 0 else 0
-                if percentage >= 80:
-                    performance = "Excellent (চমৎকার 🌟)"
-                elif percentage >= 50:
-                    performance = "Very Good (খুব ভালো 👍)"
-                else:
-                    performance = "Good (চেষ্টা চালিয়ে যাও 💪)"
-
-                score_str = f"{correct_count}/{total_q} ({percentage:.0f}%)"
-
-                # প্রগ্রেস ডেটা ড্যাশবোর্ড ও প্রগ্রেস পেজের জন্য সেভ করা[cite: 53]
-                progress_record = {
-                    "class": selected_class,
-                    "subject": selected_book,
-                    "chapter": selected_chapter,
-                    "mode": practice_mode,
-                    "study_hours": study_hours,
-                    "score": score_str,
-                    "performance": performance
-                }
-                st.session_state["user_progress"].append(progress_record)
-                st.balloons()
-                st.success(f"অভিনন্দন! আপনার স্কোর: **{score_str}** | পারফরম্যান্স: **{performance}**")
-                st.info("এই ফলাফলটি আপনার ড্যাশবোর্ড এবং প্রগ্রেস পেজে স্বয়ংক্রিয়ভাবে জমা হয়ে গেছে![cite: 53]")
-
-                st.session_state["show_review"] = True
+            if time_left <= 0 and not st.session_state.exam_submitted:
+                st.session_state.exam_submitted = True
                 st.rerun()
+
+            m_left = max(0, time_left // 60)
+            s_left = max(0, time_left % 60)
+            time_str_display = f"{m_left:02d}:{s_left:02d}"
+
+            st.markdown(
+                f"""
+            <div style="background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); color: white; padding: 15px 20px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                <div style="font-size: 16px; font-weight: bold;">
+                    পরীক্ষা চলছে: <span style="color: #fef08a;">{st.session_state.exam_title_str}</span>
+                </div>
+                <div style="background-color: #ef4444; color: white; padding: 6px 14px; border-radius: 8px; font-size: 20px; font-weight: bold; font-family: monospace;">
+                    {time_str_display}
+                </div>
+            </div>
+            """,
+                unsafe_allow_html=True,
+            )
+
+            with st.form("active_custom_exam_form"):
+                for idx, q_data in enumerate(st.session_state.exam_questions):
+                    st.markdown(f"**প্রশ্ন {idx + 1}: {q_data['q']}**")
+                    options = q_data["options"]
+                    ans_key = f"q_ans_live_{idx}"
+                    user_choice = st.radio(
+                        f"উত্তর সিলেক্ট করুন ({idx + 1})",
+                        options,
+                        key=ans_key,
+                        index=None,
+                    )
+                    st.session_state.user_answers[idx] = user_choice
+                    st.markdown(
+                        "<hr style='margin: 10px 0; border: 0.5px solid"
+                        " #e2e8f0;'>",
+                        unsafe_allow_html=True,
+                    )
+
+                submit_test = st.form_submit_button(
+                    "📩 পরীক্ষা সম্পন্ন ও খাতা জমা দিন",
+                    use_container_width=True,
+                    type="primary",
+                )
+                if submit_test:
+                    st.session_state.exam_submitted = True
+                    st.rerun()
+
+            if time_left > 0 and not st.session_state.exam_submitted:
+                time.sleep(1)
+                st.rerun()
+
+        if st.session_state.get("exam_submitted", False):
+            score = 0
+            total_q = len(st.session_state.exam_questions)
+            correct_cnt = 0
+            wrong_cnt = 0
+
+            for idx, q_data in enumerate(st.session_state.exam_questions):
+                user_ans = st.session_state.user_answers.get(idx)
+                correct_ans = q_data["answer"]
+                if user_ans == correct_ans:
+                    score += 1
+                    correct_cnt += 1
+                else:
+                    wrong_cnt += 1
+
+            percentage = (score / total_q) * 100 if total_q > 0 else 0
+
+            if not st.session_state.is_saved_to_db:
+                current_date_str = datetime.now().strftime(
+                    "%Y-%m-%d %I:%M %p"
+                )
+                details_data = json.dumps(
+                    st.session_state.exam_questions, ensure_ascii=False
+                )
+
+                conn = sqlite3.connect("smart_school_syllabus.db")
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO model_test_history (test_title, test_date, total_marks, allocated_time, obtained_score, correct_count, wrong_count, details_json)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        st.session_state.exam_title_str,
+                        current_date_str,
+                        st.session_state.exam_total_marks,
+                        st.session_state.exam_time_allocated,
+                        score,
+                        correct_cnt,
+                        wrong_cnt,
+                        details_data,
+                    ),
+                )
+                conn.commit()
+                conn.close()
+                st.session_state.is_saved_to_db = True
+
+            st.success("🎉 আপনার মডেল টেস্ট সফলভাবে জমা দেওয়া হয়েছে!")
+            st.markdown("### পরীক্ষার ফলাফল ও মূল্যায়ন")
+            st.success(
+                f"**পূর্ণমান:** {st.session_state.exam_total_marks} | **প্রাপ্ত"
+                f" স্কোর:** {score} | **সঠিক:** {correct_cnt} টি |"
+                f" **ভুল:** {wrong_cnt} টি ({percentage:.1f}%)"
+            )
+
+            with st.expander("📖 উত্তরপত্র ও সঠিক উত্তরসমূহ দেখে নিন", expanded=True):
+                for idx, q_data in enumerate(st.session_state.exam_questions):
+                    user_ans = st.session_state.user_answers.get(idx)
+                    correct_ans = q_data["answer"]
+                    if user_ans == correct_ans:
+                        st.markdown(
+                            f"✅ **প্রশ্ন {idx + 1}:** সঠিক (আপনার উত্তর:"
+                            f" {user_ans})"
+                        )
+                    else:
+                        st.markdown(
+                            f"❌ **প্রশ্ন {idx + 1}:** ভুল (আপনার উত্তর:"
+                            f" {user_ans if user_ans else 'উত্তর দেননি'})।"
+                            f" সঠিক উত্তর: **{correct_ans}**"
+                        )
+
+            if st.button(
+                "🔄 নতুন মডেল টেস্টে ফিরে যান",
+                use_container_width=True,
+                type="primary",
+            ):
+                st.session_state.exam_started = False
+                st.session_state.exam_submitted = False
+                st.session_state.is_saved_to_db = False
+                st.session_state.exam_questions = []
+                st.session_state.user_answers = {}
+                st.rerun()
+
+    # ================= TAB 4: পরীক্ষার ইতিহাস ও রিটেস্ট =================
+    with tab4:
+        st.markdown("### 📊 সংরক্ষিত মডেল টেস্টের ইতিহাস ও রিটেস্ট")
+
+        conn = sqlite3.connect("smart_school_syllabus.db")
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, test_title, test_date, total_marks, allocated_time,"
+            " obtained_score, correct_count, wrong_count, details_json FROM"
+            " model_test_history ORDER BY id DESC"
+        )
+        past_tests = cursor.fetchall()
+        conn.close()
+
+        if past_tests:
+            for pt in past_tests:
+                (
+                    t_id,
+                    t_title,
+                    t_date,
+                    t_total,
+                    t_time,
+                    t_score,
+                    t_correct,
+                    t_wrong,
+                    tjson,
+                ) = pt
+                with st.expander(
+                    f"📂 {t_title} | তারিখ: {t_date} | প্রাপ্ত স্কোর:"
+                    f" {t_score}/{t_total}"
+                ):
+                    col_hs1, col_hs2 = st.columns(2)
+                    with col_hs1:
+                        st.markdown(f"- **পূর্ণমান:** {t_total}")
+                        st.markdown(f"- **নির্ধারিত সময়:** {t_time} মিনিট")
+                    with col_hs2:
+                        st.markdown(f"- **সঠিক উত্তর:** {t_correct} টি")
+                        st.markdown(f"- **ভুল উত্তর:** {t_wrong} টি")
+
+                    col_h1, col_h2 = st.columns(2)
+                    with col_h1:
+                        if st.button(
+                            "🔄 পুনরায় এই টেস্টটি দিন (Retest)",
+                            key=f"retest_btn_{t_id}",
+                            use_container_width=True,
+                            type="primary",
+                        ):
+                            st.session_state.exam_questions = json.loads(tjson)
+                            st.session_state.exam_started = True
+                            st.session_state.exam_submitted = False
+                            st.session_state.is_saved_to_db = False
+                            st.session_state.user_answers = {}
+                            st.session_state.exam_title_str = (
+                                f"পুনরায় পরীক্ষা: {t_title}"
+                            )
+                            st.session_state.exam_total_marks = t_total
+                            st.session_state.exam_time_allocated = t_time
+                            st.session_state.exam_deadline = time.time() + (
+                                t_time * 60
+                            )
+                            st.rerun()
+                    with col_h2:
+                        if st.button(
+                            "🗑️ হিস্ট্রি ডিলেট করুন",
+                            key=f"del_history_btn_{t_id}",
+                            use_container_width=True,
+                        ):
+                            con_del = sqlite3.connect(
+                                "smart_school_syllabus.db"
+                            )
+                            cur_del = con_del.cursor()
+                            cur_del.execute(
+                                "DELETE FROM model_test_history WHERE id=?",
+                                (t_id,),
+                            )
+                            con_del.commit()
+                            con_del.close()
+                            st.success("হিস্ট্রি সফলভাবে মুছে ফেলা হয়েছে!")
+                            st.rerun()
+        else:
+            st.info(
+                "ℹ️ এখনও কোনো মডেল টেস্ট দেওয়া হয়নি। ৩ নম্বর ট্যাব থেকে"
+                " কাস্টম কনফিগার করে আপনার প্রথম মডেল টেস্ট শুরু করুন।"
+            )
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -3200,14 +4007,14 @@ else:
         """, unsafe_allow_html=True)
         
         nav_options = [
-            ("📊 ড্যাশবোর্ড", "Dashboard"),
-            ("📚 আমার পাঠাগার", "My Books"),
-            ("🎯 প্র্যাক্টিস অ্যান্ড প্রিপারেশন", "Quiz & Practice"),
-            ("📝 আমার নোট খাতা", "Notes"),
-            ("📅 সিলেবাস ও পাঠ পরিকল্পনা", "Study Planner"),
-            ("📋 পরীক্ষার রুটিন", "Exam & Assignment"),
-            ("🔔 রিমাইন্ডার", "Notifications"),
-            ("⚙️ সেটিংস", "Profile / Settings")
+            ("📊 Dashboard", "Dashboard"),
+            ("📚 Books & Reading", "My Books"),
+            ("🎯 Practice & Preparation", "Quiz & Practice"),
+            ("📝 Note Book", "Notes"),
+            ("📅 Study Plan", "Study Planner"),
+            ("📋 Exams & Assignment", "Exam & Assignment"),
+            ("🔔 Reminder", "Notifications"),
+            ("⚙️ Profile & Settings", "Profile / Settings")
         ]
         
         for label, page_key in nav_options:
