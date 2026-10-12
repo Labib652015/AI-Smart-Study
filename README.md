@@ -4149,7 +4149,6 @@ def init_school_syllabus_db():
 
 init_school_syllabus_db()
 
-
 import streamlit as st
 import random
 import time
@@ -4157,17 +4156,19 @@ import json
 import sqlite3
 from datetime import datetime, timedelta
 import math
+import pandas as pd
+from collections import Counter
 
 def render_study_planner():
     st.markdown("""
-        <div style="background: linear-gradient(135deg, #1E3A8A 0%, #3882F6 100%); 
-                    padding: 25px; border-radius: 12px; color: white; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-            <h2 style="margin: 0; color: white;">Smart Study & Syllabus</h2>
-            <p style="margin: 5px 0 0 0; font-size: 16px; opacity: 0.9;">নিচের তোমার মতো করে তোমার দেওয়া স্কুলের সিলেবাসের আলোকে সিলেবাস ও পড়ার রুটিন তৈরি করো। তারপর তোমার স্মার্ট স্টাডি প্ল্যান বানাও!</p>
-        </div>
+    <div style="background: linear-gradient(135deg, #1E3A8A 0%, #3882F6 100%);
+    padding: 25px; border-radius: 12px; color: white; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <h2 style="margin: 0; color: white;">Smart Study & Syllabus</h2>
+        <p style="margin: 5px 0 0 0; font-size: 16px; opacity: 0.9;">নিচের তোমার মতো করে তোমার দেওয়া স্কুলের সিলেবাসের আলোকে সিলেবাস ও পড়ার রুটিন তৈরি করো। তারপর তোমার স্মার্ট স্টাডি প্ল্যান বানাও!</p>
+    </div>
     """, unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["📚 Syllabus", "📅 Routine", "📈 Study Plan"])
+    tab1, tab2, tab3 = st.tabs(["📚 Syllabus", "⏰ Routine", "📅 Study Plan"])
 
     # --- ক্লাস সেভেনের সমন্বিত সিলেবাস ডিকশনারি (Original Structure) ---
     unified_syllabus_dictionary = {
@@ -4276,7 +4277,7 @@ def render_study_planner():
                 "ত্রয়োদশ অধ্যায়: প্রাকৃতিক পরিবেশ ও দূষণ", "চতুর্দশ অধ্যায়: জলবায়ু পরিবর্তন"
             ]
         },
-        "বাংলাদেশ ও বিশ্বপরিচয়": {
+        "বাংলাদেশ ও বিশ্বপরিচয়": {
             "অধ্যায়সমূহ": [
                 "প্রথম অধ্যায়: বাংলাদেশের মুক্তিসংগ্রাম ও গণআন্দোলন", "দ্বিতীয় অধ্যায়: বাংলাদেশের সংস্কৃতি ও সাংস্কৃতিক বৈচিত্র্য",
                 "তৃতীয় অধ্যায়: পরিবারে শিশুর বেড়ে ওঠা", "চতুর্থ অধ্যায়: বাংলাদেশের অর্থনীতি",
@@ -4336,8 +4337,8 @@ def render_study_planner():
                     if s[0] == st.session_state.syllabus_edit_id:
                         editing_syllabus = s
                         break
-
-            form_title = "Edit" if editing_syllabus else "➕ নতুন সিলেবাস তৈরি করুন"
+            
+            form_title = "Edit" if editing_syllabus else "+ নতুন সিলেবাস তৈরি করুন"
             st.markdown(f"### {form_title}")
             st.markdown("সিলেবাস তৈরি করতে ক্লাস, বিষয় এবং কোন পরীক্ষার জন্য সিলেবাস তৈরি করছ তা নির্বাচন করো। তারপর Save বাটনে ক্লিক করো!")
 
@@ -4356,15 +4357,14 @@ def render_study_planner():
                 exam_terms_list = ["Weekly Quiz", "Half-Yearly", "Yearly", "Model Test", "Pre-Test", "C.T.", "Tutorial", "Others"]
                 term_idx = exam_terms_list.index(default_term) if default_term in exam_terms_list else 0
                 exam_term = st.selectbox("পরীক্ষার নাম:", exam_terms_list, index=term_idx, key="sel_term_multi")
-
             with col2:
                 available_subjects = list(unified_syllabus_dictionary.keys())
-                default_subjs = list(parsed_saved_data.keys()) if parsed_saved_data else []
+                default_subjs = [sub for sub in parsed_saved_data.keys() if sub in available_subjects] if parsed_saved_data else []
                 selected_subjects = st.multiselect("এক/একাধিক বিষয় নির্বাচন করো:", available_subjects, default=default_subjs, key="sel_subjects_multi")
 
             selected_syllabus_data = {}
             if selected_subjects:
-                st.markdown("#### নির্বাচিত বিষয়/বিষয়সমূহের টপিক বাছাই করো:")
+                st.markdown("#### নির্বাচিত বিষয়/বিষয়সমূহের টপিক বাছাই করো: ")
                 for subj in selected_subjects:
                     with st.expander(f"বিষয়: {subj}", expanded=True):
                         categories_dict = unified_syllabus_dictionary.get(subj, {})
@@ -4411,16 +4411,17 @@ def render_study_planner():
                         st.rerun()
                     else:
                         st.error("দয়া করে অন্তত একটি বিষয় এবং তার টপিক সিলেক্ট করো.")
-
+            
             if editing_syllabus or st.session_state.create_new_syllabus:
                 with col_btn_s2:
                     if st.button("❌ Cancel", use_container_width=True):
                         st.session_state.create_new_syllabus = False
                         st.session_state.syllabus_edit_id = None
                         st.rerun()
-        
+
         if all_saved_syllabi and not st.session_state.create_new_syllabus and st.session_state.syllabus_edit_id is None:
-            st.markdown("### সংরক্ষিত সিলেবাসসমূহ ও মূল সিলেবাস নির্বাচন")
+            st.markdown("### 🗂️ সংরক্ষিত সিলেবাসসমূহ ও মূল সিলেবাস নির্বাচন")
+            
             syllabus_options = {}
             for s in all_saved_syllabi:
                 s_id, s_class, s_term, s_json, s_def = s[0], s[1], s[2], s[3], s[4]
@@ -4435,9 +4436,9 @@ def render_study_planner():
             st.markdown("---")
             col_sel_title, col_sel_action = st.columns([3, 2])
             with col_sel_title:
-                st.markdown(f"**বর্তমান সিলেবাস:** {s_term} ({s_class})")
+                st.markdown(f"**বর্তমান সিলেবাস:** `{s_term} ({s_class})`")
                 if s_def == 1:
-                    st.success("⭐ এটি বর্তমানে আপনার ***'মূল সিলেবাস'*** হিসেবে সেট করা আছে।")
+                    st.success("✨ এটি বর্তমানে আপনার **'মূল সিলেবাস'** হিসেবে সেট করা আছে।")
                 else:
                     st.info("ℹ️ এটি সাধারণ সংরক্ষিত সিলেবাস। একে মূল সিলেবাস হিসেবে সেট করতে পারেন।")
             with col_sel_action:
@@ -4448,28 +4449,34 @@ def render_study_planner():
                     cursor = conn.cursor()
                     if make_default_btn:
                         cursor.execute("UPDATE school_syllabus_multi SET is_default = 0")
-                        cursor.execute("UPDATE school_syllabus_multi SET is_default = 1 WHERE id=?", (s_id,))
+                        cursor.execute("UPDATE school_syllabus_multi SET is_default = 1 WHERE id = ?", (s_id,))
                     else:
-                        cursor.execute("UPDATE school_syllabus_multi SET is_default = 0 WHERE id=?", (s_id,))
+                        cursor.execute("UPDATE school_syllabus_multi SET is_default = 0 WHERE id = ?", (s_id,))
                     conn.commit()
                     conn.close()
                     st.success("মূল সিলেবাস সফলভাবে আপডেট করা হয়েছে!")
                     st.rerun()
-
             st.markdown("---")
+
             parsed_syllabus = json.loads(s_json)
             st.markdown(f"#### Now, Your Syllabus is here ({s_class} - {s_term})")
             
             table_rows = []
             for subj, cats in parsed_syllabus.items():
+                first_row = True
+                cat_count = len(cats)
                 for cat, topics in cats.items():
-                    table_rows.append({
-                        "বিষয় (Subject)": subj,
-                        "বিভাগ (Category)": cat,
-                        "নির্বাচিত অধ্যায়সমূহ (Selected Topics)": ", ".join(topics)
-                    })
+                    topics_str = ", ".join(topics)
+                    if first_row:
+                        row_html = f'<tr><td rowspan="{cat_count}" style="padding: 10px; border: 1px solid #cbd5e1; font-weight: bold; vertical-align: top;">{subj}</td><td style="padding: 10px; border: 1px solid #cbd5e1; font-weight: 500;">{cat}</td><td style="padding: 10px; border: 1px solid #cbd5e1;">{topics_str}</td></tr>'
+                        first_row = False
+                    else:
+                        row_html = f'<tr><td style="padding: 10px; border: 1px solid #cbd5e1; font-weight: 500;">{cat}</td><td style="padding: 10px; border: 1px solid #cbd5e1;">{topics_str}</td></tr>'
+                    table_rows.append(row_html)
             
-            st.table(table_rows)
+            all_rows = "".join(table_rows)
+            table_html = f'<table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-family: sans-serif;"><thead><tr style="background-color: #1E3A8A; color: white; text-align: left;"><th style="padding: 12px; border: 1px solid #cbd5e1;">বিষয় (Subject)</th><th style="padding: 12px; border: 1px solid #cbd5e1;">বিভাগ (Category)</th><th style="padding: 12px; border: 1px solid #cbd5e1;">নির্বাচিত অধ্যায়সমূহ (Selected Topics)</th></tr></thead><tbody>{all_rows}</tbody></table>'
+            st.markdown(table_html, unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
 
             col_btn1, col_btn2, col_btn3 = st.columns(3)
@@ -4487,15 +4494,15 @@ def render_study_planner():
                     st.success("সিলেবাস সফলভাবে বাতিল ও মুছে ফেলা হয়েছে! পুনরায় সিলেবাস তৈরি করো।")
                     st.rerun()
             with col_btn3:
-                if st.button("+ Create New Syllabus", use_container_width=True, type="primary", key="create_new_s_btn"):
+                if st.button("➕ Create New Syllabus", use_container_width=True, type="primary", key="create_new_s_btn"):
                     st.session_state.create_new_syllabus = True
                     st.session_state.syllabus_edit_id = None
                     st.rerun()
 
-    # --- TAB 2: ROUTINE (আবহমান রুটিন ও এডিট/ডিলেট অপশনসহ আধুনিক ছক) ---
+    # --- TAB 2: ROUTINE ---
     with tab2:
-        st.markdown("### ⏰ আধুনিক প্রাত্যহিক পড়ার রুটিন প্রস্তুতকারক")
-        st.markdown("সকাল থেকে রাত পর্যন্ত সময় অনুযায়ী আপনার দৈনিক পড়ার সময়সূচি সাজান। যেকোনো সময় সাবজেক্ট যোগ, এডিট বা ডিলেট করতে পারবেন:")
+        st.markdown("### ⏰ সাপ্তাহিক কাস্টম রুটিন প্রস্তুতকারক (Custom Study Routine Builder)")
+        st.markdown("প্রথমে তোমার পছন্দের সিলেবাস নির্বাচন করো। এরপর প্রতিদিনের জন্য বিষয়, সময় স্লট, অধ্যায় এবং টার্গেট সেট করে রুটিন সাজাও!")
 
         conn = sqlite3.connect("smart_school_syllabus.db")
         cursor = conn.cursor()
@@ -4508,489 +4515,483 @@ def render_study_planner():
             default_index = 0
             for idx, s in enumerate(routine_syllabi):
                 s_id, s_class, s_term, s_json, s_def = s[0], s[1], s[2], s[3], s[4]
-                label_str = f"{s_term} ({s_class}) [ID: {s_id}]"
+                label_str = f"📌 {s_term} ({s_class}) [ID: {s_id}]"
                 if s_def == 1:
                     label_str += " ⭐ (মূল সিলেবাস)"
                     default_index = idx
                 syllabus_choices[label_str] = s_json
 
-            selected_routine_s_label = st.selectbox("রুটিনের ভিত্তি হিসেবে সিলেবাস বেছে নিন:", list(syllabus_choices.keys()), index=default_index, key="routine_syllabus_dropdown")
-            chosen_syllabus_data = json.loads(syllabus_choices[selected_routine_s_label])
-            available_subjects_in_syllabus = list(chosen_syllabus_data.keys())
+            selected_routine_s_label = st.selectbox("🎯 সিলেবাস নির্বাচন করো:", list(syllabus_choices.keys()), index=default_index, key="routine_syllabus_dropdown")
+            
+            # শুধুমাত্র নির্বাচিত সিলেবাসের ভেতরে থাকা বিষয়গুলো রুটিনের জন্য ফিল্টার করা হলো
+            routine_selected_syl_dict = json.loads(syllabus_choices[selected_routine_s_label])
+            available_subjects_in_syllabus = list(routine_selected_syl_dict.keys())
 
             if available_subjects_in_syllabus:
                 st.markdown("---")
+                st.markdown("#### 📅 সপ্তাহের ৭ দিনের পড়ার পরিকল্পনা ও টার্গেট সেটিং (শনিবার - শুক্রবার):")
+                
                 days_of_week = ["শনিবার", "রবিবার", "সোমবার", "মঙ্গলবার", "বুধবার", "বৃহস্পতিবার", "শুক্রবার"]
-                default_time_slots = [
-                    "০৬:০০ AM - ০৭:৩০ AM (সকাল)",
-                    "০৭:৩০ AM - ০৯:০০ AM (সকাল)",
-                    "০৪:০০ PM - ০৫:৩০ PM (বিকাল)",
-                    "০৬:৩০ PM - ০৮:০০ PM (সন্ধ্যা)",
-                    "০৮:০০ PM - ০৯:৩০ PM (রাত)",
-                    "০৯:৩০ PM - ১১:০০ PM (রাত)"
-                ]
+                weekly_custom_routine = {}
 
-                # ইনিশিয়ালাইজেশন
-                if "custom_routine_slots" not in st.session_state:
-                    st.session_state["custom_routine_slots"] = []
-                    # ডিফল্ট ডেমো স্লট যোগ করা
-                    for day in days_of_week:
-                        st.session_state["custom_routine_slots"].append({
-                            "id": str(random.randint(10000, 99999)),
-                            "day": day,
-                            "time_slot": default_time_slots[0],
-                            "subject": available_subjects_in_syllabus[0] if available_subjects_in_syllabus else "সাধারণ পড়া",
-                            "topic_note": "অধ্যায় রিভিশন ও প্র্যাকটিস"
-                        })
-
-                # রুটিনে নতুন পড়া বা সময়সূচি যোগ করার ফর্ম
-                with st.expander("➕ রুটিনে নতুন সময়সূচি / বিষয় যোগ করুন", expanded=False):
-                    with st.form("add_routine_slot_form", clear_on_submit=True):
-                        col_a1, col_a2 = st.columns(2)
-                        with col_a1:
-                            new_day = st.selectbox("বার নির্বাচন করুন:", days_of_week, key="new_slot_day")
-                            new_slot_time = st.selectbox("সময়সূচি (Time Slot):", default_time_slots + ["কাস্টম সময়..."], key="new_slot_time")
-                            if new_slot_time == "কাস্টম সময়...":
-                                new_slot_time = st.text_input("আপনার কাস্টম সময় লিখুন:", value="১০:০০ PM - ১১:৩০ PM", key="custom_time_in")
-                        with col_a2:
-                            new_sub = st.selectbox("পড়ার বিষয়:", available_subjects_in_syllabus + ["অন্যান্য / রিভিশন"], key="new_slot_sub")
-                            new_note = st.text_input("টপিক বা বিশেষ নোট (ঐচ্ছিক):", value="গুরুত্বপূর্ণ বিষয় অনুশীলন", key="new_slot_note")
+                for day in days_of_week:
+                    with st.expander(f"📆 দিন: {day}", expanded=(day == "শনিবার")):
+                        num_subjs_for_day = st.number_input(
+                            f"{day} কয়টি বিষয় পড়তে চাও? (যত খুশি দিন)",
+                            min_value=1, max_value=25, value=min(2, len(available_subjects_in_syllabus)), step=1,
+                            key=f"num_subs_{day}"
+                        )
                         
-                        add_btn = st.form_submit_button("রুটিনে যোগ করুন", type="primary", use_container_width=True)
-                        if add_btn:
-                            st.session_state["custom_routine_slots"].append({
-                                "id": str(random.randint(10000, 99999)),
-                                "day": new_day,
-                                "time_slot": new_slot_time,
-                                "subject": new_sub,
-                                "topic_note": new_note
+                        day_entries = []
+                        for i in range(int(num_subjs_for_day)):
+                            st.markdown(f"**🔹 বিষয় {i+1} বিস্তারিত ও টার্গেট সেটিং:**")
+                            c_s, c_t, c_c = st.columns([2, 2, 2])
+                            with c_s:
+                                chosen_sub = st.selectbox(
+                                    f"বিষয় নির্বাচন:",
+                                    available_subjects_in_syllabus,
+                                    key=f"sub_{day}_{i}"
+                                )
+                            with c_t:
+                                time_str = st.text_input(
+                                    f"সময় বা স্লট:",
+                                    value="06:30 AM - 07:30 AM (সকাল)",
+                                    key=f"time_{day}_{i}"
+                                )
+                            with c_c:
+                                chapter_str = st.text_input(
+                                    f"টপিক বা অধ্যায়:",
+                                    value="অধ্যায় ১.১",
+                                    key=f"chap_{day}_{i}"
+                                )
+                            
+                            st.caption("🎯 অধ্যায়ের মোট পরিমাণ ও কন্টেন্ট টার্গেট (ঐচ্ছিক):")
+                            col_p1, col_p2, col_p3 = st.columns(3)
+                            with col_p1:
+                                total_pages = st.number_input(f"মোট পৃষ্ঠা:", min_value=0, max_value=500, value=10, key=f"pages_{day}_{i}")
+                            with col_p2:
+                                total_mcq = st.number_input(f"মোট MCQ:", min_value=0, max_value=1000, value=30, key=f"mcq_{day}_{i}")
+                            with col_p3:
+                                total_cq = st.number_input(f"মোট CQ (সৃজনশীল):", min_value=0, max_value=100, value=5, key=f"cq_{day}_{i}")
+
+                            st.caption("✅ এই অধ্যায়ের কি কি সম্পন্ন করা বা লক্ষ্য রয়েছে তা টিক দিন:")
+                            col_ck1, col_ck2, col_ck3, col_ck4 = st.columns(4)
+                            with col_ck1:
+                                is_mainbook = st.checkbox("📖 মূল বই রিডিং", value=True, key=f"mb_{day}_{i}")
+                            with col_ck2:
+                                is_guide = st.checkbox("📘 গাইড/নোট", value=False, key=f"gb_{day}_{i}")
+                            with col_ck3:
+                                is_mcq_done = st.checkbox("❓ MCQ প্র্যাকটিস", value=True, key=f"md_{day}_{i}")
+                            with col_ck4:
+                                is_cq_done = st.checkbox("✍️ CQ চর্চা", value=False, key=f"cd_{day}_{i}")
+
+                            day_entries.append({
+                                "subject": chosen_sub,
+                                "time": time_str,
+                                "chapter": chapter_str,
+                                "pages": total_pages,
+                                "mcq": total_mcq,
+                                "cq": total_cq,
+                                "mainbook": is_mainbook,
+                                "guide": is_guide,
+                                "mcq_done": is_mcq_done,
+                                "cq_done": is_cq_done
                             })
-                            st.success("নতুন সময়সূচি রুটিনে যোগ করা হয়েছে!")
-                            st.rerun()
-
-                st.markdown("---")
-                st.markdown("### 📋 আপনার চূড়ান্ত প্রাত্যহিক রুটিন ছক")
-                syl_name = st.session_state.get('generated_routine_syllabus_name', selected_routine_s_label)
-                st.info(f"ভিত্তি সিলেবাস: **{syl_name}**")
-
-                # ফিল্টার অপশন
-                filter_day = st.radio("বার অনুযায়ী ফিল্টার করুন:", ["সব বার"] + days_of_week, horizontal=True)
-
-                filtered_slots = st.session_state["custom_routine_slots"]
-                if filter_day != "সব বার":
-                    filtered_slots = [s for s in filtered_slots if s["day"] == filter_day]
-
-                if filtered_slots:
-                    # সুন্দর কার্ড/ছক গ্রিড লেআউট রেন্ডারিং
-                    for item in filtered_slots:
-                        slot_id = item["id"]
+                            st.markdown("---")
                         
-                        # এডিট মোড চেক
-                        if st.session_state.get(f"edit_mode_{slot_id}", False):
-                            with st.container():
-                                st.markdown(f"🛠️ **সংশোধন করছেন (বার: {item['day']})**")
-                                c_e1, c_e2, c_e3 = st.columns([2, 2, 2])
-                                with c_e1:
-                                    edit_day = st.selectbox("বার:", days_of_week, index=days_of_week.index(item["day"]), key=f"e_day_{slot_id}")
-                                    edit_time = st.text_input("সময়সূচি:", value=item["time_slot"], key=f"e_time_{slot_id}")
-                                with c_e2:
-                                    edit_sub_idx = available_subjects_in_syllabus.index(item["subject"]) if item["subject"] in available_subjects_in_syllabus else 0
-                                    edit_sub = st.selectbox("বিষয়:", available_subjects_in_syllabus, index=edit_sub_idx, key=f"e_sub_{slot_id}")
-                                    edit_note = st.text_input("নোট:", value=item["topic_note"], key=f"e_note_{slot_id}")
-                                with c_e3:
-                                    st.markdown("<br>", unsafe_allow_html=True)
-                                    if st.button("💾 আপডেট সেভ", key=f"save_e_{slot_id}", type="primary"):
-                                        item["day"] = edit_day
-                                        item["time_slot"] = edit_time
-                                        item["subject"] = edit_sub
-                                        item["topic_note"] = edit_note
-                                        st.session_state[f"edit_mode_{slot_id}"] = False
-                                        st.success("আপডেট সফল হয়েছে!")
-                                        st.rerun()
-                                    if st.button("বাতিল", key=f"cancel_e_{slot_id}"):
-                                        st.session_state[f"edit_mode_{slot_id}"] = False
-                                        st.rerun()
-                                st.markdown("---")
-                        else:
-                            # ডিসপ্লে কার্ড ছক
-                            col_c1, col_c2, col_c3, col_c4, col_c5 = st.columns([1.5, 2.5, 2.5, 2.5, 1.5])
-                            with col_c1:
-                                st.markdown(f"🗓️ **{item['day']}**")
-                            with col_c2:
-                                st.markdown(f"⏰ <span style='color:#1e3a8a; font-weight:bold;'>{item['time_slot']}</span>", unsafe_allow_html=True)
-                            with col_c3:
-                                st.markdown(f"📘 <span style='background:#e0e7ff; color:#1e3a8a; padding:3px 8px; border-radius:5px; font-weight:bold;'>{item['subject']}</span>", unsafe_allow_html=True)
-                            with col_c4:
-                                st.markdown(f"📝 {item['topic_note']}")
-                            with col_c5:
-                                col_act1, col_act2 = st.columns(2)
-                                with col_act1:
-                                    if st.button("✏️", key=f"btn_edit_{slot_id}", help="এডিট করুন"):
-                                        st.session_state[f"edit_mode_{slot_id}"] = True
-                                        st.rerun()
-                                with col_act2:
-                                    if st.button("🗑️", key=f"btn_del_{slot_id}", help="ডিলেট করুন"):
-                                        st.session_state["custom_routine_slots"] = [s for s in st.session_state["custom_routine_slots"] if s["id"] != slot_id]
-                                        st.success("ডিলেট করা হয়েছে!")
-                                        st.rerun()
-                            st.markdown("<hr style='margin: 5px 0; border: 0.5px solid #e2e8f0;'>", unsafe_allow_html=True)
-                else:
-                    st.info("এই বারে কোনো পড়ার সময়সূচি দেওয়া নেই। উপরের 'নতুন সময়সূচি যোগ করুন' অংশ থেকে আপনার সুবিধামতো যোগ করে নিন।")
+                        weekly_custom_routine[day] = day_entries
 
                 st.markdown("<br>", unsafe_allow_html=True)
-                st.info("💡 টিপস: আপনি চাইলে ব্রাউজার থেকে সরাসরি প্রিন্ট (Ctrl + P) করে এই রুটিনটি প্রিন্ট আউট বা পেজে সংরক্ষণ করে রাখতে পারেন।")
-            else:
-                st.warning("নির্বাচিত সিলেবাসে কোনো বিষয় পাওয়া যায়নি। দয়া করে সিলেবাস চেক করুন।")
-        else:
-            st.warning("কোনো সংরক্ষিত সিলেবাস পাওয়া যায়নি। দয়া করে প্রথমে 'Syllabus' ট্যাব থেকে একটি সিলেবাস তৈরি ও সেভ করুন।")
+                if st.button("🚀 আপনার রুটিন তৈরি করুন (Generate Your Routine)", use_container_width=True, type="primary"):
+                    st.session_state["generated_custom_weekly_routine"] = weekly_custom_routine
+                    st.session_state["generated_routine_syllabus_name"] = selected_routine_s_label
+                    st.success("সফলভাবে তোমার কাস্টম প্রাত্যহিক রুটিন তৈরি করা হয়েছে!")
 
-    # --- TAB 3: STUDY PLAN ---
+                if "generated_custom_weekly_routine" in st.session_state:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown("### 🏆 আপনার চূড়ান্ত প্রাত্যহিক রুটিন ছক")
+                    
+                    syl_name = st.session_state.get('generated_routine_syllabus_name', 'নির্বাচিত সিলেবাস')
+                    
+                    st.markdown(f"""
+                    <div style="background-color: #E8F0FE; padding: 14px 20px; border-radius: 8px; color: #1E3A8A; font-weight: bold; margin-bottom: 20px; font-size: 15px;">
+                        ভিত্তি সিলেবাস: {syl_name}
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    filter_days = ["সব বার", "শনিবার", "রবিবার", "সোমবার", "মঙ্গলবার", "বুধবার", "বৃহস্পতিবার", "শুক্রবার"]
+                    selected_filter = st.radio("বার অনুযায়ী ফিল্টার করো:", filter_days, horizontal=True, key="routine_day_filter_radio")
+
+                    st.markdown("<br>", unsafe_allow_html=True)
+
+                    if "routine_edit_item" not in st.session_state:
+                        st.session_state.routine_edit_item = None
+
+                    for day_name, entries in st.session_state["generated_custom_weekly_routine"].items():
+                        if selected_filter != "সব বার" and selected_filter != day_name:
+                            continue
+                            
+                        for idx, entry in enumerate(entries):
+                            unique_entry_key = f"{day_name}_{idx}"
+                            
+                            if st.session_state.routine_edit_item == unique_entry_key:
+                                with st.form(key=f"edit_form_{unique_entry_key}"):
+                                    st.markdown(f"**✏️ এডিট করো ({day_name} - বিষয় {idx+1}):**")
+                                    e_col1, e_col2, e_col3 = st.columns(3)
+                                    with e_col1:
+                                        new_sub = st.selectbox("বিষয়:", available_subjects_in_syllabus, index=available_subjects_in_syllabus.index(entry["subject"]) if entry["subject"] in available_subjects_in_syllabus else 0)
+                                    with e_col2:
+                                        new_time = st.text_input("সময় বা স্লট:", value=entry["time"])
+                                    with e_col3:
+                                        new_chap = st.text_input("টপিক/অধ্যায়:", value=entry["chapter"])
+                                    
+                                    st.markdown("**অধ্যায়ের টার্গেট সংখ্যা এডিট করো:**")
+                                    ep1, ep2, ep3 = st.columns(3)
+                                    with ep1:
+                                        new_pages = st.number_input("মোট পৃষ্ঠা:", min_value=0, value=entry.get("pages", 10))
+                                    with ep2:
+                                        new_mcq = st.number_input("মোট MCQ:", min_value=0, value=entry.get("mcq", 30))
+                                    with ep3:
+                                        new_cq = st.number_input("মোট CQ:", min_value=0, value=entry.get("cq", 5))
+
+                                    st.markdown("**কি কি সম্পন্ন হয়েছে তা টিক দাও:**")
+                                    eb1, eb2, eb3, eb4 = st.columns(4)
+                                    with eb1:
+                                        new_mb = st.checkbox("📖 মূল বই", value=entry.get("mainbook", True))
+                                    with eb2:
+                                        new_gb = st.checkbox("📘 গাইড/নোট", value=entry.get("guide", False))
+                                    with eb3:
+                                        new_md = st.checkbox("❓ MCQ", value=entry.get("mcq_done", True))
+                                    with eb4:
+                                        new_cd = st.checkbox("✍️ CQ", value=entry.get("cq_done", False))
+
+                                    b1, b2 = st.columns(2)
+                                    with b1:
+                                        if st.form_submit_button("সংরক্ষণ করুন (Save)"):
+                                            entry["subject"] = new_sub
+                                            entry["time"] = new_time
+                                            entry["chapter"] = new_chap
+                                            entry["pages"] = new_pages
+                                            entry["mcq"] = new_mcq
+                                            entry["cq"] = new_cq
+                                            entry["mainbook"] = new_mb
+                                            entry["guide"] = new_gb
+                                            entry["mcq_done"] = new_md
+                                            entry["cq_done"] = new_cd
+                                            st.session_state.routine_edit_item = None
+                                            st.success("রুটিন সফলভাবে আপডেট করা হয়েছে!")
+                                            st.rerun()
+                                    with b2:
+                                        if st.form_submit_button("বাতিল (Cancel)"):
+                                            st.session_state.routine_edit_item = None
+                                            st.rerun()
+                            else:
+                                col_d, col_t, col_s, col_c, col_e, col_del = st.columns([1.2, 2.2, 2.0, 3.2, 0.5, 0.5])
+                                
+                                with col_d:
+                                    st.markdown(f"<div style='padding-top:8px; font-weight:bold; color:#1e293b;'>📅 {day_name}</div>", unsafe_allow_html=True)
+                                with col_t:
+                                    st.markdown(f"<div style='padding-top:8px; color:#1e3a8a; font-weight:bold;'>⏰ {entry['time']}</div>", unsafe_allow_html=True)
+                                with col_s:
+                                    st.markdown(f"<div style='padding-top:5px;'><span style='background-color:#DBEAFE; color:#1D4ED8; padding:5px 12px; border-radius:6px; font-weight:bold; font-size:13px; display:inline-block;'>📘 {entry['subject']}</span></div>", unsafe_allow_html=True)
+                                with col_c:
+                                    target_info = []
+                                    if entry.get("pages", 0) > 0: target_info.append(f"📖 {entry['pages']}টি পৃষ্ঠা")
+                                    if entry.get("mcq", 0) > 0: target_info.append(f"❓ {entry['mcq']}টি MCQ")
+                                    if entry.get("cq", 0) > 0: target_info.append(f"✍️ {entry['cq']}টি CQ")
+                                    target_str = " | ".join(target_info) if target_info else "সাধারন রিভিশন"
+
+                                    done_tags = []
+                                    if entry.get("mainbook"): done_tags.append("✅মূলবই")
+                                    if entry.get("guide"): done_tags.append("✅গাইড")
+                                    if entry.get("mcq_done"): done_tags.append("✅MCQ")
+                                    if entry.get("cq_done"): done_tags.append("✅CQ")
+                                    done_str = " ".join(done_tags) if done_tags else "⏳পড়া বাকি"
+
+                                    st.markdown(f"""
+                                    <div style='padding-top:2px;'>
+                                        <div style='color:#1e293b; font-weight:bold; font-size:14px;'>📝 {entry['chapter']}</div>
+                                        <div style='color:#475569; font-size:12px; margin-top:2px;'>🎯 {target_str}</div>
+                                        <div style='color:#059669; font-size:11px; font-weight:bold; margin-top:2px;'>{done_str}</div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+
+                                with col_e:
+                                    if st.button("✏️", key=f"btn_edit_{unique_entry_key}", help="এডিট করুন"):
+                                        st.session_state.routine_edit_item = unique_entry_key
+                                        st.rerun()
+                                with col_del:
+                                    if st.button("🗑️", key=f"btn_del_{unique_entry_key}", help="মুছে ফেলুন"):
+                                        entries.pop(idx)
+                                        st.success("এন্ট্রিটি সফলভাবে মুছে ফেলা হয়েছে!")
+                                        st.rerun()
+                                
+                                st.markdown("<hr style='margin: 8px 0; border: none; border-bottom: 1px solid #f1f5f9;'>", unsafe_allow_html=True)
+
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.info("💡 টিপস: তুমি চাইলে ব্রাউজার থেকে সরাসরি প্রিন্ট (Ctrl + P) করে এই রুটিনটি প্রিন্ট আউট বা পেজে সংরক্ষণ করে রাখতে পারো।")
+            else:
+                st.warning("⚠️ নির্বাচিত সিলেবাসে কোনো বিষয় পাওয়া যায়নি। দয়া করে সিলেবাস চেক করুন।")
+        else:
+            st.warning("⚠️ কোনো সংরক্ষিত সিলেবাস পাওয়া যায়নি। দয়া করে প্রথমে 'Syllabus' ট্যাব থেকে একটি সিলেবাস তৈরি ও সেভ করুন।")
+
+    # --- TAB 3: AUTO SMART STUDY PLAN (শুধুমাত্র নির্বাচিত সিলেবাসের বিষয় ও টপিকভিত্তিক) ---
     with tab3:
-        st.markdown("### Smart Study Plan & Timeline")
+        st.markdown("### 🤖 Auto Smart Study Plan & Interactive Task Tracker")
+        st.markdown("সিলেবাস নির্বাচন ও সময় দেওয়ার পর কেবল **নির্বাচিত সিলেবাসের বিষয় ও টপিকগুলো** নিয়ে অটো স্টাডি প্ল্যান তৈরি হবে। প্রতিটি বিষয়ের পড়ার সময়, স্ট্যাটাস ও কারণ ইনপুট দিয়ে লাইভ প্রোগ্রেস ট্র্যাক করো!")
+
         conn = sqlite3.connect("smart_school_syllabus.db")
         cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS study_plans_multi (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                plan_title TEXT,
-                plan_type TEXT,
-                start_date TEXT,
-                end_date TEXT,
-                daily_hours TEXT,
-                plan_json TEXT
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS daily_study_notes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                plan_id INTEGER,
-                day_number INTEGER,
-                note_text TEXT,
-                status_text TEXT
-            )
-        """)
-        conn.commit()
-        cursor.execute("SELECT id, plan_title, plan_type, start_date, end_date, daily_hours, plan_json FROM study_plans_multi ORDER BY id DESC")
-        all_saved_plans = cursor.fetchall()
+        cursor.execute("SELECT id, student_class, exam_term, syllabus_json, is_default FROM school_syllabus_multi ORDER BY id DESC")
+        plan_syllabi = cursor.fetchall()
         conn.close()
 
-        if "plan_edit_id" not in st.session_state:
-            st.session_state.plan_edit_id = None
-        if "create_new_plan" not in st.session_state:
-            st.session_state.create_new_plan = False
+        if plan_syllabi:
+            p_choices = {}
+            p_default_idx = 0
+            for idx, s in enumerate(plan_syllabi):
+                s_id, s_class, s_term, s_json, s_def = s[0], s[1], s[2], s[3], s[4]
+                label_str = f"📌 {s_term} ({s_class}) [ID: {s_id}]"
+                if s_def == 1:
+                    label_str += " ⭐ (মূল সিলেবাস)"
+                    p_default_idx = idx
+                p_choices[label_str] = s_json
 
-        if not all_saved_plans or st.session_state.create_new_plan or st.session_state.plan_edit_id is not None:
-            editing_record = None
-            if st.session_state.plan_edit_id is not None:
-                for p in all_saved_plans:
-                    if p[0] == st.session_state.plan_edit_id:
-                        editing_record = p
-                        break
+            selected_plan_s_label = st.selectbox("🎯 যে সিলেবাসটি শেষ করতে চাও তা নির্বাচন করো:", list(p_choices.keys()), index=p_default_idx, key="auto_plan_syllabus_dropdown")
+            
+            # 🔥 মূল সংশোধন: শুধুমাত্র সিলেক্ট করা সিলেবাসের ডিকশনারি পার্স করা হলো
+            selected_syl_dict = json.loads(p_choices[selected_plan_s_label])
 
-            form_header = "Edit" if editing_record else "➕ নতুন স্মার্ট স্টাডি প্ল্যান তৈরি করুন"
-            st.markdown(f"#### {form_header}")
-            st.markdown("আপনার সিলেবাস থেকে বিষয় ও অধ্যায়সমূহ বাছাই করে নির্দিষ্ট মেয়াদের সমন্বিত রুটিন তৈরি করুন:")
+            # ১. এনালিটিক্স প্রিভিউ (শুধুমাত্র নির্বাচিত সিলেবাসের ওপর ভিত্তি করে)
+            st.markdown("#### 📊 ১. নির্বাচিত সিলেবাসের পূর্ণাঙ্গ এনালিটিক্স প্রিভিউ:")
+            total_subjs_count = len(selected_syl_dict)
+            total_topics_count = sum([len(t) for cats in selected_syl_dict.values() for t in cats.values()])
 
-            conn = sqlite3.connect("smart_school_syllabus.db")
-            cursor = conn.cursor()
-            cursor.execute("SELECT syllabus_json FROM school_syllabus_multi WHERE is_default = 1 LIMIT 1")
-            saved_plan_record = cursor.fetchone()
-            if not saved_plan_record:
-                cursor.execute("SELECT syllabus_json FROM school_syllabus_multi ORDER BY id DESC LIMIT 1")
-                saved_plan_record = cursor.fetchone()
-            conn.close()
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("📚 মোট বিষয়", f"{total_subjs_count} টি")
+            c2.metric("📝 মোট অধ্যায়/টপিক", f"{total_topics_count} টি")
+            c3.metric("📖 আনুমানিক পৃষ্ঠা", f"~{total_topics_count * 8} টি")
+            c4.metric("🎯 মোট MCQ ও CQ", f"~{total_topics_count * 20} MCQ | {total_topics_count * 3} CQ")
 
-            saved_syllabus_dict = {}
-            if saved_plan_record:
-                saved_syllabus_dict = json.loads(saved_plan_record[0])
+            st.markdown("---")
 
-            if saved_syllabus_dict:
-                available_saved_subjects = list(saved_syllabus_dict.keys())
-                today = datetime.today().date()
-                default_title = editing_record[1] if editing_record else "আমার সমন্বিত স্টাডি প্ল্যান"
-                default_start = datetime.strptime(editing_record[3], "%Y-%m-%d").date() if editing_record else today
-                default_end = datetime.strptime(editing_record[4], "%Y-%m-%d").date() if editing_record else (today + timedelta(days=7))
-                default_hrs = float(editing_record[5].replace(" ঘণ্টা", "")) if editing_record else 3.0
+            # ২. সময় ও ঘণ্টা
+            st.markdown("#### ⏳ ২. সময় ও দৈনিক পড়ার ঘণ্টা নির্ধারণ করুন:")
+            col_t1, col_t2 = st.columns(2)
+            with col_t1:
+                target_days = st.number_input("সিলেবাস শেষ করার জন্য কত দিন সময় আছে?", min_value=1, max_value=365, value=3, step=1)
+            with col_t2:
+                daily_study_hours = st.slider("প্রতিদিন গড়ে কত ঘণ্টা পড়তে চাও? (দৈনিক টার্গেট সময়)", 1.0, 12.0, 4.0, 0.5)
 
-                parsed_edit_topics = []
-                if editing_record:
-                    edit_json_data = json.loads(editing_record[6])
-                    parsed_edit_topics = edit_json_data.get("topics", [])
+            if st.button("✨ অটো স্টাডি প্ল্যান ও টাস্ক ট্র্যাকার তৈরি করুন", use_container_width=True, type="primary"):
+                subj_topic_queues = {}
+                # 🔥 শুধুমাত্র নির্বাচিত সিলেবাসের বিষয় ও টপিকগুলো সারিবদ্ধ করা হলো
+                for subj, cats in selected_syl_dict.items():
+                    subj_topic_queues[subj] = []
+                    for cat, topics in cats.items():
+                        for t in topics:
+                            subj_topic_queues[subj].append({"subject": subj, "category": cat, "topic": t})
 
-                plan_title_input = st.text_input("স্টাডি প্ল্যানের নাম/শিরোনাম দিন:", default_title, key="plan_title_in")
-                col_d1, col_d2, col_d3 = st.columns(3)
-                with col_d1:
-                    start_date = st.date_input("শুরুর তারিখ:", default_start, key="plan_start_date_in")
-                with col_d2:
-                    end_date = st.date_input("শেষের তারিখ:", default_end, key="plan_end_date_in")
-                with col_d3:
-                    daily_hrs = st.slider("প্রতিদিনের পড়ার সময় (ঘণ্টা):", 1.0, 8.0, default_hrs, 0.5, key="daily_hrs_slider_in")
+                interleaved_topics_list = []
+                max_topic_len = max([len(v) for v in subj_topic_queues.values()]) if subj_topic_queues else 0
+                subj_list_keys = list(subj_topic_queues.keys())
 
-                calc_days = (end_date - start_date).days + 1
-                if calc_days == 7:
-                    p_type_label = "সাপ্তাহিক প্ল্যান (৭ দিন)"
-                elif calc_days in [28, 29, 30, 31]:
-                    p_type_label = "মাসিক প্ল্যান (১ মাস)"
-                elif calc_days in [14, 15]:
-                    p_type_label = "পাক্ষিক প্ল্যান (১৫ দিন)"
-                elif calc_days in [180, 182, 183]:
-                    p_type_label = "ষান্মাসিক প্ল্যান (৬ মাস)"
-                elif calc_days in [365, 366]:
-                    p_type_label = "বার্ষিক প্ল্যান (১ বছর)"
-                else:
-                    p_type_label = f"কাস্টম প্ল্যান ({calc_days} দিন)"
-                st.info(f"নির্ণীত মেয়াদ: **{p_type_label}**")
+                for i in range(max_topic_len):
+                    for sk in subj_list_keys:
+                        if i < len(subj_topic_queues[sk]):
+                            interleaved_topics_list.append(subj_topic_queues[sk][i])
 
-                default_selected_subjs = list(set([t[0] for t in parsed_edit_topics])) if parsed_edit_topics else available_saved_subjects
-                target_subjects = st.multiselect("কমপ্লিট করার জন্য বিষয়সমূহ সিলেক্ট করুন:", available_saved_subjects, default=default_selected_subjs, key="target_subjects_multi_in")
+                st.session_state["active_interleaved_topics"] = interleaved_topics_list
+                st.session_state["active_target_days"] = target_days
+                st.session_state["active_daily_hours"] = daily_study_hours
+                st.session_state["active_plan_syl_label"] = selected_plan_s_label
+                st.success("🎉 আপনার নির্বাচিত সিলেবাসের আলোকে স্মার্ট স্টাডি প্ল্যান প্রস্তুত করা হয়েছে!")
 
-                selected_comprehensive_topics = []
-                if target_subjects:
-                    st.markdown("##### বিষয় ভিত্তিক অধ্যায় ও টপিকসমূহ নির্ধারণ করুন:")
-                    for subj in target_subjects:
-                        with st.expander(f"বিষয়: {subj}", expanded=True):
-                            categories_dict = saved_syllabus_dict.get(subj, {})
-                            for cat, topics in categories_dict.items():
-                                default_t_sel = [t[2] for t in parsed_edit_topics if t[0] == subj and t[1] == cat] if parsed_edit_topics else topics
-                                chosen_topics = st.multiselect(
-                                    f"{subj} -> {cat}:",
-                                    topics,
-                                    default=[t for t in default_t_sel if t in topics],
-                                    key=f"plan_topics_form_{subj}_{cat}"
-                                )
-                                for t in chosen_topics:
-                                    selected_comprehensive_topics.append((subj, cat, t))
+            # --- ৩. ইন্টারেক্টিভ প্ল্যান ও ট্র্যাকার ---
+            if "active_interleaved_topics" in st.session_state:
+                interleaved_topics_list = st.session_state["active_interleaved_topics"]
+                target_days = st.session_state["active_target_days"]
+                daily_study_hours = st.session_state["active_daily_hours"]
+                
+                total_items = len(interleaved_topics_list)
+                topics_per_day = math.ceil(total_items / max(1, target_days))
 
                 st.markdown("<br>", unsafe_allow_html=True)
-                col_b1, col_b2 = st.columns(2)
-                with col_b1:
-                    save_btn_txt = "স্টাডি প্ল্যান আপডেট করুন" if editing_record else "স্টাডি প্ল্যান তৈরি ও সংরক্ষণ করুন"
-                    if st.button(save_btn_txt, use_container_width=True, type="primary", key="save_plan_action_btn"):
-                        if start_date > end_date:
-                            st.error("দয়া করে সঠিক তারিখ দিন (শুরুর তারিখ শেষের তারিখের পরে হতে পারে না)।")
-                        elif not selected_comprehensive_topics:
-                            st.error("দয়া করে অন্তত একটি বিষয় বা টপিক সিলেক্ট করুন।")
+                st.markdown("### 🏆 জেনারেটেড প্রাত্যহিক স্টাডি প্ল্যান ও লাইভ প্রোগ্রেস ট্র্যাকার:")
+
+                # স্টেট ইনিশিয়ালাইজেশন
+                if "user_done_notes" not in st.session_state:
+                    st.session_state["user_done_notes"] = {}
+                if "user_pending_notes" not in st.session_state:
+                    st.session_state["user_pending_notes"] = {}
+                if "user_subject_status" not in st.session_state:
+                    st.session_state["user_subject_status"] = {}
+                if "user_obstacle_reason" not in st.session_state:
+                    st.session_state["user_obstacle_reason"] = {}
+                if "user_subject_hours_text" not in st.session_state:
+                    st.session_state["user_subject_hours_text"] = {}
+
+                backlog_items = []
+                obstacle_reasons_list = []
+                total_tasks_global = 0
+                completed_score_global = 0.0
+
+                curr_idx = 0
+                for day_num in range(1, target_days + 1):
+                    if curr_idx >= total_items:
+                        day_tasks = [{"subject": "সমন্বিত রিভিশন", "category": "অল সাবজেক্ট", "topic": "পূর্বের সকল পঠিত বিষয় রিভিশন"}]
+                    else:
+                        day_tasks = interleaved_topics_list[curr_idx : curr_idx + topics_per_day]
+                        curr_idx += topics_per_day
+
+                    day_score = 0.0
+                    day_task_count = len(day_tasks)
+
+                    st.markdown(f"""
+                    <div style="background: #F8FAFC; border: 2px solid #3B82F6; border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #CBD5E1; padding-bottom: 8px; margin-bottom: 12px;">
+                            <span style="font-size: 16px; font-weight: bold; color: #1E3A8A;">📅 দিন {day_num} (টার্গেট ডে)</span>
+                            <span style="background-color: #DBEAFE; color: #1E4ED8; font-weight: bold; padding: 4px 10px; border-radius: 6px; font-size: 13px;">⏱️ নির্ধারিত টার্গেট সময়: {daily_study_hours} ঘণ্টা</span>
+                        </div>
+                    """, unsafe_allow_html=True)
+
+                    for t_idx, task in enumerate(day_tasks):
+                        s_name = task["subject"]
+                        cat_name = task["category"]
+                        top_name = task["topic"]
+                        task_key = f"day_{day_num}_task_{t_idx}_{s_name}"
+
+                        st.markdown(f"**📘 {s_name}** - *[{cat_name}] {top_name}*")
+                        
+                        col_st, col_hr, col_dn, col_pn = st.columns([1.5, 1.2, 2.3, 2.3])
+                        
+                        with col_st:
+                            current_status = st.selectbox(
+                                "পড়ার অবস্থা:",
+                                ["✅ সম্পূর্ণ সম্পন্ন", "⏳ আংশিক সম্পন্ন", "❌ একদম পড়তে পারিনি"],
+                                index=["✅ সম্পূর্ণ সম্পন্ন", "⏳ আংশিক সম্পন্ন", "❌ একদম পড়তে পারিনি"].index(st.session_state["user_subject_status"].get(task_key, "✅ সম্পূর্ণ সম্পন্ন")),
+                                key=f"status_sel_{task_key}"
+                            )
+                            st.session_state["user_subject_status"][task_key] = current_status
+
+                        with col_hr:
+                            subject_hours_txt = st.text_input(
+                                "পড়ার সময় (যেমন: ১ ঘণ্টা ১০ মি):",
+                                value=str(st.session_state["user_subject_hours_text"].get(task_key, "১.০ ঘণ্টা")),
+                                key=f"hrs_txt_{task_key}"
+                            )
+                            st.session_state["user_subject_hours_text"][task_key] = subject_hours_txt
+
+                        with col_dn:
+                            done_text = st.text_input(
+                                "আজ কতটুকু পড়েছ লেখো:",
+                                value=st.session_state["user_done_notes"].get(task_key, ""),
+                                placeholder="যেমন: ১-৫ পৃষ্ঠা পড়েছি...",
+                                key=f"done_in_{task_key}"
+                            )
+                            st.session_state["user_done_notes"][task_key] = done_text
+
+                        with col_pn:
+                            pending_text = st.text_input(
+                                "কতটুকু বাকি আছে লেখো:",
+                                value=st.session_state["user_pending_notes"].get(task_key, ""),
+                                placeholder="যেমন: শব্দার্থ পড়া হয়নি...",
+                                key=f"pending_in_{task_key}"
+                            )
+                            st.session_state["user_pending_notes"][task_key] = pending_text
+
+                        obstacle_val = "কোনো সমস্যা নেই"
+                        if current_status != "✅ সম্পূর্ণ সম্পন্ন":
+                            obstacle_val = st.selectbox(
+                                "⚠️ পড়া শেষ না হওয়ার মূল কারণ কী ছিল?",
+                                [
+                                    "⏳ সময়ের অভাব / ব্যস্ততা",
+                                    "🧠 টপিক কঠিন বা বুঝতে সমস্যা হয়েছে",
+                                    "🤒 শারীরিক অসুস্থতা / ক্লান্তি",
+                                    "📱 অন্যমনস্কতা বা মনোযোগের অভাব",
+                                    "🏠 পারিবারিক বা অন্যান্য কাজ"
+                                ],
+                                index=0,
+                                key=f"obstacle_{task_key}"
+                            )
+                            st.session_state["user_obstacle_reason"][task_key] = obstacle_val
+                            obstacle_reasons_list.append(obstacle_val)
+
+                        if current_status == "✅ সম্পূর্ণ সম্পন্ন":
+                            day_score += 1.0
+                        elif current_status == "⏳ আংশিক সম্পন্ন":
+                            day_score += 0.5
                         else:
-                            plan_data = {
-                                "title": plan_title_input,
-                                "type": p_type_label,
-                                "start_date": str(start_date),
-                                "end_date": str(end_date),
-                                "total_days": calc_days,
-                                "daily_hours": f"{daily_hrs} ঘণ্টা",
-                                "topics": selected_comprehensive_topics
-                            }
-                            plan_str = json.dumps(plan_data, ensure_ascii=False)
-                            conn = sqlite3.connect("smart_school_syllabus.db")
-                            cursor = conn.cursor()
-                            if editing_record:
-                                cursor.execute("""
-                                    UPDATE study_plans_multi 
-                                    SET plan_title=?, plan_type=?, start_date=?, end_date=?, daily_hours=?, plan_json=?
-                                    WHERE id=?
-                                """, (plan_title_input, p_type_label, str(start_date), str(end_date), f"{daily_hrs} ঘণ্টা", plan_str, editing_record[0]))
-                            else:
-                                cursor.execute("""
-                                    INSERT INTO study_plans_multi (plan_title, plan_type, start_date, end_date, daily_hours, plan_json)
-                                    VALUES (?, ?, ?, ?, ?, ?)
-                                """, (plan_title_input, p_type_label, str(start_date), str(end_date), f"{daily_hrs} ঘণ্টা", plan_str))
-                            conn.commit()
-                            conn.close()
-                            st.session_state.create_new_plan = False
-                            st.session_state.plan_edit_id = None
-                            st.success("স্টাডি প্ল্যান সফলভাবে সংরক্ষণ করা হয়েছে।")
-                            st.rerun()
+                            day_score += 0.0
 
-                if st.session_state.create_new_plan or st.session_state.plan_edit_id is not None:
-                    with col_b2:
-                        if st.button("❌ বাতিল (Cancel)", use_container_width=True, key="cancel_form_action_btn"):
-                            st.session_state.create_new_plan = False
-                            st.session_state.plan_edit_id = None
-                            st.rerun()
-            else:
-                st.warning("অনুগ্রহ করে প্রথমে 'Syllabus' ট্যাব থেকে সিলেবাস ইনপুট ও সেভ করুন, তবেই এখানে স্টাডি প্ল্যান তৈরি করতে পারবেন।")
+                        if current_status != "✅ সম্পূর্ণ সম্পন্ন" or pending_text.strip() != "":
+                            backlog_items.append({
+                                "day": day_num,
+                                "subject": s_name,
+                                "topic": top_name,
+                                "done": done_text if done_text else "কিছু অংশ পঠিত",
+                                "pending": pending_text if pending_text else "বাকি অংশ অসম্পূর্ণ",
+                                "status": current_status,
+                                "reason": obstacle_val
+                            })
+
+                        st.markdown("<hr style='margin: 8px 0; border: none; border-bottom: 1px solid #E2E8F0;'>", unsafe_allow_html=True)
+
+                    total_tasks_global += day_task_count
+                    completed_score_global += day_score
+                    day_prog_percentage = int((day_score / max(1, day_task_count)) * 100)
+
+                    st.markdown(f"**📊 দিন দিন {day_num} এর স্টাডি প্রোগ্রেস: `{day_prog_percentage}%` (টার্গেট সময়: {daily_study_hours} ঘণ্টা)**")
+                    st.progress(day_prog_percentage / 100)
+
+                    if day_prog_percentage == 100:
+                        st.success(f"🎉 অসাধারণ! তুমি নির্দিষ্ট টার্গেটের চেয়ে কম সময়েই সমস্ত পড়া সম্পূর্ণ করে ফেলেছ! অল্প সময়ে সিলেবাস শেষ করতে পারার এই দক্ষতা ও ক্রেডিট সত্যিই প্রশংসনীয়!")
+                    elif day_prog_percentage >= 50:
+                        st.info(f"👍 দারুন চেষ্টা! তুমি আংশিক পড়া শেষ করেছ। সিলেবাস পুরোপুরি শেষ করতে চাইলে সময় একটু বাড়িয়ে নিতে পারো।")
+                    else:
+                        st.warning(f"⚠️ আজ পড়ার গতি একটু কম। সিলেবাস নিয়মিত শেষ করতে চাইলে সময় বাড়িয়ে মনোযোগ দিয়ে পড়ার চেষ্টা করো!")
+
+                    st.markdown("</div>", unsafe_allow_html=True)
+
+                # --- ৪. সার্বিক স্টাডি প্রোগ্রেস, বকেয়া রিমাইন্ডার ও এআই রুট কজ ইনসাইটস ---
+                global_percentage = int((completed_score_global / max(1, total_tasks_global)) * 100)
+                st.markdown("---")
+                st.markdown("### 📈 আপনার সার্বিক প্রোগ্রেস রিপোর্ট ও এআই ইনসাইটস (Analytics & Insights)")
+                
+                col_p_left, col_p_right = st.columns([1, 2])
+                with col_p_left:
+                    st.metric("🔥 সামগ্রিক সিলেবাস প্রোগ্রেস", f"{global_percentage}%")
+                    st.progress(global_percentage / 100)
+                    if global_percentage == 100:
+                        st.balloons()
+                        st.success("🎉 অভিনন্দন! তুমি তোমার নির্বাচিত সিলেবাসের ১০০% টার্গেট পূরণ করেছ!")
+                
+                with col_p_right:
+                    if obstacle_reasons_list:
+                        reason_counts = Counter(obstacle_reasons_list)
+                        most_common_reason, count = reason_counts.most_common(1)[0]
+                        
+                        st.markdown(f"""
+                        <div style="background-color: #FEF3C7; border-left: 5px solid #D97706; padding: 12px 15px; border-radius: 6px; margin-bottom: 12px;">
+                            <h4 style="margin: 0 0 5px 0; color: #92400E;">🤖 AI Learning Behavior Insights</h4>
+                            <p style="margin: 0; font-size: 13px; color: #78350F;">
+                                আপনার পড়াশোনায় পিছিয়ে পড়ার প্রধান কারণ হলো: <b>{most_common_reason}</b> ({count} বার চিহ্নিত হয়েছে)। এই সমস্যা উত্তরণে সময় ব্যবস্থাপনা বা কনসেপ্ট ক্লিয়ার করার জন্য শিক্ষকের সহায়তা নিতে পারেন।
+                            </p>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    if backlog_items:
+                        st.warning(f"⚠️ **বকেয়া রিমাইন্ডার (Pending Backlogs):** আপনার মোট {len(backlog_items)}টি বিষয়ে অপূর্ণ পড়া রয়েছে!")
+                        with st.expander("🔔 কোন দিন কোন বিষয়ে কি পড়া বাকি আছে ও কারণ দেখে নিন", expanded=True):
+                            for b in backlog_items:
+                                r_disp = f" | 📌 *কারণ:* {b['reason']}" if b['reason'] != "কোনো সমস্যা নেই" else ""
+                                st.markdown(f"• **দিন {b['day']} [{b['subject']}]:** {b['topic']}<br>&nbsp;&nbsp;&nbsp;&nbsp;🔹 *পড়েছ:* {b['done']} | 🔴 *বাকি:* `{b['pending']}` ({b['status']}){r_disp}", unsafe_allow_html=True)
+                            st.info("💡 পরামর্শ: আগামী রিভিশন সেশন বা সাপ্তাহিক ছুটির দিনে এই বকেয়া পড়াগুলো অবশ্যই রিকভার করে নিন!")
+                    else:
+                        st.success("✨ দারুন! আপনার কোনো বকেয়া বা অপূর্ণ পড়া নেই। আপনি একদম পারফেক্ট ট্র্যাকে আছেন!")
+
         else:
-            plan_options = {}
-            for p in all_saved_plans:
-                p_id_val, p_title_val, p_type_val, p_start_val, p_end_val = p[0], p[1], p[2], p[3], p[4]
-                label_str = f"📚 {p_title_val} [{p_type_val} ({p_start_val} হতে {p_end_val})]"
-                plan_options[label_str] = p
-
-            selected_plan_label = st.selectbox(
-                "আপনার সংরক্ষিত স্টাডি প্ল্যানগুলো থেকে বেছে নিন (সবগুলো প্ল্যান সেভ থাকবে):",
-                list(plan_options.keys()),
-                key="select_saved_plan_main_dropdown"
-            )
-            selected_record = plan_options[selected_plan_label]
-            p_id, p_title, p_type, p_start, p_end, p_hrs, p_json = selected_record
-            plan_data = json.loads(p_json)
-            total_days = plan_data.get("total_days", 7)
-            raw_topics_list = plan_data.get("topics", [])
-
-            conn = sqlite3.connect("smart_school_syllabus.db")
-            cursor = conn.cursor()
-            cursor.execute("SELECT day_number, note_text, status_text FROM daily_study_notes WHERE plan_id = ?", (p_id,))
-            existing_notes_rows = cursor.fetchall()
-            conn.close()
-
-            saved_notes_dict = {}
-            for row in existing_notes_rows:
-                saved_notes_dict[row[0]] = {"note": row[1], "status": row[2]}
-
-            st.markdown(f"### {p_title} <span style='font-size:14px; background: #e0e7ff; color:#1e3a8a; padding:3px 10px; border-radius: 12px; margin-left:10px;'>{p_type}</span>", unsafe_allow_html=True)
-            st.markdown(f"📅 **তারিখ:** {p_start} হতে {p_end} (মোট {total_days} দিন) | ⏰ **দৈনিক পড়ার সময়:** {p_hrs}")
-
-            start_dt = datetime.strptime(p_start, "%Y-%m-%d").date()
-            subject_grouped = {}
-            for item in raw_topics_list:
-                subj, cat, t = item[0], item[1], item[2]
-                if subj not in subject_grouped:
-                    subject_grouped[subj] = []
-                subject_grouped[subj].append((subj, cat, t))
-
-            interleaved_topics = []
-            max_len = max((len(v) for v in subject_grouped.values())) if subject_grouped else 0
-            subj_keys = list(subject_grouped.keys())
-            for i in range(max_len):
-                for sk in subj_keys:
-                    if i < len(subject_grouped[sk]):
-                        interleaved_topics.append(subject_grouped[sk][i])
-
-            num_items = len(interleaved_topics)
-            items_per_day = max(1, math.ceil(num_items / total_days))
-            item_index = 0
-
-            st.markdown("""
-                <style>
-                .clean-grid-table {
-                    width: 100%;
-                    border-collapse: collapse !important;
-                    border: 2px solid #2563eb !important;
-                    margin-top: 15px;
-                    font-family: sans-serif;
-                }
-                .clean-grid-table th {
-                    background-color: #1e3a8a;
-                    color: white;
-                    padding: 12px 10px;
-                    border: 2px solid #2563eb !important;
-                    text-align: left;
-                    font-size: 14px;
-                    font-weight: bold;
-                }
-                </style>
-            """, unsafe_allow_html=True)
-
-            st.markdown("""
-                <table class="clean-grid-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 12%;">দিন ও তারিখ</th>
-                            <th style="width: 19%;">বিষয়সমূহ</th>
-                            <th style="width: 39%;">নির্ধারিত পড়ার টপিকসমূহ</th>
-                            <th style="width: 18%;">📝 নোট / খসড়া ইনপুট</th>
-                            <th style="width: 12%; text-align: center;">💾 স্ট্যাটাস ও সেভ</th>
-                        </tr>
-                    </thead>
-                </table>
-            """, unsafe_allow_html=True)
-
-            for day in range(1, total_days + 1):
-                current_day_date = start_dt + timedelta(days=day - 1)
-                date_str = current_day_date.strftime("%d %b, %Y")
-                day_note_info = saved_notes_dict.get(day, {"note": "", "status": "⏳ বাকি আছে"})
-                current_note = day_note_info["note"]
-                current_status = day_note_info["status"]
-
-                if item_index >= num_items:
-                    day_subjs = "রিভিশন ও প্র্যাকটিস"
-                    formatted_topics_html = "<span style='color:#059669; font-weight:bold;'>✨ পূর্বে পঠিত সকল টপিকের সম্যক রিভিশন ও মডেল টেস্ট অনুশীলন</span>"
-                else:
-                    assigned_items = interleaved_topics[item_index: item_index + items_per_day]
-                    item_index += items_per_day
-                    unique_subjs = list(dict.fromkeys([item[0] for item in assigned_items]))
-                    day_subjs = ", ".join(unique_subjs)
-                    
-                    formatted_topic_list = []
-                    for item in assigned_items:
-                        s_name, c_name, t_name = item[0], item[1], item[2]
-                        badge_html = f"""<div style="margin-bottom: 5px; line-height: 1.4;">
-                            <span style="background-color: #e0e7ff; color: #1e3a8a; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; border: 1px solid #c7d2fe;">{s_name}</span>
-                            <span style="font-size: 12px; color: #1e293b; font-weight: 500;">{t_name}</span>
-                        </div>"""
-                        formatted_topic_list.append(badge_html)
-                    formatted_topics_html = "".join(formatted_topic_list)
-
-                st.markdown(f"<div style='border: 2px solid #2563eb; border-top: none; background-color: #ffffff; margin-bottom: 0px;'>", unsafe_allow_html=True)
-                col1, col2, col3, col4, col5 = st.columns([1.2, 1.9, 3.9, 1.8, 1.2])
-
-                with col1:
-                    st.markdown(f"<div style='border-right: 2px solid #2563eb; padding: 8px; min-height: 90px;'><b>দিন {day}</b><br><span style='font-size:11px; color:#475569;'>({date_str})</span></div>", unsafe_allow_html=True)
-                with col2:
-                    st.markdown(f"<div style='border-right: 2px solid #2563eb; padding: 8px; min-height: 90px;'><span style='color:#1e3a8a; font-weight:bold; font-size:13px;'>{day_subjs}</span></div>", unsafe_allow_html=True)
-                with col3:
-                    st.markdown(f"<div style='border-right: 2px solid #2563eb; padding: 8px; min-height: 90px; background: #ffffff;'>{formatted_topics_html}</div>", unsafe_allow_html=True)
-                with col4:
-                    st.markdown("<div style='border-right: 2px solid #2563eb; padding: 6px; min-height: 90px;'>", unsafe_allow_html=True)
-                    user_entry_note = st.text_input(
-                        f"নোট লিখুন (দিন {day}):",
-                        value=current_note,
-                        key=f"direct_note_{p_id}_{day}",
-                        label_visibility="collapsed",
-                        placeholder="আজকের খসড়া নোট..."
-                    )
-                    st.markdown("</div>", unsafe_allow_html=True)
-                with col5:
-                    st.markdown("<div style='padding: 6px; min-height: 90px;'>", unsafe_allow_html=True)
-                    status_opts = ["⏳ বাকি আছে", "✅ সম্পন্ন"]
-                    s_idx = status_opts.index(current_status) if current_status in status_opts else 0
-                    selected_st = st.selectbox(
-                        f"স্ট্যাটাস {day}",
-                        status_opts,
-                        index=s_idx,
-                        key=f"direct_status_{p_id}_{day}",
-                        label_visibility="collapsed"
-                    )
-                    if st.button("সেভ", key=f"save_row_btn_{p_id}_{day}", use_container_width=True):
-                        conn = sqlite3.connect("smart_school_syllabus.db")
-                        cursor = conn.cursor()
-                        cursor.execute("DELETE FROM daily_study_notes WHERE plan_id = ? AND day_number = ?", (p_id, day))
-                        cursor.execute("""
-                            INSERT INTO daily_study_notes (plan_id, day_number, note_text, status_text)
-                            VALUES (?, ?, ?, ?)
-                        """, (p_id, day, user_entry_note.strip(), selected_st))
-                        conn.commit()
-                        conn.close()
-                        st.toast(f"দিন {day} এর তথ্য সংরক্ষিত হয়েছে!")
-                        time.sleep(0.5)
-                        st.rerun()
-                    st.markdown("</div>", unsafe_allow_html=True)
-
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            col_opt1, col_opt2, col_opt3 = st.columns(3)
-            with col_opt1:
-                if st.button("✏️ বর্তমান প্ল্যান এডিট করুন", use_container_width=True, key=f"edit_plan_btn_{p_id}"):
-                    st.session_state.plan_edit_id = p_id
-                    st.rerun()
-            with col_opt2:
-                if st.button("🗑️ বর্তমান প্ল্যানটি ডিলেট করুন", use_container_width=True, key=f"delete_plan_btn_{p_id}"):
-                    conn = sqlite3.connect("smart_school_syllabus.db")
-                    cursor = conn.cursor()
-                    cursor.execute("DELETE FROM study_plans_multi WHERE id = ?", (p_id,))
-                    cursor.execute("DELETE FROM daily_study_notes WHERE plan_id = ?", (p_id,))
-                    conn.commit()
-                    conn.close()
-                    st.success("নির্বাচিত স্টাডি প্ল্যানটি সফলভাবে মুছে ফেলা হয়েছে!")
-                    st.rerun()
-            with col_opt3:
-                if st.button("➕ নতুন আরেকটি স্টাডি প্ল্যান তৈরি করুন", use_container_width=True, type="primary", key=f"add_another_new_plan_btn_{p_id}"):
-                    st.session_state.create_new_plan = True
-                    st.session_state.plan_edit_id = None
-                    st.rerun()
-
-            st.info("💡 পরামর্শ: আপনি চাইলে ব্রাউজার থেকে সরাসরি প্রিন্ট (Ctrl + P) করে আপনার যেকোনো সংরক্ষিত রুটিন ও নোট কাগজের মতো সংগ্রহ করতে পারেন।")
+            st.warning("⚠️ কোনো সংরক্ষিত সিলেবাস পাওয়া যায়নি। দয়া করে প্রথমে 'Syllabus' ট্যাব থেকে একটি সিলেবাস তৈরি ও সেভ করুন।")
 
    
 import sqlite3
