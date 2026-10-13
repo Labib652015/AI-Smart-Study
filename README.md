@@ -616,24 +616,52 @@ def render_dashboard():
             </div>
         """, unsafe_allow_html=True)
 
-import os
-import requests
-import base64
-import streamlit as st
 
-# পিডিএফ ফাইল মেমোরিতে ফাস্ট লোড ও হ্যাং বন্ধ করার জন্য ক্যাশিং ফাংশন
+import streamlit as st
+import os
+import os.path as path
+import base64
+import requests
+import sqlite3
+from datetime import datetime
+
+# ডেটাবেজ ইনিশিয়ালাইজেশন এবং স্বয়ংক্রিয়ভাবে missing column যোগ করার লজিক
+def init_db():
+    conn = sqlite3.connect("subject_notes.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT,
+        content TEXT,
+        subject TEXT,
+        note_type TEXT
+    )
+    """)
+    try:
+        cursor.execute("SELECT created_at FROM notes LIMIT 1")
+    except sqlite3.OperationalError:
+        cursor.execute("ALTER TABLE notes ADD COLUMN created_at TEXT")
+    
+    conn.commit()
+    conn.close()
+
+init_db()
+
+# পিডিএফ ফাইল মেমোরিতে ফাস্ট লোড করার জন্য ক্যাশিং ফাংশন
 @st.cache_data
 def load_pdf_as_base64(file_path):
     with open(file_path, "rb") as f:
         return base64.b64encode(f.read()).decode('utf-8')
 
 def render_my_books():
-    # ১. Gemini API Key (যদি ইন-অ্যাপ চ্যাট ব্যবহার করতে চান)
+    # ১. Gemini API Key
     GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE"
-    
+
     def ask_gemini_rest_api(prompt_text):
         if not GEMINI_API_KEY or GEMINI_API_KEY == "YOUR_GEMINI_API_KEY_HERE":
-            return "⚠️ API Key সমস্যা হচ্ছে। দয়া করে 'Gemini Chatbot' বাটনে ক্লিক করো।"
+            return "API Key সমস্যা হচ্ছে। দয়া করে 'Gemini Chatbot' বাটনে ক্লিক করো।"
+        
         models_to_try = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"]
         for model_name in models_to_try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
@@ -646,338 +674,482 @@ def render_my_books():
                     return data['candidates'][0]['content']['parts'][0]['text']
             except Exception:
                 continue
-        return "⚠️ API Key সমস্যা হচ্ছে। দয়া করে 'Gemini Chatbot' বাটনে ক্লিক করো।"
+        return "API Key সমস্যা হচ্ছে। দয়া করে সঠিক API Key সেট করুন।"
 
-    # ২. বাচ্চাদের জন্য আকর্ষণীয়, কালারফুল ও প্রিমিয়াম CSS স্টাইল (আলাদা ফন্ট ও নতুন মাত্রা)
+    # ২. প্রিমিয়াম CSS স্টাইল
+    st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css?family=Hind+Siliguri:wght@400;500;600;700&family=Outfit:wght@400;600;800&display=swap');
+    
+    .kids-magic-wrapper {
+        font-family: 'Outfit', 'Hind Siliguri', sans-serif;
+        background: linear-gradient(135deg, #f0fdf4 0%, #eff6ff 50%, #fdf4ff 100%);
+        padding: 25px;
+        border-radius: 24px;
+        border: 2px solid #bae6fd;
+        box-shadow: 0 15px 30px rgba(14, 165, 233, 0.08);
+        color: #1e293b;
+        margin-bottom: 20px;
+    }
+    .kids-banner {
+        background: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%);
+        padding: 18px;
+        border-radius: 16px;
+        color: white;
+        text-align: center;
+        margin-bottom: 20px;
+        box-shadow: 0 8px 20px rgba(56, 189, 248, 0.25);
+    }
+    .motivation-quote-box {
+        background: #ffffff;
+        padding: 14px 18px;
+        border-radius: 14px;
+        border-left: 5px solid #10b981;
+        border: 1px solid #e2e8f0;
+        margin-bottom: 20px;
+        box-shadow: 0 6px 15px rgba(16, 185, 129, 0.06);
+    }
+    .kids-book-card {
+        background: #ffffff;
+        padding: 16px;
+        border-radius: 14px;
+        border: 1px solid #e0f2fe;
+        border-top: 4px solid #0ea5e9;
+        box-shadow: 0 6px 15px rgba(14, 165, 233, 0.06);
+        margin-bottom: 12px;
+        transition: all 0.3s ease;
+    }
+    .kids-book-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 10px 20px rgba(14, 165, 233, 0.15);
+        border-color: #38bdf8;
+    }
+    .stButton button {
+        font-family: 'Outfit', 'Hind Siliguri', sans-serif !important;
+        border-radius: 10px !important;
+        font-weight: 700 !important;
+        background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%) !important;
+        color: white !important;
+        border: none !important;
+        box-shadow: 0 4px 12px rgba(14, 165, 233, 0.25) !important;
+        transition: all 0.3s ease !important;
+    }
+    .stButton button:hover {
+        background: linear-gradient(135deg, #0284c7 0%, #1d4ed8 100%) !important;
+        transform: translateY(-2px);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+
+import streamlit as str_lib
+import os
+from os.path import basename, exists, join, dirname, abspath
+from os import listdir, makedirs, remove, rename
+from datetime import datetime
+import time
+
+def render_my_books():
+    global st
+    st = str_lib
+    
+    # CSS স্টাইল ও প্রিমিয়াম লুক
     st.markdown("""
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Outfit:wght@400;600;800&display=swap');
-
-        .kids-magic-wrapper {
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Hind+Siliguri:wght@400;600;700&display=swap');
+        
+        .reading-room-wrapper {
             font-family: 'Outfit', 'Hind Siliguri', sans-serif;
-            background: linear-gradient(135deg, #f0fdf4 0%, #eff6ff 50%, #fdf4ff 100%);
-            padding: 30px;
-            border-radius: 28px;
-            border: 2px solid #bae6fd;
-            box-shadow: 0 20px 40px rgba(14, 165, 233, 0.1);
-            color: #1e293b;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            padding: 24px;
+            border-radius: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.03);
             margin-bottom: 25px;
         }
-
-        .kids-banner {
-            background: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%);
-            padding: 22px;
+        
+        .hero-banner {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #2563eb 100%);
+            padding: 32px 25px;
             border-radius: 20px;
-            color: white;
+            color: #ffffff;
             text-align: center;
-            margin-bottom: 25px;
-            box-shadow: 0 10px 25px rgba(56, 189, 248, 0.3);
+            box-shadow: 0 12px 28px rgba(99, 102, 241, 0.28);
+            margin-bottom: 20px;
         }
-
-        .motivation-quote-box {
+        
+        .motivation-box {
             background: #ffffff;
-            padding: 16px 20px;
-            border-radius: 16px;
-            border-left: 6px solid #10b981;
-            border-top: 1px solid #e2e8f0;
-            border-right: 1px solid #e2e8f0;
-            border-bottom: 1px solid #e2e8f0;
-            margin-bottom: 25px;
-            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.08);
+            border-left: 5px solid #10b981;
+            padding: 15px 20px;
+            border-radius: 14px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+            margin-bottom: 20px;
+            border: 1px solid #e2e8f0;
         }
-
+        
         .kids-book-card {
             background: #ffffff;
-            padding: 20px;
-            border-radius: 18px;
-            border: 1px solid #e0f2fe;
-            border-top: 5px solid #0ea5e9;
-            box-shadow: 0 10px 25px rgba(14, 165, 233, 0.08);
-            margin-bottom: 16px;
+            padding: 16px;
+            border-radius: 16px;
+            border: 1px solid #e0e7ff;
+            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.06);
+            margin-bottom: 12px;
             transition: all 0.3s ease;
         }
-
         .kids-book-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 30px rgba(14, 165, 233, 0.2);
-            border-color: #38bdf8;
-        }
-
-        /* আকর্ষণীয় ও কালারফুল বাটন ডিজাইন */
-        .stButton button {
-            font-family: 'Outfit', 'Hind Siliguri', sans-serif !important;
-            border-radius: 12px !important;
-            font-weight: 700 !important;
-            background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%) !important;
-            color: white !important;
-            border: none !important;
-            box-shadow: 0 6px 15px rgba(14, 165, 233, 0.3) !important;
-            transition: all 0.3s ease !important;
-        }
-
-        .stButton button:hover {
-            background: linear-gradient(135deg, #0284c7 0%, #1d4ed8 100%) !important;
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(14, 165, 233, 0.4) !important;
+            transform: translateY(-3px);
+            box-shadow: 0 10px 22px rgba(99, 102, 241, 0.12);
         }
         </style>
     """, unsafe_allow_html=True)
 
-    # মূল কালারফুল কন্টেইনার শুরু
-    st.markdown("<div class='kids-magic-wrapper'>", unsafe_allow_html=True)
+    st.markdown("<div class='reading-room-wrapper'>", unsafe_allow_html=True)
     
-    # আকর্ষণীয় ব্যানার ও লোগো
+    # সুন্দর ও কেচি হেডলাইন ও সাবলাইন ব্যানার
     st.markdown("""
-        <div class="kids-banner">
-            <h1 style="margin: 0; font-size: 28px; font-weight: 800; font-family: 'Outfit', sans-serif;">🌟 ভার্চুয়াল রিডিং রুম - পড়ার জাদুকরী দুনিয়া 🌟</h1>
-            <p style="margin: 5px 0 0 0; font-size: 14px; font-weight: 500; opacity: 0.95;">ষষ্ঠ থেকে দশম শ্রেণির সোনামনিদের স্মার্ট পড়াশোনা, জ্ঞানার্জন ও চরিত্র গঠনের ঘর</p>
-        </div>
+    <div class="hero-banner">
+        <h1 style="margin: 0; font-size: 28px; font-weight: 800; letter-spacing: 0.5px;">✨ Your Virtual Reading Room-Books & Reading Section</h1>
+        <p style="margin: 8px 0 0 0; font-size: 15px; font-weight: 500; opacity: 0.95;">
+            A Smart Hub for Your Books, Studies & Notes
+        </p>
+    </div>
     """, unsafe_allow_html=True)
-
-    # আজকের নীতিকথা ও অনুপ্রেরণামূলক বার্তা (বাচ্চাদের উৎসাহ বাড়াতে)
+    
+    # মোটিভেশনাল বক্স
     st.markdown("""
-        <div class="motivation-quote-box">
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <span style="font-size: 28px;">💡</span>
-                <div>
-                    <h4 style="margin: 0; color: #047857; font-size: 15px; font-weight: 700;">আজকের অনুপ্রেরণা ও নীতিকথা:</h4>
-                    <p style="margin: 4px 0 0 0; color: #334155; font-size: 13px; font-weight: 500;">
-                        "আজকের অর্জিত জ্ঞান ও ভালো অভ্যাসই আগামী দিনে তোমাকে একজন আদর্শ দেশপ্রেমিক ও সফল মানুষ হিসেবে গড়ে তুলবে। নিয়মিত বই পড়ো, দেশকে ভালোবাসো!" 🇧🇩✨
-                    </p>
-                </div>
+    <div class="motivation-box">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 26px;">💡</span>
+            <div>
+                <h4 style="margin: 0; color: #047857; font-size: 14px; font-weight: 700;">Daily Motivation:</h4>
+                <p style="margin: 3px 0 0 0; color: #334155; font-size: 13px; font-weight: 500;">
+                    "Read regularly, keep notes of important lines, and build a brilliant future!"
+                </p>
             </div>
         </div>
+    </div>
     """, unsafe_allow_html=True)
 
-    # ৩. সেশন স্টেট ইনিশিয়ালাইজেশন[cite: 18]
+    # সেশন স্টেট ইনিশিয়ালাইজেশন
     if "active_pdf_path" not in st.session_state:
         st.session_state.active_pdf_path = None
     if "book_chat_messages" not in st.session_state:
         st.session_state.book_chat_messages = [
-            {"role": "assistant", "content": "✨ হ্যালো বন্ধু! বইয়ের কোনো লাইন বুঝতে সমস্যা হলে আমাকে জানাও, আমি বুঝিয়ে দেব।"}
+            {"role": "assistant", "content": "Hello! Ask me if you need help understanding any line."}
         ]
     if "rename_file" not in st.session_state:
         st.session_state.rename_file = None
+    if "editing_note_id" not in st.session_state:
+        st.session_state.editing_note_id = None
 
-    # ৪. ফাইল সেভ করার ফোল্ডার সেটআপ[cite: 18]
-    current_dir = os.path.dirname(os.path.abspath(__file__)) if "__file__" in locals() else os.getcwd()
-    assets_dir = os.path.join(current_dir, "assets")
-    if not os.path.exists(assets_dir):
-        os.makedirs(assets_dir)
+    # ফাইল সেভ ফোল্ডার সেটআপ
+    current_dir = dirname(abspath(__file__)) if "__file__" in locals() else os.getcwd()
+    assets_dir = join(current_dir, "assets")
+    if not exists(assets_dir):
+        makedirs(assets_dir)
 
-    # ৫. ক্যাটাগরি সিলেকশন[cite: 18]
+    # ক্যাটাগরি সিলেকশন
     col_cat, col_up = st.columns([2.5, 1.5], gap="large")
     with col_cat:
         book_category = st.radio(
             "Select Category",
-            ["📖 এনসিটিবি পাঠ্যবই (NCTB)", "📘 সহায়ক গাইডবুক", "📂 অন্যান্য বই"],
+            ["📖 NCTB Books", "📗 Guide Books", "📕 Other Books", "📝 My Saved Notes"],
             horizontal=True
         )
-    with col_up:
-        if "সহায়ক গাইডবুক" in book_category:
-            uploaded_guide = st.file_uploader("Upload Guide Book PDF", type=["pdf"], key="upload_guide_file")
+        
+    if "📗 Guide Books" in book_category:
+        with col_up:
+            uploaded_guide = st.file_uploader("Upload Guide PDF", type=["pdf"], key="upload_guide_file")
             if uploaded_guide is not None:
                 save_name = f"guide_{uploaded_guide.name}"
-                save_path = os.path.join(assets_dir, save_name)
+                save_path = join(assets_dir, save_name)
                 with open(save_path, "wb") as f:
                     f.write(uploaded_guide.getbuffer())
-                st.success(f"🎉 গাইড বই সফলভাবে যুক্ত হয়েছে: {uploaded_guide.name}")
+                st.success(f"Guide added: {uploaded_guide.name}")
                 st.rerun()
-        elif "অন্যান্য বই" in book_category:
-            uploaded_other = st.file_uploader("Upload Other Book PDF", type=["pdf"], key="upload_other_file")
+    elif "📕 Other Books" in book_category:
+        with col_up:
+            uploaded_other = st.file_uploader("Upload Book PDF", type=["pdf"], key="upload_other_file")
             if uploaded_other is not None:
                 save_name = f"other_{uploaded_other.name}"
-                save_path = os.path.join(assets_dir, save_name)
+                save_path = join(assets_dir, save_name)
                 with open(save_path, "wb") as f:
                     f.write(uploaded_other.getbuffer())
-                st.success(f"🎉 বই সফলভাবে যুক্ত হয়েছে: {uploaded_other.name}")
+                st.success(f"Book added: {uploaded_other.name}")
                 st.rerun()
 
-    st.markdown("<hr style='margin: 25px 0; border: 0; border-top: 2px dashed #bae6fd;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin: 20px 0; border: 0; border-top: 1.5px dashed #cbd5e1;'>", unsafe_allow_html=True)
 
-    # ৬. ক্যাটাগরি অনুযায়ী বই ফিল্টার ও প্রদর্শন লজিক[cite: 19, 20, 21, 22]
-    if "এনসিটিবি পাঠ্যবই" in book_category:
-        st.markdown("<h3 style='color: #0284c7; font-size: 18px; font-weight: 700;'>🎯 তোমার শ্রেণি নির্বাচন করো (NCTB Curriculum)</h3>", unsafe_allow_html=True)
-        selected_class = st.selectbox(
-            "Choose Class",
-            ["Class 6", "Class 7", "Class 8", "Class 9", "Class 10"],
-            index=1
-        )
+    # রিনেম হ্যান্ডলার
+    if st.session_state.rename_file:
+        old_file = st.session_state.rename_file
+        st.warning(f"Renaming file: {old_file}")
+        new_name = st.text_input("Enter new name (with .pdf): ", value=old_file, key="global_rename_input")
+        c_save, c_cancel = st.columns([1, 1], gap="small")
+        with c_save:
+            if st.button("Save", key="global_save_rename"):
+                if new_name and new_name != old_file:
+                    rename(join(assets_dir, old_file), join(assets_dir, new_name))
+                    st.session_state.rename_file = None
+                    st.success("Renamed successfully!")
+                    st.rerun()
+        with c_cancel:
+            if st.button("X Cancel", key="global_cancel_rename"):
+                st.session_state.rename_file = None
+                st.rerun()
+
+    # ক্যাটাগরি লজিক ও ডিসপ্লে
+    if "📖 NCTB Books" in book_category:
+        col_class_select, col_nctb_opts = st.columns([2, 1.5], gap="medium")
+        with col_class_select:
+            st.markdown("<h3 style='color: #4f46e5; font-size: 16px; font-weight: 700;'>📚 Select Class (NCTB Curriculum)</h3>", unsafe_allow_html=True)
+            selected_class = st.selectbox(
+                "Choose Class",
+                ["Class 6", "Class 7", "Class 8", "Class 9", "Class 10"],
+                index=2
+            )
         cls_prefix = selected_class.lower().replace(" ", "")
-        
+
+        with col_nctb_opts:
+            st.markdown("<h4 style='color: #4f46e5; font-size: 14px; margin-bottom: 6px;'>📌 Add NCTB Books</h4>", unsafe_allow_html=True)
+            st.link_button(
+                "🌐 Download from NCTB Website",
+                "http://nctb.gov.bd/",
+                use_container_width=True
+            )
+            uploaded_nctb = st.file_uploader(f"Upload {selected_class} Book PDF", type=["pdf"], key=f"upload_nctb_{cls_prefix}")
+            if uploaded_nctb is not None:
+                save_name = f"nctb_{cls_prefix}_{uploaded_nctb.name}"
+                save_path = join(assets_dir, save_name)
+                with open(save_path, "wb") as f:
+                    f.write(uploaded_nctb.getbuffer())
+                st.success(f"📚 Book uploaded successfully for {selected_class}!")
+                st.rerun()
+
         try:
-            all_files = os.listdir(assets_dir)
-            pdf_files = [f for f in all_files if f.lower().endswith('.pdf') and cls_prefix in f.lower()]
+            all_files = listdir(assets_dir)
+            pdf_files = [f for f in all_files if f.lower().endswith('.pdf') and f.lower().startswith('nctb_' + cls_prefix)]
         except:
             pdf_files = []
 
-        st.markdown(f"<h4 style='color: #334155; font-size: 15px; margin-top: 15px;'>📚 {selected_class} এর উপলব্ধ বইসমূহ:</h4>", unsafe_allow_html=True)
+        st.markdown(f"<h4 style='color: #1e293b; font-size: 15px; margin-top: 15px; font-weight: 700;'>📖 {selected_class} Books:</h4>", unsafe_allow_html=True)
         
         if pdf_files:
             grid_cols = st.columns(3, gap="medium")
             for idx, file_name in enumerate(pdf_files):
-                file_path = os.path.join(assets_dir, file_name)
+                file_path = join(assets_dir, file_name)
                 col = grid_cols[idx % 3]
-                clean_title = file_name.replace(cls_prefix, '').replace('.pdf', '').replace('.PDF', '').replace('_', ' ').strip()
-                if not clean_title:
-                    clean_title = file_name.replace('.pdf', '')
+                display_name = file_name.replace(f'nctb_{cls_prefix}_', '').replace('.pdf', '').replace('_', ' ').strip()
                 
                 with col:
                     st.markdown(f"""
-                        <div class="kids-book-card">
-                            <div style="font-size: 28px; margin-bottom: 8px;">📖</div>
-                            <h4 style="color: #0f172a; margin: 0 0 10px 0; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{selected_class} - {clean_title}</h4>
-                        </div>
+                    <div class="kids-book-card">
+                        <div style="font-size: 24px; margin-bottom: 6px;">📘</div>
+                        <h4 style="color: #0f172a; margin: 0 0 8px 0; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{display_name}</h4>
+                    </div>
                     """, unsafe_allow_html=True)
-                    if st.button("🚀 বই পড়ো (Read)", key=f"read_nctb_{cls_prefix}_{idx}", use_container_width=True):
-                        st.session_state.active_pdf_path = file_path
-                        st.rerun()
+                    
+                    b1, b2, b3 = st.columns([1, 1, 1], gap="small")
+                    with b1:
+                        if st.button("Read", key=f"read_nctb_{idx}", use_container_width=True, type="primary"):
+                            st.session_state.active_pdf_path = file_path
+                            st.rerun()
+                    with b2:
+                        if st.button("Rename", key=f"ren_nctb_{idx}", use_container_width=True):
+                            st.session_state.rename_file = file_name
+                            st.rerun()
+                    with b3:
+                        if st.button("Delete", key=f"del_nctb_{idx}", use_container_width=True):
+                            remove(file_path)
+                            if st.session_state.active_pdf_path == file_path:
+                                st.session_state.active_pdf_path = None
+                            st.success("Deleted!")
+                            st.rerun()
         else:
-            st.info(f"ℹ️ '{selected_class}' এর জন্য ফোল্ডারে কোনো বই পাওয়া যায়নি। উপরে পাঠ্যবই যুক্ত করুন।")
+            st.info(f"ℹ️ No books found for '{selected_class}'. Please upload your book PDF above or download directly from the official NCTB link.")
 
-    elif "সহায়ক গাইডবুক" in book_category:
+    elif "📗 Guide Books" in book_category:
         try:
-            all_files = os.listdir(assets_dir)
+            all_files = listdir(assets_dir)
             pdf_files = [f for f in all_files if f.lower().endswith('.pdf') and f.lower().startswith('guide_')]
         except:
             pdf_files = []
 
-        if st.session_state.rename_file:
-            old_file = st.session_state.rename_file
-            st.warning(f"⚠️ ফাইলের নাম পরিবর্তন হচ্ছে: {old_file}")
-            new_name = st.text_input("নতুন নাম লিখুন (.pdf সহ):", value=old_file)
-            c_save, c_cancel = st.columns([1, 1], gap="small")
-            with c_save:
-                if st.button("💾 সংরক্ষণ"):
-                    if new_name and new_name != old_file:
-                        os.rename(os.path.join(assets_dir, old_file), os.path.join(assets_dir, new_name))
-                        st.session_state.rename_file = None
-                        st.success("✅ নাম সফলভাবে পরিবর্তন হয়েছে!")
-                        st.rerun()
-            with c_cancel:
-                if st.button("❌ বাতিল"):
-                    st.session_state.rename_file = None
-                    st.rerun()
-
-        st.markdown("<h4 style='color: #334155; font-size: 15px;'>📘 আপলোডকৃত সহায়ক গাইডবুকসমূহ</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 style='color: #1e293b; font-size: 15px; font-weight: 700;'>📗 Uploaded Guide Books</h4>", unsafe_allow_html=True)
         if pdf_files:
             grid_cols = st.columns(3, gap="medium")
             for idx, file_name in enumerate(pdf_files):
-                file_path = os.path.join(assets_dir, file_name)
+                file_path = join(assets_dir, file_name)
                 col = grid_cols[idx % 3]
-                display_name = file_name.replace('guide_', '').replace('.pdf', '')
+                display_name = file_name.replace('guide_', '').replace('.pdf', '').replace('_', ' ').strip()
                 with col:
                     st.markdown(f"""
-                        <div class="kids-book-card">
-                            <div style="font-size: 28px; margin-bottom: 8px;">📘</div>
-                            <h4 style="color: #0f172a; margin: 0 0 10px 0; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{display_name}</h4>
-                        </div>
+                    <div class="kids-book-card">
+                        <div style="font-size: 24px; margin-bottom: 6px;">📗</div>
+                        <h4 style="color: #0f172a; margin: 0 0 8px 0; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{display_name}</h4>
+                    </div>
                     """, unsafe_allow_html=True)
-                    b1, b2, b3 = st.columns([1.2, 1, 1], gap="small")
+                    b1, b2, b3 = st.columns([1, 1, 1], gap="small")
                     with b1:
-                        if st.button("📖 পড়ো", key=f"read_guide_{idx}", use_container_width=True):
+                        if st.button("Read", key=f"read_guide_{idx}", use_container_width=True, type="primary"):
                             st.session_state.active_pdf_path = file_path
                             st.rerun()
                     with b2:
-                        if st.button("✏️ নাম", key=f"ren_guide_{idx}", use_container_width=True):
+                        if st.button("Rename", key=f"ren_guide_{idx}", use_container_width=True):
                             st.session_state.rename_file = file_name
                             st.rerun()
                     with b3:
-                        if st.button("🗑️ ডিলিট", key=f"del_guide_{idx}", use_container_width=True):
-                            os.remove(file_path)
+                        if st.button("Delete", key=f"del_guide_{idx}", use_container_width=True):
+                            remove(file_path)
                             if st.session_state.active_pdf_path == file_path:
                                 st.session_state.active_pdf_path = None
-                            st.success("✅ মুছে ফেলা হয়েছে!")
+                            st.success("Deleted!")
                             st.rerun()
         else:
-            st.info("ℹ️ কোনো গাইড বই আপলোড করা হয়নি। উপরে 'Upload Guide Book PDF' থেকে আপলোড করুন।")
+            st.info("No guide books uploaded yet.")
 
-    else:
+    elif "📕 Other Books" in book_category:
         try:
-            all_files = os.listdir(assets_dir)
+            all_files = listdir(assets_dir)
             pdf_files = [f for f in all_files if f.lower().endswith('.pdf') and f.lower().startswith('other_')]
         except:
             pdf_files = []
 
-        if st.session_state.rename_file:
-            old_file = st.session_state.rename_file
-            st.warning(f"⚠️ ফাইলের নাম পরিবর্তন হচ্ছে: {old_file}")
-            new_name = st.text_input("নতুন নাম লিখুন (.pdf সহ):", value=old_file)
-            c_save, c_cancel = st.columns([1, 1], gap="small")
-            with c_save:
-                if st.button("💾 সংরক্ষণ"):
-                    if new_name and new_name != old_file:
-                        os.rename(os.path.join(assets_dir, old_file), os.path.join(assets_dir, new_name))
-                        st.session_state.rename_file = None
-                        st.success("✅ নাম সফলভাবে পরিবর্তন হয়েছে!")
-                        st.rerun()
-            with c_cancel:
-                if st.button("❌ বাতিল"):
-                    st.session_state.rename_file = None
-                    st.rerun()
-
-        st.markdown("<h4 style='color: #334155; font-size: 15px;'>📂 আপলোডকৃত অন্যান্য বইসমূহ</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 style='color: #1e293b; font-size: 15px; font-weight: 700;'>📕 Uploaded Other Books</h4>", unsafe_allow_html=True)
         if pdf_files:
             grid_cols = st.columns(3, gap="medium")
             for idx, file_name in enumerate(pdf_files):
-                file_path = os.path.join(assets_dir, file_name)
+                file_path = join(assets_dir, file_name)
                 col = grid_cols[idx % 3]
-                display_name = file_name.replace('other_', '').replace('.pdf', '')
+                display_name = file_name.replace('other_', '').replace('.pdf', '').replace('_', ' ').strip()
                 with col:
                     st.markdown(f"""
-                        <div class="kids-book-card">
-                            <div style="font-size: 28px; margin-bottom: 8px;">📂</div>
-                            <h4 style="color: #0f172a; margin: 0 0 10px 0; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{display_name}</h4>
-                        </div>
+                    <div class="kids-book-card">
+                        <div style="font-size: 24px; margin-bottom: 6px;">📕</div>
+                        <h4 style="color: #0f172a; margin: 0 0 8px 0; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{display_name}</h4>
+                    </div>
                     """, unsafe_allow_html=True)
-                    b1, b2, b3 = st.columns([1.2, 1, 1], gap="small")
+                    b1, b2, b3 = st.columns([1, 1, 1], gap="small")
                     with b1:
-                        if st.button("📖 পড়ো", key=f"read_other_{idx}", use_container_width=True):
+                        if st.button("Read", key=f"read_other_{idx}", use_container_width=True, type="primary"):
                             st.session_state.active_pdf_path = file_path
                             st.rerun()
                     with b2:
-                        if st.button("✏️ নাম", key=f"ren_other_{idx}", use_container_width=True):
+                        if st.button("Rename", key=f"ren_other_{idx}", use_container_width=True):
                             st.session_state.rename_file = file_name
                             st.rerun()
                     with b3:
-                        if st.button("🗑️ ডিলিট", key=f"del_other_{idx}", use_container_width=True):
-                            os.remove(file_path)
+                        if st.button("Delete", key=f"del_other_{idx}", use_container_width=True):
+                            remove(file_path)
                             if st.session_state.active_pdf_path == file_path:
                                 st.session_state.active_pdf_path = None
-                            st.success("✅ মুছে ফেলা হয়েছে!")
+                            st.success("Deleted!")
                             st.rerun()
         else:
-            st.info("ℹ️ কোনো অন্যান্য বই আপলোড করা হয়নি। উপরে 'Upload Other Book PDF' থেকে আপলোড করুন।")
+            st.info("No other books uploaded yet.")
+
+    elif "📝 My Saved Notes" in book_category:
+        st.markdown("<h3 style='color: #4f46e5; font-size: 18px; font-weight: 700;'>📝 My Permanent Personal Notebook</h3>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #64748b; font-size: 12px;'>All your saved notes with exact timestamp are listed below.</p>", unsafe_allow_html=True)
+        
+        import sqlite3
+        conn = sqlite3.connect("subject_notes.db")
+        cursor = conn.cursor()
+        cursor.execute("CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, content TEXT, subject TEXT, note_type TEXT, created_at TEXT)")
+        cursor.execute("SELECT id, title, content, subject, created_at FROM notes ORDER BY id DESC")
+        db_notes = cursor.fetchall()
+        conn.close()
+
+        if db_notes:
+            for note_id, note_title, note_content, note_subject, note_time in db_notes:
+                display_time = note_time if note_time else "No timestamp"
+                if st.session_state.editing_note_id == note_id:
+                    st.markdown(f"""
+                    <div style="background: #f0fdf4; padding: 12px 16px; border-radius: 12px; border: 2px solid #10b981; margin-bottom: 10px;">
+                        <div style="font-size: 12px; font-weight: 700; color: #047857; margin-bottom: 6px;">✏️ Editing Note</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    with st.form(key=f"edit_tab_note_form_{note_id}"):
+                        edited_topic = st.text_input("Topic / Title:", value=note_title)
+                        edited_text = st.text_area("Note Details:", value=note_content, height=90)
+                        col_update, col_cancel_edit = st.columns([1, 1])
+                        with col_update:
+                            update_btn = st.form_submit_button("💾 Update", use_container_width=True)
+                        with col_cancel_edit:
+                            cancel_btn = st.form_submit_button("X Cancel", use_container_width=True)
+                        if update_btn:
+                            current_time_str = datetime.now().strftime("%d %B, %Y, %I:%M %p")
+                            conn_up = sqlite3.connect("subject_notes.db")
+                            cur_up = conn_up.cursor()
+                            cur_up.execute("UPDATE notes SET title = ?, content = ?, created_at = ? WHERE id = ?", (edited_topic, edited_text, current_time_str, note_id))
+                            conn_up.commit()
+                            conn_up.close()
+                            st.session_state.editing_note_id = None
+                            st.success("Note updated successfully!")
+                            st.rerun()
+                        if cancel_btn:
+                            st.session_state.editing_note_id = None
+                            st.rerun()
+                else:
+                    st.markdown(f"""
+                    <div style="background: #ffffff; padding: 14px 18px; border-radius: 12px; border: 1px solid #e0e7ff; border-left: 4px solid #4f46e5; margin-bottom: 10px; box-shadow: 0 3px 8px rgba(79,70,229,0.04);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <span style="font-size: 11px; font-weight: 700; color: #4f46e5;">Subject: {note_subject}</span>
+                            <span style="font-size: 10px; font-weight: 600; color: #64748b; background: #e0e7ff; padding: 2px 6px; border-radius: 4px;">🕒 {display_time}</span>
+                        </div>
+                        <div style="font-size: 13px; font-weight: 600; color: #0f172a; margin-bottom: 4px;">Topic: {note_title}</div>
+                        <div style="font-size: 12px; color: #334155; background: #f8fafc; padding: 8px; border-radius: 6px;">{note_content}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    c_edit, c_del = st.columns([1, 1], gap="small")
+                    with c_edit:
+                        if st.button("Edit", key=f"btn_edit_tab_{note_id}", use_container_width=True):
+                            st.session_state.editing_note_id = note_id
+                            st.rerun()
+                    with c_del:
+                        if st.button("🗑️ Delete", key=f"btn_del_tab_{note_id}", use_container_width=True):
+                            conn_del = sqlite3.connect("subject_notes.db")
+                            cur_del = conn_del.cursor()
+                            cur_del.execute("DELETE FROM notes WHERE id = ?", (note_id,))
+                            conn_del.commit()
+                            conn_del.close()
+                            if st.session_state.editing_note_id == note_id:
+                                st.session_state.editing_note_id = None
+                            st.success("Note deleted!")
+                            st.rerun()
+        else:
+            st.info("No saved notes found. Save important notes while reading!")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # ৭. ফুল-ফিচার্ড পিডিএফ রিডার উইন্ডো এবং ডানপাশে Gemini AI[cite: 23, 24, 25]
-    if st.session_state.active_pdf_path and os.path.exists(st.session_state.active_pdf_path):
-        st.markdown("<hr style='margin: 30px 0; border: 0; border-top: 2px solid #0ea5e9;'>", unsafe_allow_html=True)
+    # পিডিএফ রিডার এবং এআই চ্যাট হাব
+    if st.session_state.active_pdf_path and exists(st.session_state.active_pdf_path):
+        st.markdown("<hr style='margin: 25px 0; border: 0; border-top: 2px solid #4f46e5;'>", unsafe_allow_html=True)
         c_title, c_close = st.columns([4, 1], gap="small")
         with c_title:
-            active_file_name = os.path.basename(st.session_state.active_pdf_path)
-            st.markdown(f"<h3 style='color: #0284c7; margin: 0; font-family: Outfit;'>📖 পড়ার কক্ষ - {active_file_name}</h3>", unsafe_allow_html=True)
+            active_file_name = basename(st.session_state.active_pdf_path)
+            st.markdown(f"<h3 style='color: #4f46e5; margin: 0; font-family: Outfit; font-size: 18px;'>📖 Reading Room: {active_file_name}</h3>", unsafe_allow_html=True)
         with c_close:
-            if st.button("❌ রিডার বন্ধ করো", use_container_width=True):
+            if st.button("X Close Reader", use_container_width=True):
                 st.session_state.active_pdf_path = None
                 st.rerun()
 
         pdf_col, ai_col = st.columns([2.3, 1.1], gap="large")
-        
         with pdf_col:
             try:
-                base64_pdf = load_pdf_as_base64(st.session_state.active_pdf_path)
+                import base64
+                with open(st.session_state.active_pdf_path, "rb") as pdf_file:
+                    base64_pdf = base64.b64encode(pdf_file.read()).decode('utf-8')
                 pdf_embed_html = f'''
-                    <iframe
+                <iframe
                     src="data:application/pdf;base64,{base64_pdf}#toolbar=1&navpanes=1"
                     width="100%"
-                    height="780px"
+                    height="750px"
                     type="application/pdf"
-                    style="border: 2px solid #bae6fd; border-radius: 18px; background-color: #f8fafc; box-shadow: 0 15px 35px rgba(0,0,0,0.1);"
-                    >
-                    <p>আপনার ব্রাউজার PDF প্রদর্শন করতে পারছে না।</p>
-                    </iframe>
+                    style="border: 2px solid #e0e7ff; border-radius: 16px; background-color: #f8fafc; box-shadow: 0 10px 25px rgba(0,0,0,0.08);"
+                >
+                <p>Your browser does not support PDF rendering.</p>
+                </iframe>
                 '''
                 st.markdown(pdf_embed_html, unsafe_allow_html=True)
             except Exception as e:
@@ -985,23 +1157,42 @@ def render_my_books():
 
         with ai_col:
             st.markdown("""
-                <div style="background: #ffffff; padding: 18px; border-radius: 18px; border: 2px solid #bae6fd; margin-bottom: 15px; box-shadow: 0 10px 25px rgba(14,165,233,0.08);">
-                    <h4 style="color: #0284c7; margin-top: 0; margin-bottom: 6px; font-family: Outfit; font-size: 16px;">🤖 এআই স্টাডি অ্যাসিস্ট্যান্ট</h4>
-                    <p style="color: #64748b; font-size: 12px; margin-bottom: 0px;">বইয়ের যেকোনো কঠিন লাইন কপি করে এখানে বা জেমিনি চ্যাটবটে পেস্ট করো:</p>
-                </div>
+            <div style="background: #ffffff; padding: 15px; border-radius: 16px; border: 2px solid #e0e7ff; margin-bottom: 12px; box-shadow: 0 6px 15px rgba(79, 70, 229, 0.06);">
+                <h4 style="color: #4f46e5; margin-top: 0; margin-bottom: 4px; font-family: Outfit; font-size: 14px;">🤖 AI Assistant & Note Hub</h4>
+                <p style="color: #64748b; font-size: 11px; margin-bottom: 0px;">Paste difficult lines for AI help or save notes permanently:</p>
+            </div>
             """, unsafe_allow_html=True)
             
             st.link_button(
-                "🚀 জেমিনি চ্যাটবট ওপেন করো",
+                "Open Gemini Chatbot",
                 "https://gemini.google.com",
                 use_container_width=True,
                 type="primary"
             )
-            st.markdown("<p style='text-align: center; color: #64748b; font-size: 11px; margin-top: 6px;'>টেক্সট কপি করার পর বাটনে ক্লিক করে পেস্ট করুন</p>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; color: #64748b; font-size: 10px; margin-top: 4px;'>Copy text and paste it into the chatbot</p>", unsafe_allow_html=True)
+            st.markdown("<hr style='margin: 12px 0; border-color: #e2e8f0;'>", unsafe_allow_html=True)
             
-            st.markdown("<hr style='margin: 15px 0; border-color: #e2e8f0;'>", unsafe_allow_html=True)
-            
-            chat_container = st.container(height=320)
+            with st.form(key="save_note_form_from_reader", clear_on_submit=True):
+                st.markdown("<h5 style='color: #047857; margin:0 0 4px 0; font-size: 13px;'>💾 Save Permanent Note</h5>", unsafe_allow_html=True)
+                note_title_input = st.text_input("Topic / Title:", placeholder="e.g. Model Question 01")
+                note_subject_input = st.selectbox("Select Subject:", ["Bangla", "English", "Math", "Science", "BGS", "Religion", "ICT", "Other"])
+                note_content_input = st.text_area("Note / Problem Details:", placeholder="Write your note or problem here...", height=70)
+                note_submit_btn = st.form_submit_button("💾 Save Note", use_container_width=True)
+                
+                if note_submit_btn and note_content_input.strip():
+                    current_time_str = datetime.now().strftime("%d %B, %Y, %I:%M %p")
+                    conn_s = sqlite3.connect("subject_notes.db")
+                    cur_s = conn_s.cursor()
+                    cur_s.execute("""
+                        INSERT INTO notes (title, content, subject, note_type, created_at)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (note_title_input if note_title_input else f"Book: {active_file_name}", note_content_input, note_subject_input, "Final", current_time_str))
+                    conn_s.commit()
+                    conn_s.close()
+                    st.success("Saved successfully with timestamp!")
+
+            st.markdown("<hr style='margin: 12px 0; border-color: #e2e8f0;'>", unsafe_allow_html=True)
+            chat_container = st.container(height=240)
             with chat_container:
                 for msg in st.session_state.book_chat_messages:
                     if msg["role"] == "user":
@@ -1010,21 +1201,18 @@ def render_my_books():
                         st.chat_message("assistant").write(msg["content"])
             
             with st.form(key="ai_chat_form", clear_on_submit=True):
-                user_text = st.text_area(
-                    "প্রশ্ন বা টেক্সট পেস্ট করো:",
-                    placeholder="এখানে তোমার প্রশ্ন লিখ বা পেস্ট কর...",
-                    height=70
-                )
-                submit_button = st.form_submit_button("✨ এআই-এর সাহায্য নাও", use_container_width=True)
+                user_text = st.text_area("Ask or paste text:", placeholder="Type or paste your question here...", height=55)
+                submit_button = st.form_submit_button("✨ Ask AI", use_container_width=True)
                 if submit_button and user_text.strip():
                     st.session_state.book_chat_messages.append({"role": "user", "content": user_text})
-                    with st.spinner("উত্তর তৈরি হচ্ছে..."):
-                        ai_reply = ask_gemini_rest_api(user_text)
-                    st.session_state.book_chat_messages.append({"role": "assistant", "content": ai_reply})
+                    with st.spinner("Generating answer..."):
+                        try:
+                            ai_reply = ask_gemini_rest_api(user_text)
+                        except:
+                            ai_reply = "দুঃখিত, এ মুহূর্তে এআই সংযোগে সমস্যা হচ্ছে।"
+                        st.session_state.book_chat_messages.append({"role": "assistant", "content": ai_reply})
                     st.rerun()
 
-
-# Practice & Prepation Option এর কোডগুলো এখান থেকে শুরু...
 
 import streamlit as st
 import random
@@ -1034,14 +1222,11 @@ import sqlite3
 from datetime import datetime
 
 def render_quiz_practice():
-
-
-    # .....নিচের কোডগুলো আধুনিক, আকর্ষণীয় ও প্রিমিয়াম কাস্টম স্টাইল, কালার ও ডিজাইন এর....
+    # আধুনিক, আকর্ষণীয় ও প্রিমিয়াম কাস্টম স্টাইল, কালার ও ডিজাইন[cite: 143, 144, 145, 146]
     st.markdown(
         """
         <style>
         @import url('https://fonts.googleapis.com/css?family=Hind+Siliguri:wght@400;500;600;700&family=Outfit:wght@400;600;800&display=swap');
-        
         .practice-magic-wrapper {
             font-family: 'Outfit', 'Hind Siliguri', sans-serif;
             background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
@@ -1068,9 +1253,7 @@ def render_quiz_practice():
             padding: 20px;
             margin-bottom: 18px;
             box-shadow: 0 6px 15px rgba(0,0,0,0.04);
-            border-top: 1px solid #f1f5f9;
-            border-right: 1px solid #f1f5f9;
-            border-bottom: 1px solid #f1f5f9;
+            border: 1px solid #f1f5f9;
         }
         .cq-stem {
             background-color: #eef2ff;
@@ -1089,9 +1272,7 @@ def render_quiz_practice():
             padding: 20px;
             margin-bottom: 18px;
             box-shadow: 0 6px 15px rgba(0,0,0,0.04);
-            border-top: 1px solid #f1f5f9;
-            border-right: 1px solid #f1f5f9;
-            border-bottom: 1px solid #f1f5f9;
+            border: 1px solid #f1f5f9;
         }
         .stTabs [data-baseweb="tab-list"] {
             gap: 12px;
@@ -1132,22 +1313,20 @@ def render_quiz_practice():
         unsafe_allow_html=True
     )
 
-# .....উপর থেকে এই পর্যন্ত কোডগুলো আধুনিক, আকর্ষণীয় ও প্রিমিয়াম কাস্টম স্টাইল, কালার ও ডিজাইন এর....
-
     st.markdown("<div class='practice-magic-wrapper'>", unsafe_allow_html=True)
     st.markdown(
         """
         <div class="practice-banner">
-            <h1 style="margin: 0; font-size: 28px; font-weight: 800; letter-spacing: 0.5px;">Smart Practice & Model Test Hub</h1>
+            <h1 style="margin: 0; font-size: 28px; font-weight: 800; letter-spacing: 0.5px;">Your Virtual Reading Room - Practice & Preparation Section</h1>
             <p style="margin: 8px 0 0 0; font-size: 15px; font-weight: 500; opacity: 0.95;">
-                ৬ষ্ঠ থেকে ১০ম শ্রেণির স্মার্ট প্র্যাকটিস, কুইজ টেস্ট এবং লাইভ মডেল টেস্ট প্ল্যাটফর্ম!
+                A Smart Hub for Practice, Preparation, Model Test & Archives!
             </p>
         </div>
         """,
         unsafe_allow_html=True
     )
 
-    # সেশন স্টেট ইনিশিয়ালাইজেশন
+    # সেশন স্টেট ইনিশিয়ালাইজেশন[cite: 147]
     if "exam_started" not in st.session_state:
         st.session_state.exam_started = False
     if "exam_questions" not in st.session_state:
@@ -1168,215 +1347,155 @@ def render_quiz_practice():
         "ষষ্ঠ শ্রেণি": {
             "বাংলা প্রথম পত্র": {
                 "গদ্যাংশ": {
-                    "কাবুলিওয়ালা": {
+                    "মিনু": {
                         "MCQ": [
-                            {"q": "'কাবুলিওয়ালা' গল্পে কাবুলিওয়ালার আসল নাম কী ছিল?", "options": ["ক) রহমত", "খ) ছোট খোকা", "গ) নিয়ামত", "ঘ) মিনু"], "answer": "ক) রহমত"},
-                            {"q": "কাবুলিওয়ালা গল্পের কথক পেশায় কী ছিলেন?", "options": ["ক) শিক্ষক", "খ) ব্যবসায়ী", "গ) লেখক/উপন্যাসিক", "ঘ) চিকিৎসক"], "answer": "গ) লেখক/উপন্যাসিক"}
+                            {"q": "'মিনু' গল্পের মূল চরিত্র মিনু সম্পর্কে কোন তথ্যটি সঠিক?", "options": ["ক) সে কথা বলতে পারত", "খ) সে এতিম ও বাকপ্রতিবন্ধী", "গ) সে চোখে দেখত না", "ঘ) সে খুব চঞ্চল প্রকৃতির ছিল"], "answer": "খ) সে এতিম ও বাকপ্রতিবন্ধী"},
+                            {"q": "মিনু তার পেিষের দায়িত্ব কার ওপর অর্পণ করেছিল?", "options": ["ক) হলুদ পাখি", "খ) জোছনা", "গ) সূর্য", "ঘ) মেঘ"], "answer": "ক) হলুদ পাখি"}
                         ],
                         "CQ": [
                             {
-                                "stem": "উদ্দীপক: জীবিকার তাগিদে সুদূর পার্বত্য অঞ্চল থেকে সমতলের শহরে আসেন এক হকার। শহরের ব্যস্ততার মাঝেও পাশের বাড়ির একটি ছোট্ট খুকিকে দেখলেই তার নিজের ছোট মেয়ের কথা মনে পড়ে যায়।",
-                                "ka": "কাবুলিওয়ালা গল্পের মিনুর বয়স কত ছিল?",
-                                "kha": "কাবুলিওয়ালা কেন জেলে গিয়েছিল?",
-                                "ga": "উদ্দীপকের হকারের সাথে 'কাবুলিওয়ালা' গল্পের রহমতের সাদৃশ্য কোথায়—ব্যাখ্যা কর।",
-                                "gha": "\"পিতৃহৃদয়ের টানে দূর পরবাসেও হৃদয়ের সম্পর্ক গড়ে ওঠে।\"—'কাবুলিওয়ালা' গল্পের আলোকে মূল্যায়ন কর।"
+                                "stem": "উদ্দীপক: দশ বছরের প্রতিবন্ধী শিশু রতন সমাজের আর দশটি শিশুর মতো কথা বলতে পারে না। তবুও সে মনের আনন্দে চারপাশের প্রকৃতি ও ছোট ছোট পাখির সাথে ভাব জমায়, তাদের আচরণ দেখে নিজের দুঃখ ভুলে থাকে।",
+                                "ka": "মিনুর অভিভাবক কে ছিলেন?",
+                                "kha": "মিনু বধির হলেও সে কীভাবে সবকিছু বুঝে নিত—ব্যাখ্যা কর।",
+                                "ga": "উদ্দীপকের রতনের মানসিকতার সাথে 'মিনু' গল্পের মিনুর চরিত্রের সাদৃশ্য কোথায়—আলোচনা কর।",
+                                "gha": "\"প্রকৃতির বৈচিত্র্য ও কল্পনার জগৎ বিশেষ চাহিদাসম্পন্ন শিশুর মনে আনন্দ জোগায়।\"—'মিনু' গল্পের আলোকে মূল্যায়ন কর।"
                             }
-                        ],
-                        "Written": [
-                            {"title": "অনুধাবনমূলক প্রশ্ন", "desc": "'মিনু ও রহমতের বন্ধুত্ব বয়স ও দেশের সীমানা ছাড়িয়ে গিয়েছিল'—ব্যাখ্যা কর।"},
-                            {"title": "সারাংশ লিখন", "desc": "দাঁড়াও তবে খাটো করে নয়... (পাঠ্যবইয়ের সংশ্লিষ্ট সারাংশ অনুশীলন করুন)।"}
                         ]
                     }
                 }
             },
             "বাংলা দ্বিতীয় পত্র": {
-                            "গদ্যাংশ": {
-                                "কাবুলিওয়ালা": {
-                                    "MCQ": [
-                                        {"q": "'কাবুলিওয়ালা' গল্পে কাবুলিওয়ালার আসল নাম কী ছিল?", "options": ["ক) রহমত", "খ) ছোট খোকা", "গ) নিয়ামত", "ঘ) মিনু"], "answer": "ক) রহমত"},
-                                        {"q": "কাবুলিওয়ালা গল্পের কথক পেশায় কী ছিলেন?", "options": ["ক) শিক্ষক", "খ) ব্যবসায়ী", "গ) লেখক/উপন্যাসিক", "ঘ) চিকিৎসক"], "answer": "গ) লেখক/উপন্যাসিক"}
-                                    ],
-                                    "CQ": [
-                                        {
-                                            "stem": "উদ্দীপক: জীবিকার তাগিদে সুদূর পার্বত্য অঞ্চল থেকে সমতলের শহরে আসেন এক হকার। শহরের ব্যস্ততার মাঝেও পাশের বাড়ির একটি ছোট্ট খুকিকে দেখলেই তার নিজের ছোট মেয়ের কথা মনে পড়ে যায়।",
-                                            "ka": "কাবুলিওয়ালা গল্পের মিনুর বয়স কত ছিল?",
-                                            "kha": "কাবুলিওয়ালা কেন জেলে গিয়েছিল?",
-                                            "ga": "উদ্দীপকের হকারের সাথে 'কাবুলিওয়ালা' গল্পের রহমতের সাদৃশ্য কোথায়—ব্যাখ্যা কর।",
-                                            "gha": "\"পিতৃহৃদয়ের টানে দূর পরবাসেও হৃদয়ের সম্পর্ক গড়ে ওঠে।\"—'কাবুলিওয়ালা' গল্পের আলোকে মূল্যায়ন কর।"
-                                        }
-                                    ],
-                                    "Written": [
-                                        {"title": "অনুধাবনমূলক প্রশ্ন", "desc": "'মিনু ও রহমতের বন্ধুত্ব বয়স ও দেশের সীমানা ছাড়িয়ে গিয়েছিল'—ব্যাখ্যা কর।"},
-                                        {"title": "সারাংশ লিখন", "desc": "দাঁড়াও তবে খাটো করে নয়... (পাঠ্যবইয়ের সংশ্লিষ্ট সারাংশ অনুশীলন করুন)।"}
-                                    ]
-                                }
-                            }
-                        },
-                        "গণিত": {
-        "পাটিগণিত": {
-            "স্বাভাবিক সংখ্যা ও ভগ্নাংশ": {
-                "MCQ": [
-                    {"q": "সবচেয়ে ছোট মৌলিক সংখ্যা কোনটি?", "options": ["ক) ১", "খ) ২", "গ) ৩", "ঘ) ৪"], "answer": "খ) ২"},
-                    {"q": "নিচের কোনটি মৌলিক সংখ্যা?", "options": ["ক) ৯", "খ) ১১", "গ) ১৫", "ঘ) ২১"], "answer": "খ) ১১"}
-                ],
-                "CQ": [
-                    {
-                        "stem": "উদ্দীপক: ২৪ এবং ৩৬ দুটি সংখ্যা। সংখ্যা দুটির সাধারণ উৎপাদক এবং লসাগু ও গসাগু নির্ণয় করতে হবে।",
-                        "ka": "২৪ এর সকল উৎপাদক নির্ণয় কর।",
-                        "kha": "২৪ ও ৩৬ এর গসাগু নির্ণয় কর।",
-                        "ga": "সংখ্যা দুটির লসাগু ও গসাগু এর গুণফল সংখ্যা দুটির গুণফলের সমান কিনা—যাচাই কর।",
-                        "gha": "\"মৌলিক উৎপাদকের সাহায্যে গসাগু নির্ণয় প্রক্রিয়া সহজতর হয়।\"—উক্তিটি মূল্যায়ন কর।"
-                    }
-                ],
-                "Written": [
-                    {"title": "অনুধাবনমূলক প্রশ্ন", "desc": "১ থেকে ১০০ পর্যন্ত কয়টি মৌলিক সংখ্যা আছে এবং কী কী—ব্যাখ্যা কর।"},
-                    {"title": "গাণিতিক সমস্যা", "desc": "তিনটি ঘণ্টা একত্রে বাজার পর যথাক্রমে ৯, ১২ ও ১৫ সেকেন্ড অন্তর বাজতে লাগল। কতক্ষণ পর ঘণ্টাগুলো আবার একত্রে বাজবে?"}
-                ]
-            }
-        },
-        "বীজগণিত": {
-            "বীজগণিতীয় রাশি": {
-                "MCQ": [
-                    {"q": "৩x + ৫y রাশিতে x এর সহগ কত?", "options": ["ক) ৩", "খ) ৫", "গ) ৮", "ঘ) ১৫"], "answer": "ক) ৩"},
-                    {"q": "বীজগণিতীয় রাশিতে যোগ, বিয়োগ, গুণ ও ভাগ—এই কয়টি প্রক্রিয়া চিহ্ন ব্যবহার করা হয়?", "options": ["ক) ২টি", "খ) ৩টি", "গ) ৪টি", "ঘ) ৫টি"], "answer": "গ) ৪টি"}
-                ],
-                "CQ": [
-                    {
-                        "stem": "উদ্দীপক: a = ৩, b = ২ এবং c = ১ হলে, বীজগণিতীয় রাশিটির মান নির্ণয় কর: ৪a² - ৫ab + ৩c²",
-                        "ka": "a ও b এর মান বসিয়ে (a + b) এর মান নির্ণয় কর।",
-                        "kha": "উদ্দীপকের রাশির মান নির্ণয় কর।",
-                        "ga": "দেখাও যে, (a + b)² = a² + ২ab + b²।",
-                        "gha": "\"বীজগণিতীয় রাশির মান নির্ণয়ে চলকের সাংখ্যিক মান প্রতিস্থাপন গুরুত্বপূর্ণ ভূমিকা রাখে।\"—বিশ্লেষণ কর।"
-                    }
-                ],
-                "Written": [
-                    {"title": "সংক্ষিপ্ত প্রশ্ন", "desc": "বীজগণিতীয় রাশি ও সমীকরণের মধ্যে প্রধান পার্থক্য কী—লিখে দেখাও।"}
-                ]
-            }
-        }
-    },
-            "ইংরেজি প্রথম পত্র": {
-                "Reading & Composition": {
-                    "Unit 1: Going on a foreign trip": {
+                "ব্যাকরণ ও নির্মিতি": {
+                    "ভাষা ও বর্ণ": {
                         "MCQ": [
-                            {"q": "What is the main topic of Unit 1 in Class 6 English?", "options": ["a) Preparing for a journey", "b) Playing football", "c) Cooking food", "d) Gardening"], "answer": "a) Preparing for a journey"}
+                            {"q": "বাংলা বর্ণমালায় মোট বর্ণের সংখ্যা কত?", "options": ["ক) ৫০টি", "খ) ৩৯টি", "গ) ১১টি", "ঘ) ৫২টি"], "answer": "ঘ) ৫২টি"}
                         ],
                         "CQ": [],
                         "Written": [
-                            {"title": "Paragraph Writing", "desc": "Write a paragraph on 'A Journey by Train'."},
-                            {"title": "Email/Letter Writing", "desc": "Write an email to your friend thanking him/her for a nice birthday gift."}
+                            {"title": "অনুচ্ছেদ লিখন", "desc": "অনুচ্ছেদ লেখো: 'ষঋতু' বা 'আমাদের গ্রাম'।"},
+                            {"title": "আবেদনপত্র", "desc": "স্কুলের দরিদ্র তহবিল থেকে সাহায্যের জন্য প্রধান শিক্ষকের নিকট আবেদনপত্র লেখো।"}
+                        ]
+                    }
+                }
+            },
+            "ইংরেজি প্রথম পত্র": {
+                "Reading & Composition": {
+                    "Unit 2: Exploring People and Places": {
+                        "MCQ": [
+                            {"q": "What is the main objective of exploring new places?", "options": ["a) To waste time", "b) To gain knowledge and experience", "c) To spend money", "d) To sleep"], "answer": "b) To gain knowledge and experience"}
+                        ],
+                        "CQ": [],
+                        "Written": [
+                            {"title": "Paragraph Writing", "desc": "Write a paragraph on 'A School Library'."},
+                            {"title": "Letter Writing", "desc": "Write a letter to your friend describing your village home."}
                         ]
                     }
                 }
             },
             "ইংরেজি দ্বিতীয় পত্র": {
                 "Grammar & Composition": {
-                    "Parts of Speech": {
+                    "Parts of Speech & Tense": {
                         "MCQ": [
-                            {"q": "Identify the verb in: 'The boy runs fast.'", "options": ["a) boy", "b) fast", "c) runs", "d) The"], "answer": "c) runs"}
+                            {"q": "Identify the adjective in: 'The clever fox ran away.'", "options": ["a) fox", "b) ran", "c) clever", "d) away"], "answer": "c) clever"}
                         ],
                         "CQ": [],
                         "Written": [
-                            {"title": "Application Writing", "desc": "Write an application to the Headmaster for a Morning School facility or Fee Concession."},
-                            {"title": "Dialogues", "desc": "Write a dialogue between two friends about the importance of reading newspaper."}
+                            {"title": "Application", "desc": "Write an application for setting up a multimedia classroom."},
+                            {"title": "Dialogue", "desc": "Write a dialogue between two friends about learning English."}
                         ]
                     }
                 }
-            }, 
+            },
+            "গণিত": {
+                "পাটিগণিত ও জ্যামিতি": {
+                    "অনুপাত ও শতকরা": {
+                        "MCQ": [
+                            {"q": "শতকরা ৫% মানে কত?", "options": ["ক) ৫/১০", "খ) ৫/১০০", "গ) ১০০/৫", "ঘ) ১/৫"], "answer": "খ) ৫/১০০"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: একটি বিদ্যালয়ের ষষ্ঠ শ্রেণীতে মোট শিক্ষার্থীর ৬০ জন ছাত্র এবং ৪০ জন ছাত্রী।",
+                                "ka": "মোট শিক্ষার্থীর মধ্যে ছাত্র ও ছাত্রীর অনুপাত কত?",
+                                "kha": "ছাত্রসংখ্যা ও মোট শিক্ষার্থীর শতকরা হার নির্ণয় কর।",
+                                "ga": "যদি আরও ২০ জন ছাত্রী নতুন ভর্তি হয়, তবে ছাত্র ও ছাত্রীর নতুন অনুপাত কত হবে?",
+                                "gha": "\"অনুপাত ও শতকরা হিসাব দৈনন্দিন জীবনে তুলনামূলক বিশ্লেষণ সহজ করে।\"—বিশ্লেষণ কর।"
+                            }
+                        ]
+                    }
+                }
+            },
             "বিজ্ঞান": {
-        "অভিজ্ঞতাভিত্তিক": {
-            "জলবায়ু ও পরিবেশ": {
-                "MCQ": [
-                    {"q": "বায়ুমণ্ডলে কোন গ্যাসের পরিমাণ সবচেয়ে বেশি?", "options": ["ক) অক্সিজেন", "খ) নাইট্রোজেন", "গ) কার্বন ডাই-অক্সাইড", "ঘ) আর্গন"], "answer": "খ) নাইট্রোজেন"},
-                    {"q": "উদ্ভিদ শালোকসংশ্লেষণ প্রক্রিয়ায় কোন গ্যাস গ্রহণ করে?", "options": ["ক) অক্সিজেন", "খ) নাইট্রোজেন", "গ) কার্বন ডাই-অক্সাইড", "ঘ) হাইড্রোজেন"], "answer": "গ) কার্বন ডাই-অক্সাইড"}
-                ],
-                "CQ": [
-                    {
-                        "stem": "উদ্দীপক: গ্রামের একটি উন্মুক্ত মাঠে নির্বিচারে গাছ কাটা হচ্ছে এবং কলকারখানার কালো ধোঁয়া বাতাসে মিশছে। ফলে ধীরে ধীরে এলাকার তাপমাত্রা বৃদ্ধি পাচ্ছে এবং জীববৈচিত্র্য হুমকির মুখে পড়েছে।",
-                        "ka": "বায়ুমণ্ডলের প্রধান গ্যাসগুলোর নাম কী কী?",
-                        "kha": "উদ্ভিদ কীভাবে পরিবেশের ভারসাম্য রক্ষা করে—ব্যাখ্যা কর।",
-                        "ga": "উদ্দীপকে বর্ণিত সমস্যার কারণে পরিবেশের ওপর কী ধরনের নেতিবাচক প্রভাব পড়ছে—বিশ্লেষণ কর।",
-                        "gha": "\"পরিবেশ রক্ষায় বৃক্ষরোপণের বিকল্প নেই।\"—উক্তিটির যথার্থতা মূল্যায়ন কর।"
+                "জীববিজ্ঞান ও পদার্থ": {
+                    "উদ্ভিদের জীবন": {
+                        "MCQ": [
+                            {"q": "উদ্ভিদের মূলের প্রধান কাজ কোনটি?", "options": ["ক) খাদ্য তৈরি", "খ) পানি ও খনিজ লবণ শোষণ", "গ) ফুল ফোটানো", "ঘ) বীজ ছড়ানো"], "answer": "খ) পানি ও খনিজ লবণ শোষণ"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: টবে লাগানো একটি সুস্থ গাছের পাতায় সূর্যালোক পড়ছে এবং শিকড় মাটি থেকে তরল উপাদান শোষণ করে উপরের দিকে পৌঁছে দিচ্ছে।",
+                                "ka": "উদ্ভিদের পাতার সবুজ কণিকার নাম কী?",
+                                "kha": "প্রস্বেদন প্রক্রিয়া উদ্ভিদের জন্য কেন গুরুত্বপূর্ণ—ব্যাখ্যা কর।",
+                                "ga": "উদ্দীপকে বর্ণিত শিকড় কর্তৃক উপাদান শোষণ প্রক্রিয়াটি ব্যাখ্যা কর।",
+                                "gha": "\"উদ্ভিদের খাদ্য প্রস্তুত ও গ্যাসীয় বিনিময়ে পাতার ভূমিকা অনন্য।\"—মূল্যায়ন কর।"
+                            }
+                        ]
                     }
-                ],
-                "Written": [
-                    {"title": "অনুধাবনমূলক প্রশ্ন", "desc": "গ্রিনহাউস প্রতিক্রিয়া বলতে কী বোঝো—ব্যাখ্যা কর।"},
-                    {"title": "সংক্ষিপ্ত প্রশ্ন", "desc": "বায়ু দূষণ রোধের তিনটি উপায় লেখো।"}
-                ]
-            }
-        }
-    },
-
-    "বাংলাদেশ ও বিশ্বপরিচয়": {
-        "আমাদের ইতিহাস ও সংস্কৃতি": {
-            "বাংলাদেশের মুক্তিযুদ্ধ ও ইতিহাস": {
-                "MCQ": [
-                    {"q": "কত সালে বাংলাদেশের মহান মুক্তিযুদ্ধ সংঘটিত হয়?", "options": ["ক) ১৯৬৬", "খ) ১৯৬৯", "গ) ১৯৭০", "ঘ) ১৯৭১"], "answer": "ঘ) ১৯৭১"},
-                    {"q": "মুজিবনগর সরকার কত তারিখে শপথ গ্রহণ করে?", "options": ["ক) ১০ এপ্রিল ১৯৭১", "খ) ১৭ এপ্রিল ১৯৭১", "গ) ২৬ মার্চ ১৯৭১", "ঘ) ১৬ ডিসেম্বর ১৯৭১"], "answer": "খ) ১৭ এপ্রিল ১৯৭১"}
-                ],
-                "CQ": [
-                    {
-                        "stem": "উদ্দীপক: ১৯৭১ সালে এদেশের বীর জনতা অন্যায়ের বিরুদ্ধে রুখে দাঁড়িয়েছিল। দীর্ঘ ৯ মাসের রক্তক্ষয়ী সংগ্রামের পর তারা একটি স্বাধীন ও সার্বভৌম দেশ অর্জন করে।",
-                        "ka": "বাংলাদেশের স্বাধীনতা দিবস কবে?",
-                        "kha": "মুজিবনগর সরকার গঠনের প্রয়োজনীয়তা কী ছিল—ব্যাখ্যা কর।",
-                        "ga": "উদ্দীপকের বর্ণনার সাথে আমাদের মুক্তিযুদ্ধের কোন্ দিকটির সাদৃশ্য রয়েছে—ব্যাখ্যা কর।",
-                        "gha": "\"জনগণের একতা ও আত্মত্যাগই ছিল ১৯৭১ সালের বিজয়ের মূল চাবিকাঠি।\"—উক্তিটি মূল্যায়ন কর।"
+                }
+            },
+            "বাংলাদেশ ও বিশ্বপরিচয়": {
+                "বাংলাদেশ পরিচিতি": {
+                    "বাংলাদেশের সমাজ ও সংস্কৃতি": {
+                        "MCQ": [
+                            {"q": "বাংলাদেশের ভৌগোলিক অবস্থান কোন অঞ্চলে?", "options": ["ক) দক্ষিণ এশিয়া", "খ) মধ্য এশিয়া", "গ) ইউরোপ", "ঘ) আফ্রিকা"], "answer": "ক) দক্ষিণ এশিয়া"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: বাংলাদেশের গ্রামীণ সমাজে মানুষ একে অপরের বিপদে এগিয়ে আসে, উৎসবে সকলে মিলে আনন্দ ভাগাভাগি করে এবং যৌথ পরিবার প্রথার মাধ্যমে পারস্পরিক বন্ধন দৃঢ় রাখে।",
+                                "ka": "বাংলাদেশের সংস্কৃতির মূল ভিত্তি কী?",
+                                "kha": "সমাজ গঠনে পরিবারের ভূমিকা ব্যাখ্যা কর।",
+                                "ga": "উদ্দীপকে বাংলাদেশের গ্রামীণ সমাজের কোন রূপটি ফুটে উঠেছে—আলোচনা কর।",
+                                "gha": "\"পারস্পরিক সহযোগিতা ও গ্রামীণ ঐতিহ্যই আমাদের সংস্কৃতির প্রাণ।\"—মূল্যায়ন কর।"
+                            }
+                        ]
                     }
-                ],
-                "Written": [
-                    {"title": "অনুধাবনমূলক প্রশ্ন", "desc": "মুক্তিযুদ্ধে সাধারণ মানুষের অবদান সংক্ষেপে আলোচনা কর।"},
-                    {"title": "সংক্ষিপ্ত প্রশ্ন", "desc": "মুক্তিযুদ্ধের যেকোনো তিনটি প্রধান সেক্টর ও পরিচালন ব্যবস্থা সংক্ষেপে লেখো।"}
-                ]
-            }
-        }
-    },
-"ইসলাম ও নৈতিক শিক্ষা": {
-        "আকাঈদ ও নৈতিক জীবন": {
-            "তাওহীদ ও নৈতিকতা": {
-                "MCQ": [
-                    {"q": "'তাওহীদ' শব্দের অর্থ কী?", "options": ["ক) একত্ববাদ", "খ) বিশ্বাস", "গ) ইবাদত", "ঘ) আনুগত্য"], "answer": "ক) একত্ববাদ"},
-                    {"q": "আল্লাহ তায়ালার পরিচয় ও গুণাবলী সংক্ষেপে প্রকাশের মাধ্যম কোনটি?", "options": ["ক) ঈমানে মুফাসসাল", "খ) ঈমানে মুজমাল", "গ) কালেমা শাহাদাত", "ঘ) আসমাউল হুসনা"], "answer": "খ) ঈমানে মুজমাল"}
-                ],
-                "CQ": [
-                    {
-                        "stem": "উদ্দীপক: সাকিব সবসময় সত্য কথা বলে এবং মনে করে আল্লাহ তায়ালা সবকিছু দেখছেন ও শুনছেন। তাই সে গোপনেও কোনো অন্যায় কাজ করে না।",
-                        "ka": "ইসলামের প্রথম ও মৌলিক ভিত্তি কোনটি?",
-                        "kha": "তাওহীদে বিশ্বাস মানুষের চরিত্রে কী প্রভাব ফেলে—ব্যাখ্যা কর।",
-                        "ga": "উদ্দীপকে সাকিবের আচরণের মাধ্যমে আকাঈদের কোন বিষয়টি প্রতিফলিত হয়েছে—ব্যাখ্যা কর।",
-                        "gha": "\"আল্লাহ তায়ালার সার্বক্ষণিক নজরদারির অনুভূতিই মানুষকে অন্যায় থেকে মুক্ত রাখে।\"—উক্তিটি সাকিবের জীবনবোধের আলোকে মূল্যায়ন কর।"
+                }
+            },
+            "ইসলাম ও নৈতিক শিক্ষা": {
+                "ইবাদত": {
+                    "সালাত ও রোজা": {
+                        "MCQ": [
+                            {"q": "ইসলামে দৈনিক কয় ওয়াক্ত সালাত ফরজ?", "options": ["ক) ৩ ওয়াক্ত", "খ) ৪ ওয়াক্ত", "গ) ৫ ওয়াক্ত", "ঘ) ৬ ওয়াক্ত"], "answer": "গ) ৫ ওয়াক্ত"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: জামিল প্রতিদিন নিয়মিত জামায়াতের সাথে ওয়াক্তমতো সালাত আদায় করে। এর ফলে তার মন শান্ত থাকে এবং সে সকল প্রকার অশ্লীল ও খারাপ কাজ থেকে দূরে থাকে।",
+                                "ka": "সালাত শব্দের শাব্দিক অর্থ কী?",
+                                "kha": "সালাত কীভাবে মানুষকে অন্যায় থেকে দূরে রাখে—ব্যাখ্যা কর।",
+                                "ga": "উদ্দীপকে জামিলের অভ্যাসের মাধ্যমে সালাতের কোন শিক্ষাটি প্রতিফলিত হয়েছে—ব্যাখ্যা কর।",
+                                "gha": "\"নিয়মিত সালাত আদায় মানুষের চরিত্র ও নৈতিকতা গঠনে সবচেয়ে বড় ভূমিকা রাখে।\"—মূল্যায়ন কর।"
+                            }
+                        ]
                     }
-                ],
-                "Written": [
-                    {"title": "অনুধাবনমূলক প্রশ্ন", "desc": "আখিরাতে বিশ্বাসের গুরুত্ব সংক্ষেপে আলোচনা কর।"},
-                    {"title": "সংক্ষিপ্ত প্রশ্ন", "desc": "দৈনন্দিন জীবনে নৈতিক মূল্যবোধ চর্চার তিনটি উপায় লেখো।"}
-                ]
-            }
-        }
-    },
-    "তথ্য ও যোগাযোগ প্রযুক্তি": {
-        "তথ্য ও যোগাযোগ প্রযুক্তি পরিচিতি": {
-            "হার্ডওয়্যার ও সফটওয়্যার": {
-                "MCQ": [
-                    {"q": "নিচের কোনটি একটি ইনপুট ডিভাইস?", "options": ["ক) মনিটর", "খ) প্রিন্টার", "গ) কিবোর্ড", "ঘ) স্পিকার"], "answer": "গ) কিবোর্ড"},
-                    {"q": "কম্পিউটারের 'মস্তিষ্ক' বলা হয় কোন অংশকে?", "options": ["ক) র্যাম (RAM)", "খ) হার্ডডিস্ক", "গ) প্রসেসর (CPU)", "ঘ) মাদারবোর্ড"], "answer": "গ) প্রসেসর (CPU)"}
-                ],
-                "CQ": [
-                    {
-                        "stem": "উদ্দীপক: তাহসিন তার কম্পিউটারে ছবি আঁকার জন্য একটি মাউস ও কিবোর্ড ব্যবহার করে। কাজ শেষ করে সে তার আঁকা ছবিটি প্রিন্টারের মাধ্যমে কাগজে ছেপে বের করে নেয়।",
-                        "ka": "ICT এর পূর্ণরূপ কী?",
-                        "kha": "ইনপুট ডিভাইস ও আউটপুট ডিভাইসের প্রধান পার্থক্য কী—ব্যাখ্যা কর।",
-                        "ga": "তাহসিনের ব্যবহৃত ডিভাইসগুলোর মধ্যে কোনগুলো ইনপুট এবং কোনটি আউটপুট তা চিহ্নিত করে কাজ ব্যাখ্যা কর।",
-                        "gha": "\"আধুনিক শিক্ষাব্যবস্থায় তথ্য ও যোগাযোগ প্রযুক্তির ভূমিকা অপরিসীম।\"—উক্তিটির যথার্থতা মূল্যায়ন কর।"
+                }
+            },
+            "তথ্য ও যোগাযোগ প্রযুক্তি": {
+                "কম্পিউটার ও প্রযুক্তি": {
+                    "ইন্টারনেট পরিচিতি": {
+                        "MCQ": [
+                            {"q": "ওয়ার্ল্ড ওয়াইড ওয়েব (www) এর প্রবক্তা কে?", "options": ["ক) টিম বার্নার্স লি", "খ) বিল গেটস", "গ) স্টিভ জবস", "ঘ) মার্ক জুকারবার্গ"], "answer": "ক) টিম বার্নার্স লি"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: শিহাব ইন্টারনেট ব্যবহার করে ঘরে বসে পৃথিবীর যেকোনো প্রান্তের লাইব্রেরি থেকে বই পড়তে পারে এবং বিভিন্ন দেশের বন্ধুদের সাথে চ্যাট করতে পারে।",
+                                "ka": "www এর পূর্ণরূপ কী?",
+                                "kha": "ইন্টারনেটের দুটি প্রধান ব্যবহার লেখো।",
+                                "ga": "উদ্দীপকে শিহাবের তথ্য আদান-প্রদানের মাধ্যমটির কার্যাবলি ব্যাখ্যা কর।",
+                                "gha": "\"ইন্টারনেট বিশ্বকে আমাদের হাতের মুঠোয় এনে দিয়েছে।\"—উক্তিটি মূল্যায়ন কর।"
+                            }
+                        ]
                     }
-                ],
-                "Written": [
-                    {"title": "অনুধাবনমূলক প্রশ্ন", "desc": "সফটওয়্যার ছাড়া হার্ডওয়্যার কেন অচল—ব্যাখ্যা কর।"},
-                    {"title": "সংক্ষিপ্ত প্রশ্ন", "desc": "ইন্টারনেট ব্যবহারের যেকোনো তিনটি সুফল সংক্ষেপে লেখো।"}
-                ]
+                }
             }
-        }
-    }
-
         },
         "সপ্তম শ্রেণি": {
             "বাংলা প্রথম পত্র": {
@@ -1385,82 +1504,61 @@ def render_quiz_practice():
                         "MCQ": [
                             {"q": "'পিতৃপুরুষের গল্প' রচনায় কোন ঐতিহাসিক ঘটনার কথা প্রধানত এসেছে?", "options": ["ক) বায়ান্নর ভাষা আন্দোলন", "খ) ঊনসত্তরের গণঅভ্যুত্থান", "গ) ১৯৭১ সালের মুক্তিযুদ্ধ", "ঘ) নব্বইয়ের গণঅভ্যুত্থান"], "answer": "গ) ১৯৭১ সালের মুক্তিযুদ্ধ"}
                         ],
-                        "CQ": [],
-                        "Written": [
-                            {"title": "ভাবসম্প্রসারণ", "desc": "দাঁড়াও, একটু দাড়াও... মানুষের কল্যাণেই মানুষ।"},
-                            {"title": "চিঠি বা দরখাস্ত", "desc": "শিক্ষা সফরে যাওয়ার অনুমতি চেয়ে প্রধান শিক্ষকের নিকট আবেদনপত্র।"}
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: গ্রামের স্কুল মাঠে শহীদ মিনারে ফুল দিতে গিয়ে দশ বছরের রনি তার দাদীর কাছে জানতে চায় ১৯৭১ সালের মুক্তিযুদ্ধের কথা। দাদী স্নেহের সাথে তার মাথায় হাত বুলিয়ে বলেন, 'তোর চাচা শহীদ মন্টু তোদের মতো বয়সে দেশের টানে জীবন বাজি রেখেছিল।'",
+                                "ka": "হারুন হাবিব কত সালে জন্মগ্রহণ করেন?",
+                                "kha": "আমাদের ইতিহাস মূলত লড়াইয়ের ইতিহাস—কথাটি দ্বারা কী বোঝানো হয়েছে?",
+                                "ga": "উদ্দীপকের দাদীর বক্তব্যে 'পিতৃপুরুষের গল্প' গল্পের কোন দিকটি প্রতিফলিত হয়েছে? ব্যাখ্যা করো।",
+                                "gha": "\"উদ্দীপকটি 'পিতৃপুরুষের গল্প' গল্পের সামগ্রিক চেতনার একটি ক্ষুদ্র রূপ মাত্র\"—বিশ্লেষণ করো।"
+                            }
                         ]
                     }
                 }
             },
-            "বাংলা ২য় পত্র": {
-      "ব্যাকরণ ও নির্মিতি": {
-        "শব্দ, পদ ও বাক্যপ্রকরণ": {
-          "MCQ": [
-            {"q": "বাংলা ভাষার মূল উৎস কোনটি?", "options": ["ক) বৈদিক ভাষা", "খ) ইন্দো-ইউরোপীয়", "গ) প্রাকৃত", "ঘ) অপভ্রংশ"], "answer": "খ) ইন্দো-ইউরোপীয়"},
-            {"q": "সাধু ভাষার প্রধান বৈশিষ্ট্য কোনটি?", "options": ["ক) পরিবর্তনশীল", "খ) গুরুগম্ভীর ও তৎসম শব্দবহুল", "গ) আঞ্চলিকতা দোষে দুষ্ট", "ঘ) সংক্ষিপ্ত ও চটুল"], "answer": "খ) গুরুগম্ভীর ও তৎসম শব্দবহুল"},
-            {"q": "কোন শব্দটিতে উপসর্গ যুক্ত হয়েছে?", "options": ["ক) উপহার", "খ) ফলপ্রসূ", "গ) বইপত্র", "ঘ) হাঁস-মুরগি"], "answer": "ক) উপহার"},
-            {"q": "ণ-ত্ব ও ষ-ত্ব বিধান কোন ভাষার শব্দের ক্ষেত্রে প্রযোজ্য?", "options": ["ক) তদ্ভব", "খ) তৎসম", "গ) দেশি", "ঘ) বিদেশি"], "answer": "খ) তৎসম"},
-            {"q": "নিচের কোনটি স্বরসন্ধির উদাহরণ?", "options": ["ক) বিদ্যালয়", "খ) দিগন্ত", "গ) পরিচ্ছদ", "ঘ) সংবাদ"], "answer": "ক) বিদ্যালয়"},
-            {"q": "'আকাশ' শব্দের সমার্থক শব্দ কোনটি?", "options": ["ক) বসুন্ধরা", "খ) গগন", "গ) পাবক", "ঘ) সলিল"], "answer": "খ) গগন"},
-            {"q": "'অগ্নি' এর বিপরীত শব্দ কোনটি?", "options": ["ক) বাতাস", "খ) জল", "গ) আলো", "ঘ) ধোঁয়া"], "answer": "খ) জল"},
-            {"q": "বিশেষ্যের পরিবর্তে যে শব্দ ব্যবহৃত হয় তাকে কী বলে?", "options": ["ক) বিশেষণ", "খ) সর্বনাম", "গ) অব্যয়", "ঘ) ক্রিয়া"], "answer": "খ) সর্বনাম"},
-            {"q": "বাক্যের মূল উপাদান কী?", "options": ["ক) বর্ণ", "খ) শব্দ", "গ) পদ", "ঘ) ধ্বনি"], "answer": "গ) পদ"},
-            {"q": "ক্রিয়ার মূল অংশকে কী বলা হয়?", "options": ["ক) প্রত্যয়", "খ) উপসর্গ", "গ) ধাতু", "ঘ) বিভক্তি"], "answer": "গ) ধাতু"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: সুমাইয়া প্রতিদিন সকালে উঠে ব্যাকরণের নিয়ম মেনে শুদ্ধভাবে কথা বলার চর্চা করে এবং লেখার সময় বানান ও বিভক্তির প্রতি বিশেষ নজর রাখে। ফলে তার লেখার মান দিন দিন উন্নত হচ্ছে।",
-              "ka": "ভাষা কাকে বলে?",
-              "kha": "সাধু ও চলিত ভাষার দুটি মূল পার্থক্য ব্যাখ্যা কর।",
-              "ga": "উদ্দীপকের সুমাইয়ার অনুশীলনে বাংলা ব্যাকরণ চর্চার কোন দিকটি প্রকাশ পেয়েছে—ব্যাখ্যা কর।",
-              "gha": "\"ব্যাকরণ পাঠের মাধ্যমেই ভাষার শুদ্ধরূপ অর্জন সম্ভব।\"—উদ্দীপক ও পাঠ্যবইয়ের আলোকে পর্যালোচনা কর।"
+            "বাংলা দ্বিতীয় পত্র": {
+                "ব্যাকরণ ও নির্মিতি": {
+                    "শব্দ, পদ ও বাক্যপ্রকরণ": {
+                        "MCQ": [
+                            {"q": "বাংলা ভাষার মূল উৎস কোনটি?", "options": ["ক) বৈদিক ভাষা", "খ) ইন্দো-ইউরোপীয়", "গ) প্রাকৃত", "ঘ) অপভ্রংশ"], "answer": "খ) ইন্দো-ইউরোপীয়"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: সুমাইয়া প্রতিদিন সকালে উঠে ব্যাকরণের নিয়ম মেনে শুদ্ধভাবে কথা বলার চর্চা করে এবং লেখার সময় বানান ও বিভক্তির প্রতি বিশেষ নজর রাখে।",
+                                "ka": "ভাষা কাকে বলে?",
+                                "kha": "সাধু ও চলিত ভাষার দুটি মূল পার্থক্য ব্যাখ্যা কর।",
+                                "ga": "উদ্দীপকের সুমাইয়ার অনুশীলনে বাংলা ব্যাকরণ চর্চার কোন দিকটি প্রকাশ পেয়েছে—ব্যাখ্যা কর।",
+                                "gha": "\"ব্যাকরণ পাঠের মাধ্যমেই ভাষার শুদ্ধরূপ অর্জন সম্ভব।\"—পর্যালোচনা কর।"
+                            }
+                        ],
+                        "Written": [
+                            {"title": "ভাবসম্প্রসারণ", "desc": "দাঁড়াও তবে খাটো করে নয়... অথবা পরিশ্রম সৌভাগ্যের প্রসূতি।"},
+                            {"title": "দরখাস্ত", "desc": "বইয়ের প্রয়োজনীয়তা জানিয়ে ছোট ভাইয়ের কাছে একটি পত্র লেখো।"}
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: বাংলা ভাষায় এমন কিছু শব্দ ব্যবহৃত হয় যা সরাসরি সংস্কৃত থেকে পরিবর্তিত হয়ে কিংবা অপরিবর্তিত অবস্থায় আসে। আবার অনেক শব্দ উপসর্গ ও প্রত্যয় যোগ করে নতুন অর্থের সৃষ্টি করে।",
-              "ka": "বাংলা ব্যাকরণের প্রধান আলোচ্য বিষয় কয়টি?",
-              "kha": "উপসর্গ কীভাবে নতুন শব্দ গঠন করে—উদাহরণসহ বুঝিয়ে লেখ।",
-              "ga": "উদ্দীপকের আলোকে শব্দ গঠনের প্রক্রিয়াটি বাংলা ব্যাকরণের কোন অংশকে নির্দেশ করে—আলোচনা কর।",
-              "gha": "\"শব্দ গঠন ও ব্যাকরণগত নিয়মকানুন ভাষার মূল ভিত্তি।\"—উক্তিটি বিশ্লেষণ কর।"
-            }
-          ]
-        }
-      }
-    },
-    "English 1st Paper": {
-      "Reading & Composition": {
-        "Unit 1: Environment & Stories": {
-          "MCQ": [
-            {"q": "What class does Rina study in?", "options": ["a) class six", "b) class seven", "c) class eight", "d) class nine"], "answer": "b) class seven"},
-            {"q": "Why does Rina want to become a doctor?", "options": ["a) To earn money", "b) To serve poor villagers", "c) To travel the world", "d) To live in a city"], "answer": "b) To serve poor villagers"},
-            {"q": "Where did Hasan go last winter?", "options": ["a) Cox's Bazar", "b) Sreemangal", "c) Sylhet", "d) Sundarbans"], "answer": "b) Sreemangal"},
-            {"q": "What did Hasan and his family see in Sreemangal?", "options": ["a) Sea beach", "b) Green tea gardens", "c) Desert", "d) High mountains"], "answer": "b) Green tea gardens"},
-            {"q": "What is the synonym of the word 'Serene'?", "options": ["a) Calm", "b) Noisy", "c) Rough", "d) Busy"], "answer": "a) Calm"},
-            {"q": "What does early rising give a person?", "options": ["a) Enough time to perform daily duties", "b) Laziness", "c) Sickness", "d) Fatigue"], "answer": "a) Enough time to perform daily duties"},
-            {"q": "How does early rising keep the mind?", "options": ["a) Dull and sad", "b) Fresh and cheerful", "c) Angry and upset", "d) Tired"], "answer": "b) Fresh and cheerful"},
-            {"q": "Choose the correct past form of 'visit':", "options": ["a) visit", "b) visits", "c) visited", "d) visiting"], "answer": "c) visited"},
-            {"q": "Which one is an article?", "options": ["a) And", "b) But", "c) An", "d) In"], "answer": "c) An"},
-            {"q": "What does a healthy body lead to?", "options": ["a) A sound mind", "b) Bad habits", "c) Weakness", "d) Illness"], "answer": "a) A sound mind"}
-          ],
-          "CQ": [
-            {
-              "stem": "Read the passage: Rina is a student of class seven. She gets up early in the morning and attends her school regularly. She dreams of becoming a doctor to serve poor villagers.",
-              "ka": "What class does Rina study in?",
-              "kha": "Why does Rina want to become a doctor?",
-              "ga": "Describe Rina's daily routine based on the stem using appropriate Present Simple tenses.",
-              "gha": "\"Determination and hard work lead to success.\" Evaluate Rina's mindset in light of the context."
+            "ইংরেজি প্রথম পত্র": {
+                "Reading & Composition": {
+                    "Unit 1: Environment & Stories": {
+                        "MCQ": [
+                            {"q": "What class does Rina study in?", "options": ["a) class six", "b) class seven", "c) class eight", "d) class nine"], "answer": "b) class seven"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "Read the passage: Rina is a student of class seven. She gets up early in the morning and attends her school regularly. She dreams of becoming a doctor to serve poor villagers.",
+                                "ka": "What class does Rina study in?",
+                                "kha": "Why does Rina want to become a doctor?",
+                                "ga": "Describe Rina's daily routine based on the stem using appropriate Present Simple tenses.",
+                                "gha": "\"Determination and hard work lead to success.\" Evaluate Rina's mindset in light of the context."
+                            }
+                        ],
+                        "Written": [
+                            {"title": "Paragraph", "desc": "Write a paragraph on 'Early Rising'."}
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "Read the passage: Last winter, Hasan visited Sreemangal with his family. They saw green tea gardens and enjoyed the serene beauty of nature.",
-              "ka": "Where did Hasan go last winter?",
-              "kha": "How did Hasan and his family feel during the visit?",
-              "ga": "Identify the Past Tense verbs used in the stem and explain their functions.",
-              "gha": "\"Travelling broadens our horizon and refreshes our mind.\" Justify this statement with Hasan's experience."
-            }
-          ]
-        }
-      }
-    },
             "ইংরেজি দ্বিতীয় পত্র": {
                 "Grammar & Written": {
                     "Right form of verbs": {
@@ -1476,1854 +1574,845 @@ def render_quiz_practice():
                 }
             },
             "গণিত": {
-      "পাটিগণিত ও বীজগণিত": {
-        "মূলদ-অমূলদ সংখ্যা ও মূলদ সমীকরণ": {
-          "MCQ": [
-            {"q": "নিচের কোনটি মৌলিক সংখ্যা?", "options": ["ক) ৪", "খ) ৯", "গ) ১৩", "ঘ) ১৫"], "answer": "গ) ১৩"},
-            {"q": "সবচেয়ে ছোট জোড় মৌলিক সংখ্যা কোনটি?", "options": ["ক) ০", "খ) ১", "গ) ২", "ঘ) ৪"], "answer": "গ) ২"},
-            {"q": "√২৫ সংখ্যাটি কী ধরনের সংখ্যা?", "options": ["ক) অমূলদ", "খ) মূলদ", "গ) ঋণাত্মক", "ঘ) ভগ্নাংশ"], "answer": "খ) মূলদ"},
-            {"q": "x + ৫ = ১২ সমীকরণে x এর মান কত?", "options": ["ক) ৫", "খ) ৭", "গ) ১২", "ঘ) ১৭"], "answer": "খ) ৭"},
-            {"q": "৩a²b রাশিতে a এর ঘাত (Power) কত?", "options": ["ক) ১", "খ) ২", "গ) ৩", "ঘ) ৪"], "answer": "খ) ২"},
-            {"q": "(a + b)² এর সঠিক প্রসারিত রূপ কোনটি?", "options": ["ক) a² + b²", "খ) a² + 2ab + b²", "গ) a² - 2ab + b²", "ঘ) a² - b²"], "answer": "খ) a² + 2ab + b²"},
-            {"q": "বর্গের ক্ষেত্রফল = ?", "options": ["ক) দৈর্ঘ্য × প্রস্থ", "খ) (বাহু)²", "গ) ২ × (দৈর্ঘ্য + প্রস্থ)", "ঘ) বাহু × ৪"], "answer": "খ) (বাহু)²"},
-            {"q": "সমকোণী ত্রিভুজের বৃহত্তম বাহুকে কী বলে?", "options": ["ক) লম্ব", "খ) ভূমি", "গ) অতিভুজ", "ঘ) উচ্চতা"], "answer": "গ) অতিভুজ"},
-            {"q": "১ মিটার = কত সেন্টিমিটার?", "options": ["ক) ১০ সেন্টিমিটার", "খ) ১০০ সেন্টিমিটার", "গ) ১০০০ সেন্টিমিটার", "ঘ) ১০,০০০ সেন্টিমিটার"], "answer": "খ) ১০০ সেন্টিমিটার"},
-            {"q": "৫০ এর ২০% কত?", "options": ["ক) ৫", "খ) ১০", "গ) ১৫", "ঘ) ২০"], "answer": "খ) ১০"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: তিনটি ক্রমিক স্বাভাবিক সংখ্যার যোগফল ৩৬।",
-              "ka": "ক্ষুদ্রতম সংখ্যাটি x হলে অন্য সংখ্যা দুটিকে x এর মাধ্যমে লেখ[cite: 13]।",
-              "kha": "উদ্দীপকের তথ্য অনুসারে গঠিত সমীকরণটির সমাধান করে সংখ্যা তিনটি নির্ণয় কর[cite: 13]।",
-              "ga": "সংখ্যা তিনটির গড় ও বৃহত্তম সংখ্যার বর্গের অন্তর নির্ণয় কর[cite: 13]।",
-              "gha": "\"বীজগণিতীয় সমীকরণ গঠন পাটিগণিতীয় জটিল হিসাবকে সহজতর করে।\"—প্রমাণ কর[cite: 14]."
+                "পাটিগণিত ও বীজগণিত": {
+                    "মূলদ সংখ্যা ও বীজগণিতীয় সূত্র": {
+                        "MCQ": [
+                            {"q": "সবচেয়ে ছোট জোড় মৌলিক সংখ্যা কোনটি?", "options": ["ক) ০", "খ) ১", "গ) ২", "ঘ) ৪"], "answer": "গ) ২"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: a + 1/a = 4 একটি বীজগণিতীয় সমীকরণ।",
+                                "ka": "x - 1/x এর মান নির্ণয়ের সূত্রটি লেখো।",
+                                "kha": "প্রমাণ করো যে, a^2 + 1/a^2 = 14",
+                                "ga": "দেখাও যে, a^4 + 1/a^4 = 194",
+                                "gha": "\"বীজগণিতীয় অনুসিদ্ধান্ত জটিল সমস্যার সমাধান সহজ করে।\"—যাচাই করো।"
+                            }
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: একটি আয়তাকার বাগানের দৈর্ঘ্য প্রস্থের চেয়ে ৫ মিটার বেশি। বাগানটির পরিসীমা ৫০ মিটার।",
-              "ka": "প্রস্থ x মিটার ধরে বাগানের দৈর্ঘ্য x এর মাধ্যমে লেখ[cite: 14]।",
-              "kha": "বাগানটির দৈর্ঘ্য ও প্রস্থ নির্ণয় কর[cite: 14]।",
-              "ga": "বাগানটির ক্ষেত্রফল নির্ণয় কর এবং প্রতি বর্গমিটারে ৫০ টাকা হিসেবে ঘাস লাগাতে কত খরচ হবে হিসাব কর[cite: 14]।",
-              "gha": "পরিসীমা অপরিবর্তিত রেখে বাগানটিকে বর্গাকার করলে এর ক্ষেত্রফলের কী পরিবর্তন হবে—বিশ্লেষণ কর[cite: 14]."
-            }
-          ]
-        }
-      }
-    },
-    "বিজ্ঞান": {
-      "ভৌত ও জীববিজ্ঞান": {
-        "কোষ ও তাপ-তাপমাত্রা": {
-          "MCQ": [
-            {"q": "জীবদেহের গঠন ও কার্যকারিতার একককে কী বলে?", "options": ["ক) কলা", "খ) কোষ", "গ) অঙ্গ", "ঘ) তন্ত্র"], "answer": "খ) কোষ"},
-            {"q": "উদ্ভিদ কোষের কোন অঙ্গাণু সালোকসংশ্লেষণে সাহায্য করে?", "options": ["ক) মাইটোকন্ড্রিয়া", "খ) ক্লোরোপ্লাস্ট", "গ) রাইবোসোম", "ঘ) গলগি বডি"], "answer": "খ) ক্লোরোপ্লাস্ট"},
-            {"q": "কোষের 'পাওয়ার হাউস' কাকে বলা হয়?", "options": ["ক) নিউক্লিয়াস", "খ) লাইসোসোম", "গ) মাইটোকন্ড্রিয়া", "ঘ) সেন্ট্রোসোম"], "answer": "গ) মাইটোকন্ড্রিয়া"},
-            {"q": "তাপমাত্রার এসআই (SI) একক কোনটি?", "options": ["ক) সেলসিয়াস", "খ) ফারেনহাইট", "গ) কেলভিন", "ঘ) ক্যালরি"], "answer": "গ) কেলভিন"},
-            {"q": "মানবদেহের স্বাভাবিক তাপমাত্রা কত ডিগ্রি ফারেনহাইট?", "options": ["ক) ৯৭.৪° F", "খ) ৯৮.৪° F", "গ) ৯৯.৪° F", "ঘ) ১০০° F"], "answer": "খ) ৯৮.৪° F"},
-            {"q": "পদার্থের কোন অবস্থায় অণুগুলোর মধ্যে আন্তঃআণবিক আকর্ষণ সবচেয়ে বেশি?", "options": ["ক) কঠিন", "খ) তরল", "গ) বায়বীয়", "ঘ) প্লাজমা"], "answer": "ক) কঠিন"},
-            {"q": "নিচের কোনটি ভৌত পরিবর্তন?", "options": ["ক) লোহায় মরিচা ধরা", "খ) বরফ গলে পানি হওয়া", "গ) দুধ থেকে দই তৈরি", "ঘ) কাঠ পোড়ানো"], "answer": "খ) বরফ গলে পানি হওয়া"},
-            {"q": "উদ্ভিদ মূলরোমের সাহায্যে মাটি থেকে কোন প্রক্রিয়ায় পানি শোষণ করে?", "options": ["ক) ব্যাপন", "খ) অভিস্রবণ", "গ) প্রস্বেদন", "ঘ) শসন"], "answer": "খ) অভিস্রবণ"},
-            {"q": "শব্দ সঞ্চালনের জন্য কিসের প্রয়োজন হয়?", "options": ["ক) মাধ্যমের", "খ) আলোর", "গ) শুধু শূন্যস্থানের", "ঘ) বিদ্যুতের"], "answer": "ক) মাধ্যমের"},
-            {"q": "আলোর প্রতিফলনের প্রধান নিয়ম কয়টি?", "options": ["ক) ১টি", "খ) ২টি", "গ) ৩টি", "ঘ) ৪টি"], "answer": "খ) ২টি"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: রহিম একটি পাত্রে কিছু বরফ রেখে তাপ দিতে শুরু করল। কিছু সময় পর বরফ গলে পানি হলো এবং আরও তাপ দেওয়ায় পানি ফুটতে শুরু করল।",
-              "ka": "তাপমাত্রা কী?[cite: 15]",
-              "kha": "তাপ ও তাপমাত্রার দুটি মৌলিক পার্থক্য ব্যাখ্যা কর[cite: 15].",
-              "ga": "উদ্দীপকে সংঘটিত অবস্থান্তর প্রক্রিয়ায় অণুগুলোর কাঠামোগত পরিবর্তন ব্যাখ্যা কর[cite: 15].",
-              "gha": "\"তাপ প্রয়োগে পদার্থের ভৌত অবস্থার পরিবর্তন ঘটে হলেও রাসায়নিক গঠন অপরিবর্তিত থাকে।\"—যাচাই কর[cite: 15]."
+            "বিজ্ঞান": {
+                "ভৌত ও জীববিজ্ঞান": {
+                    "কোষ ও তাপ": {
+                        "MCQ": [
+                            {"q": "কোষের 'পাওয়ার হাউস' কাকে বলা হয়?", "options": ["ক) নিউক্লিয়াস", "খ) লাইসোসোম", "গ) মাইটোকন্ড্রিয়া", "ঘ) সেন্ট্রোসোম"], "answer": "গ) মাইটোকন্ড্রিয়া"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: অণুবীক্ষণ যন্ত্রের নিচে একটি উদ্ভিদ কোষ ও প্রাণীকোষ পর্যবেক্ষণ করা হলো। দেখা গেল, উদ্ভিদ কোষে একটি শক্ত প্রাচীর ও সবুজ অঙ্গাণু বিদ্যমান।",
+                                "ka": "কোষ প্রাচীর কী দিয়ে গঠিত?",
+                                "kha": "প্লাস্টিডকে উদ্ভিদের খাদ্য তৈরির কারখানা বলা হয় কেন?",
+                                "ga": "উদ্দীপকের আলোকে উদ্ভিদকোষ ও প্রাণীকোষের প্রধান বৈসাদৃশ্যগুলো তুলনা করো।",
+                                "gha": "\"সবুজ প্লাস্টিডের অনুপস্থিতিতে সমগ্র জীবজগৎ স্তব্ধ হয়ে পড়বে।\"—বিশ্লেষণ করো।"
+                            }
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: অণুবীক্ষণ যন্ত্রের নিচে একটি উদ্ভিদ কোষ ও প্রাণীকোষ পর্যবেক্ষণ করা হলো। দেখা গেল, উদ্ভিদ কোষে একটি শক্ত প্রাচীর ও সবুজ অঙ্গাণু বিদ্যমান যা প্রাণীকোষে নেই।",
-              "ka": "কোষ প্রাচীর কী দিয়ে গঠিত?[cite: 15]",
-              "kha": "প্লাস্টিডকে উদ্ভিদের খাদ্য তৈরির কারখানা বলা হয় কেন?[cite: 15]",
-              "ga": "উদ্দীপকের আলোকে উদ্ভিদকোষ ও প্রাণীকোষের প্রধান বৈসাদৃশ্যগুলো তুলনা কর[cite: 15, 16].",
-              "gha": "\"সবুজ প্লাস্টিডের অনুপস্থিতিতে সমগ্র জীবজগৎ স্তব্ধ হয়ে পড়বে।\"—উক্তিটি বিশ্লেষণ কর[cite: 16]."
-            }
-          ]
-        }
-      }
-    },
-    "বাংলাদেশ ও বিশ্বপরিচয়": {
-      "ইতিহাস ও সমাজ": {
-        "মুক্তিযুদ্ধ ও পরিবেশ": {
-          "MCQ": [
-            {"q": "বাংলাদেশের স্বাধীনতা সংগ্রাম কত সালে সংঘটিত হয়?", "options": ["ক) ১৯৬৬", "খ) ১৯৬৯", "গ) ১৯৭০", "ঘ) ১৯৭১"], "answer": "ঘ) ১৯৭১"},
-            {"q": "মুজিবনগর সরকার কবে গঠিত হয়?", "options": ["ক) ৭ মার্চ ১৯৭১", "খ) ১০ এপ্রিল ১৯৭১", "গ) ১৭ এপ্রিল ১৯৭১", "ঘ) ১৬ ডিসেম্বর ১৯৭১"], "answer": "খ) ১০ এপ্রিল ১৯৭১"},
-            {"q": "মুক্তিযুদ্ধে কত নম্বর সেক্টর কোনো আঞ্চলিক কমান্ডার ছিল না (নৌ-কমান্ডো)?", "options": ["ক) ১ নম্বর", "খ) ৭ নম্বর", "গ) ১০ নম্বর", "ঘ) ১১ নম্বর"], "answer": "গ) ১০ নম্বর"},
-            {"q": "জাতিসংঘের বর্তমান সদস্য সংখ্যা কত?", "options": ["ক) ১৯০", "খ) ১৯২", "গ) ১৯৩", "ঘ) ১৯৫"], "answer": "গ) ১৯৩"},
-            {"q": "সার্ক (SAARC) কত সালে প্রতিষ্ঠিত হয়?", "options": ["ক) ১৯৮০", "খ) ১৯৮৫", "গ) ১৯৯০", "ঘ) ২০০০"], "answer": "খ) ১৯৮৫"},
-            {"q": "জলবায়ু পরিবর্তনের প্রধান মানবসৃষ্ট কারণ কোনটি?", "options": ["ক) নির্বিচারে বৃক্ষনিধন", "খ) সুনামি", "গ) আগ্নেয়গিরির অগ্ন্যুৎপাত", "ঘ) ভূমিকম্প"], "answer": "ক) নির্বিচারে বৃক্ষনিধন"},
-            {"q": "সামাজিকীকরণের প্রথম ও প্রধান বাহন কোনটি?", "options": ["ক) বিদ্যালয়", "খ) পরিবার", "গ) খেলার সাথী", "ঘ) গণমাধ্যম"], "answer": "খ) পরিবার"},
-            {"q": "এশিয়ার সবচেয়ে বৃহত্তম মহাদেশ কোনটি?", "options": ["ক) ইউরোপ", "খ) এশিয়া", "গ) আফ্রিকা", "ঘ) অস্ট্রেলিয়া"], "answer": "খ) এশিয়া"},
-            {"q": "কত বছর বয়স পর্যন্ত শিশুদের শিশু বলা হয় (বাংলাদেশ শিশু নীতি অনুযায়ী)?", "options": ["ক) ১৪ বছর", "খ) ১৬ বছর", "গ) ১৮ বছর", "ঘ) ২১ বছর"], "answer": "গ) ১৮ বছর"},
-            {"q": "আন্তর্জাতিক নারী দিবস কবে পালিত হয়?", "options": ["ক) ৮ মার্চ", "খ) ২১ ফেব্রুয়ারি", "গ) ১ মে", "ঘ) ১০ ডিসেম্বর"], "answer": "ক) ৮ মার্চ"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: ১৯৭১ সালে বাংলাদেশের সাধারণ কৃষক, শ্রমিক ও ছাত্রসমাজ একজোট হয়ে দখলদার বাহিনীর বিরুদ্ধে প্রতিরোধ গড়ে তোলে এবং দীর্ঘ ৯ মাস রক্তক্ষয়ী সংগ্রামের পর ১৬ই ডিসেম্বর চূড়ান্ত বিজয় অর্জন করে।",
-              "ka": "মুক্তিযুদ্ধের সর্বাধিনায়ক কে ছিলেন?[cite: 17]",
-              "kha": "মুজিবনগর সরকার শপথ গ্রহণ করে কোথায়—ব্যাখ্যা কর[cite: 17].",
-              "ga": "উদ্দীপকে উল্লিখিত সর্বস্তরের মানুষের অংশগ্রহণের দিকটি আমাদের মুক্তিযুদ্ধে কী ভূমিকা রেখেছিল—ব্যাখ্যা কর[cite: 17].",
-              "gha": "\"জনগণের ঐক্য ও জাতীয়তাবোধই ছিল ১৯৭১ সালের স্বাধীনতার মূল শক্তি।\"—মূল্যায়ন কর[cite: 17]."
+            "বাংলাদেশ ও বিশ্বপরিচয়": {
+                "ইতিহাস ও সমাজ": {
+                    "মুক্তিযুদ্ধ ও পরিবেশ": {
+                        "MCQ": [
+                            {"q": "মুজিবনগর সরকার কবে গঠিত হয়?", "options": ["ক) ৭ মার্চ ১৯৭১", "খ) ১০ এপ্রিল ১৯৭১", "গ) ১৭ এপ্রিল ১৯৭১", "ঘ) ১৬ ডিসেম্বর ১৯৭১"], "answer": "খ) ১০ এপ্রিল ১৯৭১"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: উপকূলীয় একটি গ্রামে অনিয়ন্ত্রিতভাবে বনাঞ্চল কেটে ফেলার ফলে সমুদ্রের জলোচ্ছ্বাস ও ঝড়-ঝঞ্ঝার তীব্রতা বৃদ্ধি পেয়ে ঘরবাড়ি ধ্বংস হয়ে যাচ্ছে।",
+                                "ka": "গ্রিনহাউস গ্যাস কী?",
+                                "kha": "জলবায়ু পরিবর্তনের ফলে বাংলাদেশের বৈশ্বিক ঝুঁকি ব্যাখ্যা কর।",
+                                "ga": "উদ্দীপকের এলাকার প্রাকৃতিক বিপর্যয়ের কারণ পাঠ্যবইয়ের পরিবেশ অধ্যায়ের আলোকে বর্ণনা কর।",
+                                "gha": "\"টেকসই উন্নয়ন ও বৃক্ষরোপণই কেবল উপকূলীয় জীবন রক্ষা করতে পারে।\"—মতামত দাও।"
+                            }
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: উপকূলীয় একটি গ্রামে অনিয়ন্ত্রিতভাবে বনাঞ্চল কেটে ফেলার ফলে সমুদ্রের জলোচ্ছ্বাস ও ঝড়-ঝঞ্ঝার তীব্রতা বৃদ্ধি পেয়ে ঘরবাড়ি ধ্বংস হয়ে যাচ্ছে।",
-              "ka": "গ্রিনহাউস গ্যাস কী?[cite: 17]",
-              "kha": "জলবায়ু পরিবর্তনের ফলে বাংলাদেশের বৈশ্বিক ঝুঁকি ব্যাখ্যা কর[cite: 17].",
-              "ga": "উদ্দীপকের এলাকার প্রাকৃতিক বিপর্যয়ের কারণ পাঠ্যবইয়ের পরিবেশ অধ্যায়ের আলোকে বর্ণনা কর[cite: 17].",
-              "gha": "\"টেকসই উন্নয়ন ও বৃক্ষরোপণই কেবল উপকূলীয় জীবন রক্ষা করতে পারে।\"—মতামত দাও[cite: 17]."
-            }
-          ]
-        }
-      }
-    },
-    "ইসলাম ও নৈতিক শিক্ষা": {
-      "আকাঈদ ও আখলাক": {
-        "ঈমান ও সামাজিক চরিত্র": {
-          "MCQ": [
-            {"q": "'আকাঈদ' শব্দটি কোন শব্দের বহুবচন?", "options": ["ক) আকীদাহ", "খ) ঈমান", "গ) ইসলাম", "ঘ) তাওহীদ"], "answer": "ক) আকীদাহ"},
-            {"q": "ইসলামের প্রথম ও মৌলিক ভিত্তি কোনটি?", "options": ["ক) সালাত", "খ) তাওহীদ", "গ) যাকাত", "ঘ) হজ"], "answer": "খ) তাওহীদ"},
-            {"q": "'আসমাউল হুসনা' বলতে কী বোঝায়?", "options": ["ক) সুন্দর নামসমূহ", "খ) নফসের পবিত্রতা", "গ) শ্রেষ্ঠ নবীদের তালিকা", "ঘ) কিয়ামতের আলামত"], "answer": "ক) সুন্দর নামসমূহ"},
-            {"q": "দৈনন্দিন জীবনে সালাত দিনে কতবার ফরজ করা হয়েছে?", "options": ["ক) ৩ বার", "খ) ৪ বার", "গ) ৫ বার", "ঘ) ৭ বার"], "answer": "গ) ৫ বার"},
-            {"q": "কুরআন মজিদের প্রধান সুরক্ষার দায়িত্ব কার?", "options": ["ক) ফেরেশতাদের", "খ) মানুষের", "গ) মহান আল্লাহর", "ঘ) নবীদের"], "answer": "গ) মহান আল্লাহর"},
-            {"q": "আখলাক প্রধানত কয় ভাগে বিভক্ত?", "options": ["ক) ২ ভাগে", "খ) ৩ ভাগে", "গ) ৪ ভাগে", "ঘ) ৫ ভাগে"], "answer": "ক) ২ ভাগে"},
-            {"q": "আমলে সালেহ বলতে কী বোঝায়?", "options": ["ক) সৎকাজ", "খ) অন্যায় কাজ", "গ) সময় অপচয়", "ঘ) অহংকার"], "answer": "ক) সৎকাজ"},
-            {"q": "সত্যবাদিতাকে আরবিতে কী বলা হয়?", "options": ["ক) সিদক", "খ) কিজব", "গ) খিয়ানত", "ঘ) আমানত"], "answer": "ক) সিদক"},
-            {"q": "কাউকে গালি দেওয়া বা মন্দ নামে ডাকা ইসলামে-", "options": ["ক) মুস্তাহাব", "খ) হারাম/হালকা গুনাহ", "গ) কবিরা গুনাহ ও নিষিদ্ধ", "ঘ) জায়েজ"], "answer": "গ) কবিরা গুনাহ ও নিষিদ্ধ"},
-            {"q": "পরিবেশের ভারসাম্য রক্ষায় গাছ লাগানো ইসলামে-", "options": ["ক) নফল ইবাদত ও সাদকাহ", "খ) নিরুৎসাহিত", "গ) ফরজ নয় ও অপ্রয়োজনীয়", "ঘ) মাকরুহ"], "answer": "ক) নফল ইবাদত ও সাদকাহ"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: সায়েম তার ব্যবসায় কখনো মাপে কম দেয় না এবং খদ্দেরের সাথে সততার পরিচয় দেয়। সে বিশ্বাস করে যে তার প্রতিটি কাজের হিসাব শেষ বিচারে আল্লাহর কাছে দিতে হবে।",
-              "ka": "আখিরাত শব্দের অর্থ কী?[cite: 18]",
-              "kha": "তাওহীদে বিশ্বাস মানুষের মনে কীভাবে অন্যায়ের ভয় দূর করে—ব্যাখ্যা কর[cite: 18, 19].",
-              "ga": "উদ্দীপকের সায়েমের কর্মের মাধ্যমে ঈমানের কোন স্তম্ভটির প্রতিফলন ঘটেছে—ব্যাখ্যা কর[cite: 19].",
-              "gha": "\"পরকালে জবাবদিহিতার অনুভূতিই ব্যবসায়িক ও সামাজিক সততার মূল ভিত্তি।\"—বিশ্লেষণ কর[cite: 19]."
+            "ইসলাম ও নৈতিক শিক্ষা": {
+                "আকাঈদ ও আখলাক": {
+                    "ঈমান ও চরিত্র": {
+                        "MCQ": [
+                            {"q": "ইসলামের পঞ্চস্তম্ভের দ্বিতীয় স্তম্ভ কোনটি?", "options": ["ক) সাওম", "খ) সালাত", "গ) যাকাত", "ঘ) হজ"], "answer": "খ) সালাত"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: সায়েম তার ব্যবসায় কখনো মাপে কম দেয় না এবং খদ্দেরের সাথে সততার পরিচয় দেয়। সে বিশ্বাস করে যে তার প্রতিটি কাজের হিসাব শেষ বিচারে আল্লাহর কাছে দিতে হবে।",
+                                "ka": "আখিরাত শব্দের অর্থ কী?",
+                                "kha": "তাওহীদে বিশ্বাস মানুষের মনে কীভাবে অন্যায়ের ভয় দূর করে—ব্যাখ্যা কর।",
+                                "ga": "উদ্দীপকের সায়েমের কর্মের মাধ্যমে ঈমানের কোন স্তম্ভটির প্রতিফলন ঘটেছে—ব্যাখ্যা কর।",
+                                "gha": "\"পরকালে জবাবদিহিতার অনুভূতিই ব্যবসায়িক ও সামাজিক সততার মূল ভিত্তি।\"—বিশ্লেষণ কর।"
+                            }
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: রফিক ক্লাসে কোনো সহপাঠী বিপদে পড়লে সাহায্য করে এবং প্রতিবেশীদের সাথে সবসময় হাসিমুখে কথা বলে ভালো ব্যবহার করে।",
-              "ka": "আখলাক-এ হামিদা কী?[cite: 19]",
-              "kha": "ইসলামে ভালো ব্যবহারের গুরুত্ব ব্যাখ্যা কর[cite: 19].",
-              "ga": "উদ্দীপকে রফিকের আচরণে সৎচরিত্রের কোন গুণাবলি ফুটে উঠেছে—ব্যাখ্যা কর[cite: 19].",
-              "gha": "\"উত্তম চরিত্রই একজন সুনাগরিক ও আদর্শ মুসলিম গঠনের হাতিয়ার।\"—উক্তিটি মূল্যায়ন কর[cite: 19]."
+            "তথ্য ও যোগাযোগ প্রযুক্তি": {
+                "কম্পিউটার ও ইন্টারনেট": {
+                    "ইন্টারনেট ও নেটওয়ার্ক": {
+                        "MCQ": [
+                            {"q": "ই-মেইল (E-mail) এর পূর্ণরূপ কী?", "options": ["ক) Electrical Mail", "খ) Electronic Mail", "গ) Easy Mail", "ঘ) Engine Mail"], "answer": "খ) Electronic Mail"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: সিয়াম ইন্টারনেটে পরীক্ষার ফলাফল দেখার জন্য কম্পিউটারে সার্চ ব্রাউজার ব্যবহার করে রোল নম্বর প্রদান করল এবং কয়েক সেকেন্ডের মধ্যে মনিটরে রেজাল্ট দেখতে পেল।",
+                                "ka": "ইন্টারনেট কী?",
+                                "kha": "ইনপুট ও আউটপুট ডিভাইসের প্রধান দুটি পার্থক্য লেখো।",
+                                "ga": "উদ্দীপকে সিয়ামের ব্যবহৃত ডিভাইসগুলোর মধ্যে কোনগুলো ইনপুট এবং কোনটি আউটপুট তা চিহ্নিত করে কাজ ব্যাখ্যা কর।",
+                                "gha": "\"তথ্য প্রযুক্তির দ্রুত বিকাশ শিক্ষা ব্যবস্থাকে সহজ ও প্রবেশযোগ্য করেছে।\"—মূল্যায়ন কর।"
+                            }
+                        ]
+                    }
+                }
             }
-          ]
-        }
-      }
-    },
-    "তথ্য ও যোগাযোগ প্রযুক্তি": {
-      "ICT基礎 & নেটওয়ার্ক": {
-        "কম্পিউটার ও ইন্টারনেট": {
-          "MCQ": [
-            {"q": "কম্পিউটারের প্রধান মেমোরি কোনটি?", "options": ["ক) র্যাম (RAM)", "খ) পেনড্রাইভ", "গ) সিডি", "ঘ) হার্ডডিস্ক"], "answer": "ক) র্যাম (RAM)"},
-            {"q": "নিচের কোনটি একটি আউটপুট ডিভাইস?", "options": ["ক) মাউস", "খ) কিবোর্ড", "গ) মনিটর", "ঘ) স্ক্যানার"], "answer": "গ) মনিটর"},
-            {"q": "কম্পিউটারের ব্রেইন বা মস্তিষ্ক বলা হয় কাকে?", "options": ["ক) CPU", "খ) RAM", "গ) ROM", "ঘ) Monitor"], "answer": "ক) CPU"},
-            {"q": "১ বাইট (Byte) কত বিটের (Bit) সমান?", "options": ["ক) ৪ বিট", "খ) ৮ বিট", "গ) ১৬ বিট", "ঘ) ৩২ বিট"], "answer": "খ) ৮ বিট"},
-            {"q": "ই-মেইল (E-mail) এর পূর্ণরূপ কী?", "options": ["ক) Electrical Mail", "খ) Electronic Mail", "গ) Easy Mail", "ঘ) Engine Mail"], "answer": "খ) Electronic Mail"},
-            {"q": "ওয়েবসাইট দেখার জন্য কোন সফটওয়্যার ব্যবহৃত হয়?", "options": ["ক) ওয়েব ব্রাউজার", "খ) ওয়ার্ড প্রসেসর", "গ) মিডিয়া প্লেয়ার", "ঘ) অ্যান্টিভাইরাস"], "answer": "ক) ওয়েব ব্রাউজার"},
-            {"q": "নিচের কোনটি একটি সার্চ ইঞ্জিন?", "options": ["ক) Facebook", "খ) Google", "গ) WhatsApp", "ঘ) Windows"], "answer": "খ) Google"},
-            {"q": "নেটওয়ার্ক সংযোগে ব্যবহৃত তারকে কী বলা হয়?", "options": ["ক) ক্যাবল", "খ) প্রসেসর", "গ) পোর্ট", "ঘ) হাব"], "answer": "ক) ক্যাবল"},
-            {"q": "পাসওয়ার্ড ব্যবহারের প্রধান উদ্দেশ্য কী?", "options": ["ক) কম্পিউটার দ্রুত করা", "খ) তথ্য ও অ্যাকাউন্টের নিরাপত্তা প্রদান", "গ) মেমোরি বাড়ানো", "ঘ) ছবি প্রদর্শন"], "answer": "খ) তথ্য ও অ্যাকাউন্টের নিরাপত্তা প্রদান"},
-            {"q": "সাইবার স্পেসে অন্যায়ভাবে অন্যের তথ্য চুরি বা ক্ষতি করাকে কী বলে?", "options": ["ক) হ্যাকিং/সাইবার অপরাধ", "খ) ব্রাউজিং", "গ) ডাউনলোড", "ঘ) প্রোগ্রামিং"], "answer": "ক) হ্যাকিং/সাইবার অপরাধ"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: সিয়াম ইন্টারনেটে পরীক্ষার ফলাফল দেখার জন্য কম্পিউটারে সার্চ ব্রাউজার ব্যবহার করে রোল নম্বর প্রদান করল এবং কয়েক সেকেন্ডের মধ্যে মনিটরে রেজাল্ট শিট দেখতে পেয়ে প্রিন্টারের সাহায্যে তা ছেপে নিল।",
-              "ka": "ইন্টারনেট কী?[cite: 20]",
-              "kha": "ইনপুট ও আউটপুট ডিভাইসের প্রধান দুটি পার্থক্য লেখ[cite: 20].",
-              "ga": "উদ্দীপকে সিয়ামের ব্যবহৃত ডিভাইসগুলোর মধ্যে কোনগুলো ইনপুট এবং কোনটি আউটপুট তা চিহ্নিত করে কাজ ব্যাখ্যা কর[cite: 20].",
-              "gha": "\"তথ্য প্রযুক্তির দ্রুত বিকাশ শিক্ষা ব্যবস্থাকে সহজ ও প্রবেশযোগ্য করেছে।\"—উদ্দীপকের আলোকে মূল্যায়ন কর[cite: 20]."
-            },
-            {
-              "stem": "উদ্দীপক ২: একটি ব্যাংকে বেশ কয়েকটি কম্পিউটার একসাথে যুক্ত করে একটি নেটওয়ার্ক তৈরি করা হয়েছে যাতে কর্মকর্তাগণ সহজেই এক স্থান থেকে অন্য স্থানে গোপন ফাইল আদান-প্রদান ও ডেটা সংরক্ষণ করতে পারেন।",
-              "ka": "LAN এর পূর্ণরূপ কী?[cite: 20]",
-              "kha": "কম্পিউটার নেটওয়ার্ক ব্যবহারের দুটি প্রধান সুবিধা ব্যাখ্যা কর[cite: 21].",
-              "ga": "উদ্দীপকের ব্যাংকিং ব্যবস্থায় নেটওয়ার্ক প্রযুক্তির ভূমিকা কীভাবে কাজ করছে তা আলোচনা কর[cite: 21].",
-              "gha": "\"নেটওয়ার্কিং বিশ্বকে একটি বিশ্বপল্লীতে (Global Village) রূপান্তর করেছে।\"—উক্তিটির যথার্থতা বিচার কর[cite: 21]."
-            }
-          ]
-        }
-      }
-    }
         },
         "অষ্টম শ্রেণি": {
             "বাংলা প্রথম পত্র": {
                 "গদ্যাংশ": {
                     "ষোলোই ডিসেম্বরের কথা": {
                         "MCQ": [
-                            {"q": "ষোলোই ডিসেম্বর বাংলাদেশে কী হিসেবে পালিত হয়?", "options": ["ক) স্বাধীনতা দিবস", "খ) বিজয় দিবস", "গ) শহীদ দিবস", "ঘ) বাংলা নববর্ষ"], "answer": "খ) বিজয় দিবস"}
+                            {"q": "ষোলোই ডিসেম্বর বাংলাদেশে কী হিসেবে পালিত হয়?", "options": ["ক) স্বাধীনতা দিবস", "খ) বিজয় দিবস", "গ) শহীদ দিবস", "ঘ) বাংলা নববর্ষ"], "answer": "খ) বিজয় দিবস"}
                         ],
-                        "CQ": [],
+                        "CQ": []
+                    }
+                }
+            },
+            "বাংলা দ্বিতীয় পত্র": {
+                "ব্যাকরণ ও নির্মিতি": {
+                    "ভাষা, ব্যাকরণ ও নির্মিতি": {
+                        "MCQ": [
+                            {"q": "সবচেয়ে বেশি ব্যবহৃত বাংলা উপসর্গ কয়টি?", "options": ["ক) ২১টি", "খ) ২০টি", "গ) ১৯টি", "ঘ) ২২টি"], "answer": "ক) ২১টি"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: রফিক সাহেব তার লেখায় সবসময় সহজ-সরল ভাষায় মনের ভাব প্রকাশ করেন, যা সব অঞ্চলের মানুষ সহজেই বুঝতে পারে। অন্যদিকে তার বন্ধু প্রথাগত জটিল ও প্রাচীন শব্দ ব্যবহারে স্বাচ্ছন্দ্য বোধ করেন।",
+                                "ka": "চলিত ভাষার প্রবর্তক কে?",
+                                "kha": "সাধু ও চলিত ভাষার দুটি মৌলিক পার্থক্য লেখ।",
+                                "ga": "উদ্দীপকের রফিক সাহেবের ভাষারীতি পাঠ্যবইয়ের ব্যাকরণগত কোন রূপটিকে নির্দেশ করে—ব্যাখ্যা কর।",
+                                "gha": "\"সর্বজনগ্রাহ্য ও সাবলীল যোগাযোগের জন্য চলিত/প্রমিত ভাষারীতিই সর্বোত্তম।\"—বিশ্লেষণ কর।"
+                            }
+                        ],
                         "Written": [
-                            {"title": "সারমর্ম", "desc": "ক্ষুদ্র ক্ষুদ্র বালু কণা... বিন্দু বিন্দু জল।"}
+                            {"title": "ভাবসম্প্রসারণ", "desc": "দশে মিলে করি কাজ, হারি জিতি নাহি লাজ।"},
+                            {"title": "দরখাস্ত", "desc": "বিনা বেতনে অধ্যয়নের জন্য প্রধান শিক্ষকের নিকট আবেদন।"}
                         ]
                     }
                 }
             },
-            "বাংলা ২য় পত্র": {
-      "ব্যাকরণ ও নির্মিতি": {
-        "ভাষা, ব্যাকরণ ও নির্মিতি": {
-          "MCQ": [
-            {"q": "বাংলা ভাষার মূল ভিত্তি বা উৎস কোনটি?", "options": ["ক) ইন্দো-ইউরোপীয় ভাষা", "খ) ফারসি ভাষা", "গ) ড্রাবিড় ভাষা", "ঘ) প্রাকৃত ভাষা"], "answer": "ক) ইন্দো-ইউরোপীয় ভাষা"},
-            {"q": "কোন ভাষা রূপটি পরিবর্তনশীল ও অঞ্চলভেদে ভিন্ন হয়?", "options": ["ক) সাধু ভাষা", "খ) চলিত ভাষা", "গ) কথ্য বা উপভাষা", "ঘ) প্রমিত ভাষা"], "answer": "গ) কথ্য বা উপভাষা"},
-            {"q": "সন্ধি ব্যাকরণের কোন অংশে আলোচিত হয়?", "options": ["ক) রূপতত্ত্ব", "খ) ধ্বনিতত্ত্ব", "গ) বাক্যতত্ত্ব", "ঘ) অর্থতত্ত্ব"], "answer": "খ) ধ্বনিতত্ত্ব"},
-            {"q": "শব্দের ক্ষুদ্রতম একককে কী বলে?", "options": ["ক) অক্ষর", "খ) ধ্বনি", "গ) পদ", "ঘ) বাক্য"], "answer": "খ) ধ্বনি"},
-            {"q": "নিচের কোনটি তৎসম শব্দের উদাহরণ?", "options": ["ক) হাত", "খ) চন্দ্র", "গ) ডিঙি", "ঘ) চেয়ার"], "answer": "খ) চন্দ্র"},
-            {"q": "'অভাব' অর্থে কোন উপসর্গটি ব্যবহৃত হয়েছে?", "options": ["ক) অজানা", "খ) গরহাজির", "গ) সুদিন", "ঘ) সুনীতি"], "answer": "খ) গরহাজির"},
-            {"q": "ধাতুর পর যে বর্ণ বা বর্ণসমষ্টি যুক্ত হয়ে নতুন শব্দ গঠন করে তাকে কী বলে?", "options": ["ক) প্রত্যয়", "খ) উপসর্গ", "গ) সমাস", "ঘ) অনুসর্গ"], "answer": "ক) প্রত্যয়"},
-            {"q": "সমাসের প্রধান কাজ কী?", "options": ["ক) পদের সংকোচন", "খ) পদের সম্প্রসারণ", "গ) বাক্যের দীর্ঘায়ন", "ঘ) অর্থ পরিবর্তন"], "answer": "ক) পদের সংকোচন"},
-            {"q": "বাক্যের অপরিহার্য অংশ কয়টি?", "options": ["ক) ১টি", "খ) ২টি", "গ) ৩টি", "ঘ) ৪টি"], "answer": "খ) ২টি"},
-            {"q": "সবচেয়ে বেশি ব্যবহৃত বাংলা উপসর্গ কয়টি?", "options": ["ক) ২১টি", "খ) ২০টি", "গ) ১৯টি", "ঘ) ২২টি"], "answer": "ক) ২১টি"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: রফিক সাহেব তার লেখায় সবসময় সহজ-সরল ভাষায় মনের ভাব প্রকাশ করেন, যা সব অঞ্চলের মানুষ সহজেই বুঝতে পারে। অন্যদিকে তার বন্ধু প্রথাগত জটিল ও প্রাচীন শব্দ ব্যবহারে স্বাচ্ছন্দ্য বোধ করেন।",
-              "ka": "চলিত ভাষার প্রবর্তক কে?",
-              "kha": "সাধু ও চলিত ভাষার দুটি মৌলিক পার্থক্য লেখ।",
-              "ga": "উদ্দীপকের রফিক সাহেবের ভাষারীতি পাঠ্যবইয়ের ব্যাকরণগত কোন রূপটিকে নির্দেশ করে—ব্যাখ্যা কর।",
-              "gha": "\"সর্বজনগ্রাহ্য ও সাবলীল যোগাযোগের জন্য চলিত/প্রমিত ভাষারীতিই সর্বোত্তম।\"—বিশ্লেষণ কর।"
+            "ইংরেজি প্রথম পত্র": {
+                "Reading & Composition": {
+                    "Unit 1: Craft & Habits": {
+                        "MCQ": [
+                            {"q": "What is Nakshi Kantha?", "options": ["a) A kind of embroidered quilt", "b) A type of folk song", "c) A traditional dance", "d) A local sweet"], "answer": "a) A kind of embroidered quilt"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "Read the text: Nakshi Kantha is a kind of embroidered quilt. The name was taken from the Bengali word 'naksha' which means artistic pattern. It is a traditional craft of Bangladesh.",
+                                "ka": "Where does the name 'Nakshi Kantha' come from?",
+                                "kha": "Why is Nakshi Kantha called a traditional craft?",
+                                "ga": "Rewrite the main ideas of the text using simple present passive structures.",
+                                "gha": "\"Cultural crafts like Nakshi Kantha represent our national identity globally.\" Justify the statement."
+                            }
+                        ],
+                        "Written": [
+                            {"title": "Paragraph", "desc": "Write a paragraph on 'Tree Plantation'."}
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: বাংলা ভাষায় শব্দ গঠনের জন্য ধ্বনি, উপসর্গ, প্রত্যয় এবং সমাসের ব্যাপক ব্যবহার রয়েছে। সঠিক নিয়ম মেনে এগুলো প্রয়োগ করলে ভাষার ভাব প্রকাশ নির্ভুল হয়।",
-              "ka": "ব্যাকরণের ধ্বনিতত্ত্বে কী নিয়ে আলোচনা করা হয়?",
-              "kha": "উপসর্গ কীভাবে নতুন শব্দ গঠনে সাহায্য করে—উদাহরণসহ লেখ।",
-              "ga": "উদ্দীপকের আলোকে শব্দ গঠনের ব্যাকরণিক প্রক্রিয়াগুলো ব্যাখ্যা কর।",
-              "gha": "\"ব্যাকরণ চর্চাই ভাষার রূপ ও শুদ্ধতা রক্ষায় প্রধান হাতিয়ার।\"—উক্তিটি মূল্যায়ন কর।"
-            }
-          ]
-        }
-      }
-    },
-    "English 1st Paper": {
-      "Reading & Composition": {
-        "Unit 1: Craft & Habits": {
-          "MCQ": [
-            {"q": "What is Nakshi Kantha?", "options": ["a) A kind of embroidered quilt", "b) A type of folk song", "c) A traditional dance", "d) A local sweet"], "answer": "a) A kind of embroidered quilt"},
-            {"q": "Where was the name 'Nakshi Kantha' taken from?", "options": ["a) An English word", "b) The Bengali word 'naksha'", "c) An Arabic word", "d) A Hindi word"], "answer": "b) The Bengali word 'naksha'"},
-            {"q": "What does the word 'naksha' mean?", "options": ["a) A traditional song", "b) Artistic pattern", "c) Colorful design", "d) Handmade cloth"], "answer": "b) Artistic pattern"},
-            {"q": "What is early rising?", "options": ["a) The habit of getting up early from bed", "b) Sleeping late at night", "c) Waking up in the afternoon", "d) Working overnight"], "answer": "a) The habit of getting up early from bed"},
-            {"q": "How does early rising help a person?", "options": ["a) Gives enough time to perform daily duties", "b) Makes a person lazy", "c) Causes tiredness", "d) Wastes time"], "answer": "a) Gives enough time to perform daily duties"},
-            {"q": "How does early rising keep the mind?", "options": ["a) Dull and sad", "b) Fresh and cheerful", "c) Tense and worried", "d) Tired"], "answer": "b) Fresh and cheerful"},
-            {"q": "What does a healthy body lead to?", "options": ["a) A sound mind", "b) Sickness", "c) Weakness", "d) Fatigue"], "answer": "a) A sound mind"},
-            {"q": "Choose the correct preposition: 'He is proficient ___ English.'", "options": ["a) in", "b) at", "c) on", "d) with"], "answer": "a) in"},
-            {"q": "What is the synonym of the word 'Traditional'?", "options": ["a) Modern", "b) Conventional/Customary", "c) New", "d) Strange"], "answer": "b) Conventional/Customary"},
-            {"q": "Which sentence is in Present Simple Tense?", "options": ["a) He plays football.", "b) He played football.", "c) He will play football.", "d) He is playing football."], "answer": "a) He plays football."}
-          ],
-          "CQ": [
-            {
-              "stem": "Read the text: Nakshi Kantha is a kind of embroidered quilt. The name was taken from the Bengali word 'naksha' which means artistic pattern. It is a traditional craft of Bangladesh[cite: 24].",
-              "ka": "Where does the name 'Nakshi Kantha' come from?[cite: 24]",
-              "kha": "Why is Nakshi Kantha called a traditional craft?[cite: 24]",
-              "ga": "Rewrite the main ideas of the text using simple present passive structures[cite: 24].",
-              "gha": "\"Cultural crafts like Nakshi Kantha represent our national identity globally.\" Justify the statement[cite: 24]."
+            "ইংরেজি দ্বিতীয় পত্র": {
+                "Grammar & Composition": {
+                    "Grammar Basics & Transformation": {
+                        "MCQ": [
+                            {"q": "Which one is an Assertive sentence?", "options": ["a) What a bird!", "b) Bangladesh is our motherland.", "c) Do you know him?", "d) May Allah bless you."], "answer": "b) Bangladesh is our motherland."}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "Transform the following sentences as directed: (a) Cricket is a very popular game. (Exclamatory) (b) Everybody knows this. (Negative) (c) Who does not love cricket? (Assertive) (d) It is an exciting game. (Interrogative)",
+                                "ka": "What is an assertive sentence?",
+                                "kha": "How do you change an affirmative sentence into a negative one without changing its meaning—explain with an example.",
+                                "ga": "Transform the sentences (a), (b), (c) and (d) according to the directions given in the stem.",
+                                "gha": "\"Sentence transformation tests a student's grammatical capability and flexibility in language use.\"—Evaluate the statement."
+                            }
+                        ],
+                        "Written": [
+                            {"title": "Formal Letter", "desc": "Write a letter to the editor about frequent load-shedding."}
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "Read the text: Early rising is the habit of getting up early from bed. It gives a person enough time to perform daily duties and keeps the mind fresh and cheerful[cite: 24].",
-              "ka": "What is early rising?[cite: 24]",
-              "kha": "How does early rising benefit human physical health?[cite: 24]",
-              "ga": "Transform the positive aspects mentioned in the stem using appropriate linking words[cite: 24].",
-              "gha": "\"A healthy body leads to a sound mind.\" Evaluate the significance of early rising in light of this proverb[cite: 24]."
-            }
-          ]
-        }
-      }
-    },
-    "English 2nd Paper": {
-      "Grammar & Composition": {
-        "Grammar Basics & Transformation": {
-          "MCQ": [
-            {"q": "Which one is an Assertive sentence?", "options": ["a) What a beautiful bird!", "b) Bangladesh is our motherland.", "c) Do you know him?", "d) May Allah bless you."], "answer": "b) Bangladesh is our motherland."},
-            {"q": "Change the voice: 'He plays cricket.'", "options": ["a) Cricket was played by him.", "b) Cricket is played by him.", "c) Cricket has been played by him.", "d) Cricket played by him."], "answer": "b) Cricket is played by him."},
-            {"q": "What is the superlative degree of 'Good'?", "options": ["a) Better", "b) Best", "c) More good", "d) Gooder"], "answer": "b) Best"},
-            {"q": "Choose the correct preposition: 'He is proficient in English.'", "options": ["a) in", "b) at", "c) on", "d) with"], "answer": "a) in"},
-            {"q": "Identify the conjunction in: 'Do or die.'", "options": ["a) Do", "b) or", "c) die", "d) None"], "answer": "b) or"},
-            {"q": "Which sentence is in Past Perfect Tense?", "options": ["a) He had finished the task.", "b) He finished the task.", "c) He was finishing the task.", "d) He has finished the task."], "answer": "a) He had finished the task."},
-            {"q": "What is the noun form of 'Believe'?", "options": ["a) Believable", "b) Belief", "c) Believing", "d) Believer"], "answer": "b) Belief"},
-            {"q": "Choose the correct sentence:", "options": ["a) One of my friends are rich.", "b) One of my friends is rich.", "c) One of my friend is rich.", "d) One of my friends were rich."], "answer": "b) One of my friends is rich."},
-            {"q": "Synonym of 'Obey' is-", "options": ["a) Disregard", "b) Follow", "c) Refuse", "d) Ignore"], "answer": "b) Follow"},
-            {"q": "Antonym of 'Ancient' is-", "options": ["a) Old", "b) Modern", "c) Traditional", "d) Past"], "answer": "b) Modern"}
-          ],
-          "CQ": [
-            {
-              "stem": "Transform the following sentences as directed: (a) Cricket is a very popular game. (Exclamatory) (b) Everybody knows this. (Negative) (c) Who does not love cricket? (Assertive) (d) It is an exciting game. (Interrogative)",
-              "ka": "What is an assertive sentence?",
-              "kha": "How do you change an affirmative sentence into a negative one without changing its meaning—explain with an example.",
-              "ga": "Transform the sentences (a), (b), (c) and (d) according to the directions given in the stem.",
-              "loan": "",
-              "gha": "\"Sentence transformation tests a student's grammatical capability and flexibility in language use.\"—Evaluate the statement."
+            "গণিত": {
+                "পাটিগণিত ও বীজগণিত": {
+                    "প্যাটার্ন ও মুনাফা": {
+                        "MCQ": [
+                            {"q": "সরল মুনাফার সূত্র কোনটি?", "options": ["ক) Pnr", "খ) P/nr", "গ) Pr/n", "ঘ) Pn/r"], "answer": "ক) Pnr"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: কোনো আসল ৩ বছরে মুনাফা-আসলে ১৫২০০ টাকা এবং ৫ বছরে মুনাফা-আসলে ১৭৬০০ টাকা হয়।",
+                                "ka": "২ বছরের মুনাফা কত তা নির্ণয় কর।",
+                                "kha": "আসল ও বার্ষিক মুনাফার হার নির্ণয় কর।",
+                                "ga": "উক্ত আসলে একই হারে ৫ বছরের জন্য সঞ্চয় করলে চক্রবৃদ্ধি মুনাফা কত হবে?",
+                                "gha": "\"নির্দিষ্ট হারে সরল মুনাফার চেয়ে চক্রবৃদ্ধি মুনাফায় আমানতকারীর লাভ বেশি।\"—গাণিতিকভাবে বিশ্লেষণ কর।"
+                            }
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "Read the following dialogue and apply appropriate grammatical rules: Rahim said to Karim, \"Where are you going now? I need your help to complete my grammar assignment.\"",
-              "ka": "What is direct speech?",
-              "kha": "State the basic rules of changing direct speech into indirect speech.",
-              "ga": "Change the narration of the sentences given in the stem.",
-              "gha": "\"Proper understanding of narration and voice change makes written communication error-free.\"—Analyze based on the context."
-            }
-          ]
-        }
-      }
-    },
-    "গণিত": {
-      "পাটিগণিত ও বীজগণিত": {
-        "প্যাটার্ন, মুনাফা ও বীজগণিতীয় সূত্রাবলী": {
-          "MCQ": [
-            {"q": "৩, ৬, ৯, ১২, ... প্যাটার্নটির পরবর্তী সংখ্যাটি কত?", "options": ["ক) ১৩", "খ) ১৪", "গ) ১৫", "ঘ) ১৬"], "answer": "গ) ১৫"},
-            {"q": "সরল মুনাফা I = ?", "options": ["ক) Pnr", "খ) P/nr", "গ) Pr/n", "ঘ) Pn/r"], "answer": "ক) Pnr"},
-            {"q": "(a + b)² - (a - b)² = ?", "options": ["ক) 2(a² + b²)", "খ) 4ab", "গ) a² + b²", "ঘ) 2ab"], "answer": "খ) 4ab"},
-            {"q": "১ থেকে ১০ পর্যন্ত মৌলিক সংখ্যা কয়টি?", "options": ["ক) ৩টি", "খ) ৪টি", "গ) ৫টি", "ঘ) ২টি"], "answer": "খ) ৪টি"},
-            {"q": "(x + a)(x + b) এর প্রসারিত রূপ কোনটি?", "options": ["ক) x² + (a+b)x + ab", "খ) x² + abx + a", "গ) x² + (a-b)x - ab", "ঘ) x² - ab"], "answer": "ক) x² + (a+b)x + ab"},
-            {"q": "চক্রবৃদ্ধি মুনাফা নির্ণয়ের সূত্র C = ?", "options": ["ক) P(1 + r)^n", "খ) P(1 - r)^n", "গ) P(1 + nr)", "ঘ) Prn"], "answer": "ক) P(1 + r)^n"},
-            {"q": "একটি বর্গক্ষেত্রের বাহুর দৈর্ঘ্য a হলে তার কর্ণের দৈর্ঘ্য কত?", "options": ["ক) a²", "খ) √2a", "গ) 2a", "ঘ) a/√2"], "answer": "খ) √2a"},
-            {"q": "সামান্তরিকের ক্ষেত্রফল = ?", "options": ["ক) ভূমি × উচ্চতা", "খ) ১/২ × ভূমি × উচ্চতা", "গ) দৈর্ঘ্য × প্রস্থ", "ঘ) বাহু²"], "answer": "ক) ভূমি × উচ্চতা"},
-            {"q": "x + 1/x = 3 হলে, x² + 1/x² এর মান কত?", "options": ["ক) ৭", "খ) ৯", "গ) ১১", "ঘ) ৬"], "answer": "ক) ৭"},
-            {"q": "বৃত্তের পরিধি ও ব্যাসের অনুপাতকে কী বলা হয়?", "options": ["ক) পাই (π)", "খ) থিটা (θ)", "গ) আলফা (α)", "ঘ) ব্যাসার্ধ"], "answer": "ক) পাই (π)"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: কোনো আসল ৩ বছরে মুনাফা-আসলে ১৫২০০ টাকা এবং ৫ বছরে মুনাফা-আসলে ১৭৬০০ টাকা হয়[cite: 25, 26]।",
-              "ka": "২ বছরের মুনাফা কত তা নির্ণয় কর[cite: 26].",
-              "kha": "আসল ও বার্ষিক মুনাফার হার নির্ণয় কর[cite: 26].",
-              "ga": "উক্ত আসলে একই হারে ৫ বছরের জন্য সঞ্চয় করলে চক্রবৃদ্ধি মুনাফা কত হবে?[cite: 26]",
-              "gha": "\"নির্দিষ্ট হারে সরল মুনাফার চেয়ে চক্রবৃদ্ধি মুনাফায় আমানতকারীর লাভ বেশি।\"—গাণিতিকভাবে বিশ্লেষণ কর[cite: 26]."
+            "বিজ্ঞান": {
+                "পদার্থ ও জীব": {
+                    "প্রাণীজগতের শ্রেণীবিন্যাস": {
+                        "MCQ": [
+                            {"q": "শ্রেণীবিন্যাসের জনক কাকে বলা হয়?", "options": ["ক) এরিস্টটল", "খ) ক্যারোলাস লিনিয়াস", "গ) থিওফ্রাস্টাস", "ঘ) জন রে"], "answer": "খ) ক্যারোলাস লিনিয়াস"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: সিয়াম পুকুর থেকে কেঁচো, চিংড়ি এবং একটি মাছ সংগ্রহ করল। শিক্ষক বললেন, প্রাণী তিনটির দৈহিক গঠন ও মেরুদণ্ডের উপস্থিতি ভিন্ন হওয়ার কারণে এরা আলাদা পর্বের অন্তর্ভুক্ত।",
+                                "ka": "শ্রেণীবিন্যাসের সর্বনিম্ন ধাপ কোনটি?",
+                                "kha": "অর্থোপোডা পর্বের প্রাণীদের দুটি প্রধান বৈশিষ্ট্য লেখো।",
+                                "ga": "উদ্দীপকের সংগৃহীত কেঁচো ও চিংড়ির বৈশিষ্ট্যগত পার্থক্য ব্যাখ্যা কর।",
+                                "gha": "\"প্রাণীজগতের বৈচিত্র্য অনুধাবনে শ্রেণীবিন্যাসের ভূমিকা অপরিসীম।\"—মূল্যায়ন কর।"
+                            }
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: a + 1/a = 4 এবং x² - √5x + 1 = 0 দুটি বীজগণিতীয় সমীকরণ[cite: 26].",
-              "ka": "x + 1/x এর মান কত?[cite: 26]",
-              "kha": "প্রমাণ কর যে, a² + 1/a² = 14[cite: 26].",
-              "ga": "দেখাও যে, a⁴ + 1/a⁴ = 194[cite: 26].",
-              "gha": "\"বীজগণিতীয় অনুসিদ্ধান্ত ব্যবহার করে জটিল মান সহজে বের করা সম্ভব।\"—দ্বিতীয় সমীকরণের মান প্রয়োগ করে বিশ্লেষণ কর[cite: 26]."
-            }
-          ]
-        }
-      }
-    },
-    "বাংলাদেশ ও বিশ্বপরিচয়": {
-      "ইতিহাস ও বিশ্বসমাজ": {
-        "মুক্তিযুদ্ধ ও সামাজিক পরিবর্তন": {
-          "MCQ": [
-            {"q": "১৯৭১ সালের ৭ই মার্চ বঙ্গবন্ধু কোথায় ভাষণ দেন?", "options": ["ক) রেসকোর্স ময়দান", "খ) পল্টন ময়দান", "গ) শহীদ মিনার", "ঘ) বাহাদুর শাহ পার্ক"], "answer": "ক) রেসকোর্স ময়দান"},
-            {"q": "বাংলাদেশের মুক্তিযুদ্ধে বীরপ্রতীক খেতাবপ্রাপ্ত একমাত্র বিদেশী নাগরিক কে?", "options": ["ক) সাইমন ড্রিং", "খ) ডব্লিউ এ এস ওডারল্যান্ড", "গ) জর্জ হ্যারিসন", "ঘ) রবি শংকর"], "answer": "খ) ডব্লিউ এ এস ওডারল্যান্ড"},
-            {"q": "মুক্তিযুদ্ধের সময় সমগ্র দেশকে কয়টি সেক্টরে ভাগ করা হয়েছিল?", "options": ["ক) ৮টি", "খ) ১০টি", "গ) ১১টি", "ঘ) ৬৪টি"], "answer": "গ) ১১টি"},
-            {"q": "জাতিসংঘ শিশু তহবিল (UNICEF) এর সদর দফতর কোথায় অবস্থিত?", "options": ["ক) জেনেভা", "খ) নিউ ইয়র্ক", "গ) প্যারিস", "ঘ) লন্ডন"], "answer": "খ) নিউ ইয়র্ক"},
-            {"q": "বাঙালি জাতীয়তাবাদের মূল ভিত্তি কোনটি ছিল?", "options": ["ক) ধর্মীয় চেতনা", "খ) ভাষা ও সংস্কৃতির চেতনা", "গ) অর্থনৈতিক বৈষম্য", "ঘ) ভৌগোলিক অবস্থান"], "answer": "খ) ভাষা ও সংস্কৃতির চেতনা"},
-            {"q": "বাংলাদেশের সংবিধানে মূলনীতি কয়টি?", "options": ["ক) ৩টি", "খ) ৪টি", "গ) ৫টি", "ঘ) ৭টি"], "answer": "খ) ৪টি"},
-            {"q": "এশিয়ার বৃহত্তম অর্থনীতির দেশ কোনটি?", "options": ["ক) জাপান", "খ) চীন", "গ) ভারত", "ঘ) দক্ষিণ কোরিয়া"], "answer": "খ) চীন"},
-            {"q": "বাংলাদেশে দুর্যোগ ব্যবস্থাপনার প্রধান উদ্দেশ্য কী?", "options": ["ক) ক্ষয়ক্ষতি কমানো", "খ) সাহায্য বন্ধ করা", "গ) জনসংখ্যা বাড়ানো", "ঘ) বনাঞ্চল কাটা"], "answer": "ক) ক্ষয়ক্ষতি কমানো"},
-            {"q": "সামাজিকীকরণের সবচেয়ে শক্তিশালী মাধ্যম কোনটি?", "options": ["ক) পরিবার", "খ) খেলার মাঠ", "গ) গণমাধ্যম", "ঘ) ক্লাব"], "answer": "ক) পরিবার"},
-            {"q": "কত সালে 'ঐতিহাসিক আগরতলা মামলা' দায়ের করা হয়?", "options": ["ক) ১৯৬৬", "খ) ১৯৬৮", "গ) ১৯৬৯", "ঘ) ১৯৭০"], "answer": "খ) ১৯৬৮"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: ১৯৭১ সালে পাকিস্তানি বাহিনীর গণহত্যা ও নির্যাতনের বিরুদ্ধে বাঙালি জাতি দল-মত নির্বিশেষে রুখে দাঁড়ায়। সাধারণ মানুষ ও যৌথ বাহিনীর সম্মিলিত আক্রমণের ফলে অর্জিত হয় কাঙিক্ষত স্বাধীনতা[cite: 29].",
-              "ka": "মুজিবনগর সরকার কত তারিখে শপথ গ্রহণ করে?[cite: 29]",
-              "kha": "অপারেশন সার্চলাইট বলতে কী বোঝায়—ব্যাখ্যা কর।[cite: 29]",
-              "ga": "উদ্দীপকে বর্ণিত মুক্তি সংগ্রামে সর্বস্তরের জনগণের ভূমিকার কারণ আলোচনা কর[cite: 29].",
-              "gha": "\"বাঙালির জাতীয় ঐক্য ও আত্মত্যাগই ছিল ১৯৭১ সালের বিজয়ের মূল চাবিকাঠি।\"—মূল্যায়ন কর[cite: 29]."
+            "বাংলাদেশ ও বিশ্বপরিচয়": {
+                "ইতিহাস ও সমাজ": {
+                    "মুক্তিযুদ্ধ ও পরিবেশ": {
+                        "MCQ": [
+                            {"q": "১৯৭১ সালের ৭ই মার্চ বঙ্গবন্ধু কোথায় ভাষণ দেন?", "options": ["ক) রেসকোর্স ময়দান", "খ) পল্টন ময়দান", "গ) শহীদ মিনার", "ঘ) বাহাদুর শাহ পার্ক"], "answer": "ক) রেসকোর্স ময়দান"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: ১৯৭১ সালে পাকিস্তানি বাহিনীর গণহত্যা ও নির্যাতনের বিরুদ্ধে বাঙালি জাতি দল-মত নির্বিশেষে রুখে দাঁড়ায়। সাধারণ মানুষ ও যৌথ বাহিনীর সম্মিলিত আক্রমণের ফলে অর্জিত হয় কাঙিক্ষত স্বাধীনতা।",
+                                "ka": "মুজিবনগর সরকার কত তারিখে শপথ গ্রহণ করে?",
+                                "kha": "অপারেশন সার্চলাইট বলতে কী বোঝায়—ব্যাখ্যা কর।",
+                                "ga": "উদ্দীপকে বর্ণিত মুক্তি সংগ্রামে সর্বস্তরের জনগণের ভূমিকার কারণ আলোচনা কর।",
+                                "gha": "\"বাঙালির জাতীয় ঐক্য ও আত্মত্যাগই ছিল ১৯৭১ সালের বিজয়ের মূল চাবিকাঠি।\"—মূল্যায়ন কর।"
+                            }
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: জলবায়ু পরিবর্তনের ফলে সুন্দরবনের ম্যানগ্রোভ বনাঞ্চল হুমকির মুখে পড়েছে এবং উপকূলীয় এলাকায় ঘন ঘন ঘূর্ণিঝড় ও জলোচ্ছ্বাসের প্রাদুর্ভাব বাড়ছে[cite: 29, 30].",
-              "ka": "গ্রিনহাউস প্রতিক্রিয়া কী?[cite: 30]",
-              "kha": "ভূগোল ও পরিবেশের ভারসাম্য রক্ষায় বনাঞ্চলের গুরুত্ব লেখ[cite: 30].",
-              "ga": "উদ্দীপকে বর্ণিত ঝুঁকির কারণ পাঠ্যবইয়ের পরিবেশ ও দুর্যোগ অধ্যায়ের আলোকে ব্যাখ্যা কর[cite: 30].",
-              "gha": "\"পরিবেশগত দুর্যোগ প্রশমনে বৈশ্বিক সহযোগিতা ও স্থানীয় সচেতনতা অপরিহার্য।\"—উক্তিটি বিশ্লেষণ কর[cite: 30]."
-            }
-          ]
-        }
-      }
-    },
-    "বিজ্ঞান": {
-      "পদার্থ ও জীববিজ্ঞান": {
-        "প্রাণীজগতের শ্রেণীবিন্যাস ও মৌল-রাসায়নিক বিক্রিয়া": {
-          "MCQ": [
-            {"q": "প্রাণীজগতের সর্ববৃহৎ পর্ব কোনটি?", "options": ["ক) Annelida", "খ) Arthropoda", "গ) Mollusca", "ঘ) Chordata"], "answer": "খ) Arthropoda"},
-            {"q": "শ্রেণীবিন্যাসের জনক কাকে বলা হয়?", "options": ["ক) এরিস্টটল", "খ) ক্যারোলাস লিনিয়াস", "গ) থিওফ্রাস্টাস", "ঘ) জন রে"], "answer": "খ) ক্যারোলাস লিনিয়াস"},
-            {"q": "পরমাণুর নিউক্লিয়াসে কোন কণাগুলো থাকে?", "options": ["ক) ইলেকট্রন ও প্রোটন", "খ) প্রোটন ও নিউট্রন", "গ) ইলেকট্রন ও নিউট্রন", "ঘ) কেবল ইলেকট্রন"], "answer": "খ) প্রোটন ও নিউট্রন"},
-            {"q": "হাইড্রোজেনের প্রতীক কোনটি?", "options": ["ক) He", "খ) H", "গ) Hg", "ঘ) Na"], "answer": "খ) H"},
-            {"q": "কোষ বিভাজনের কোন ধাপে ক্রোমোজোমগুলো বিষুবীয় অঞ্চলে অবস্থান করে?", "options": ["ক) প্রোফেজ", "খ) মেটাফেজ", "গ) এনাফেজ", "ঘ) টেলোফেজ"], "answer": "খ) মেটাফেজ"},
-            {"q": "মানুষের লোহিত রক্তকণিকার গড় আয়ু কত দিন?", "options": ["ক) ৬০ দিন", "খ) ১২০ দিন", "গ) ১৫০ দিন", "ঘ) ১৮০ দিন"], "answer": "খ) ১২০ দিন"},
-            {"q": "এসিড নীল লিটমাসকে কোন রঙে পরিণত করে?", "options": ["ক) লাল", "খ) সবুজ", "গ) হলুদ", "ঘ) বেগুনি"], "answer": "ক) লাল"},
-            {"q": "পৃথিবীর কেন্দ্রে অভিকর্ষজ ত্বরণ (g) এর মান কত?", "options": ["ক) ৯.৮ m/s²", "খ) ০ m/s²", "গ) ৯.৮১ m/s²", "ঘ) ১০ m/s²"], "answer": "খ) ০ m/s²"},
-            {"q": "উদ্ভিদের বৃদ্ধি ও কোষ বিভাজনে সাহায্যকারী প্রধান অঙ্গাণু কোনটি?", "options": ["ক) মাইটোকন্ড্রিয়া", "খ) নিউক্লিয়াস", "গ) গলগি বডি", "ঘ) লাইসোসোম"], "answer": "খ) নিউক্লিয়াস"},
-            {"q": "নিচের কোনটি সংযোজন বিক্রিয়ার উদাহরণ?", "options": ["ক) C + O₂ → CO₂", "খ) CaCO₃ → CaO + CO₂", "গ) Zn + H₂SO₄ → ZnSO₄ + H₂", "ঘ) HCl + NaOH → NaCl + H₂O"], "answer": "ক) C + O₂ → CO₂"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: সিয়াম পুকুর থেকে কেঁচো, চিংড়ি এবং একটি মাছ সংগ্রহ করল। শিক্ষক বললেন, প্রাণী তিনটির দৈহিক গঠন ও মেরুদণ্ডের উপস্থিতি ভিন্ন হওয়ার কারণে এরা আলাদা পর্বের অন্তর্ভুক্ত[cite: 27].",
-              "ka": "শ্রেণীবিন্যাসের সর্বনিম্ন ধাপ কোনটি?[cite: 27]",
-              "kha": "অর্থোপোডা পর্বের প্রাণীদের দুটি প্রধান বৈশিষ্ট্য লেখ[cite: 27].",
-              "ga": "উদ্দীপকের সংগৃহীত কেঁচো ও চিংড়ির বৈশিষ্ট্যগত পার্থক্য ব্যাখ্যা কর[cite: 27].",
-              "gha": "\"প্রাণীজগতের বৈচিত্র্য অনুধাবনে শ্রেণীবিন্যাসের ভূমিকা অপরিসীম।\"—উদ্দীপকের প্রাণীদের আলোকে মূল্যায়ন কর[cite: 27]."
+            "ইসলাম ও নৈতিক শিক্ষা": {
+                "আকাঈদ ও আখলাক": {
+                    "ঈমান ও চরিত্র": {
+                        "MCQ": [
+                            {"q": "কুরআন মজিদ নাজিল হতে কত বছর সময় লেগেছিল?", "options": ["ক) ২০ বছর", "খ) ২২ বছর", "গ) ২৩ বছর", "ঘ) ২৫ বছর"], "answer": "গ) ২৩ বছর"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: জামিল সাহেব সবসময় মুখে মিষ্টি কথা বলেন, কিন্তু কাজের বেলায় ওয়াদা বরখেলাপ করেন এবং বন্ধুদের গোপন কথা অন্যের কাছে ফাঁস করে দেন।",
+                                "ka": "মুনাফিকের নিদর্শন কয়টি?",
+                                "kha": "নিফাক মানুষের আখিরাতের জীবনের জন্য চরম ক্ষতিকর কেন—ব্যাখ্যা কর।",
+                                "ga": "উদ্দীপকের জামিল সাহেবের আচরণের মধ্যে কোন সামাজিক অপরাধটি পরিলক্ষিত হয়—ব্যাখ্যা কর।",
+                                "gha": "\"আমানতদারী ও ওয়াদা পালনের মনোভাবই সমাজে শান্তি প্রতিষ্ঠা করতে পারে।\"—পর্যালোচনা কর।"
+                            }
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: একটি মৌলের পারমাণবিক সংখ্যা ১১ এবং ভরসংখ্যা ২৩। মৌলটি পানির সাথে বিক্রিয়া করে হাইড্রোজেন গ্যাস উৎপন্ন করে[cite: 27, 28].",
-              "ka": "পারমাণবিক সংখ্যা কাকে বলে?[cite: 27]",
-              "kha": "আইসোটোপ বলতে কী বোঝায়—উদাহরণসহ লেখ[cite: 28].",
-              "ga": "উদ্দীপকের মৌলটির ইলেকট্রন, প্রোটন ও নিউট্রন সংখ্যা নির্ণয় কর[cite: 28].",
-              "gha": "\"নিউক্লিয়াসের প্রোটন ও নিউট্রন সংখ্যাই পরমাণুর রাসায়নিক পরিচয় ও বৈশিষ্ট্য নির্ধারণ করে।\"—বিশ্লেষণ কর[cite: 28]."
+            "তথ্য ও যোগাযোগ প্রযুক্তি": {
+                "ই-লার্নিং ও বিশ্বগ্রাম": {
+                    "বিশ্বগ্রাম ও প্রযুক্তি": {
+                        "MCQ": [
+                            {"q": "বিশ্বগ্রাম (Global Village) ধারণার প্রবক্তা কে?", "options": ["ক) বিল গেটস", "খ) মার্শাল ম্যাকলুহান", "গ) স্টিভ জবস", "ঘ) মার্ক জুকারবার্গ"], "answer": "খ) মার্শাল ম্যাকলুহান"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: রনি ঘরে বসেই ল্যাপটপ ও ইন্টারনেটের সাহায্যে বিদেশি একটি বিশ্ববিদ্যালয়ের অনলাইন কোর্সে অংশ নিচ্ছে, পরীক্ষা দিচ্ছে এবং ডিজিটাল লাইব্রেরি থেকে বই পড়ছে।",
+                                "ka": "ই-লার্নিং কী?",
+                                "kha": "শিক্ষাক্ষেত্রে ইন্টারনেটের দুটি সুফল ব্যাখ্যা কর।",
+                                "ga": "উদ্দীপকে রনির শিক্ষাগ্রহণের মাধ্যমটি পাঠ্যবইয়ের ই-লার্নিং ধারণার সাথে কীভাবে সম্পর্কিত—ব্যাখ্যা কর।",
+                                "gha": "\"ই-লার্নিং ঐতিহ্যগত শিক্ষা ব্যবস্থাকে আরও সহজ ও গতিশীল করেছে।\"—বিশ্লেষণ কর।"
+                            }
+                        ]
+                    }
+                }
             }
-          ]
-        }
-      }
-    },
-    "ইসলাম ও নৈতিক শিক্ষা": {
-      "আকাঈদ ও আখলাক": {
-        "ঈমান, ইবাদত ও নৈতিকতা": {
-          "MCQ": [
-            {"q": "'আকাঈদ' শব্দটি কোন শব্দ থেকে এসেছে?", "options": ["ক) আকীদাহ", "খ) আমল", "গ) ইসলাম", "ঘ) তাওহীদ"], "answer": "ক) আকীদাহ"},
-            {"q": "ইসলামের পঞ্চস্তম্ভের দ্বিতীয় স্তম্ভ কোনটি?", "options": ["ক) সাওম", "খ) সালাত", "গ) যাকাত", "ঘ) হজ"], "answer": "খ) সালাত"},
-            {"q": "নেফাক শব্দের অর্থ কী?", "options": ["ক) কাপট্য/প্রতারণা", "খ) সত্যবাদিতা", "গ) আমানতদারী", "ঘ) ধৈর্য"], "answer": "ক) কাপট্য/প্রতারণা"},
-            {"q": "যে ব্যক্তি নেফাক করে তাকে কী বলা হয়?", "options": ["ক) কাফির", "খ) মুনাফিক", "গ) মুশরিক", "ঘ) ফাসিক"], "answer": "খ) মুনাফিক"},
-            {"q": "কুরআন মজিদ নাজিল হতে কত বছর সময় লেগেছিল?", "options": ["ক) ২০ বছর", "খ) ২২ বছর", "গ) ২৩ বছর", "ঘ) ২৫ বছর"], "answer": "গ) ২৩ বছর"},
-            {"q": "আখলাক-এ যমীমাহ বলতে কী বোঝায়?", "options": ["ক) সৎ স্বভাব", "খ) নিন্দনীয়/অসৎ চরিত্র", "গ) দানশীলতা", "ঘ) সত্যবাদিতা"], "answer": "খ) নিন্দনীয়/অসৎ চরিত্র"},
-            {"q": "গীবত শব্দের অর্থ কী?", "options": ["ক) পরচর্চা/পরনিন্দা", "খ) হিংসা", "গ) অহংকার", "ঘ) গালি দেওয়া"], "answer": "ক) পরচর্চা/পরনিন্দা"},
-            {"q": "হাদিস অনুসারে 'উত্তম চরিত্রের অধিকারী ব্যক্তি' কে?", "options": ["ক) যার ধনসম্পদ বেশি", "খ) যার নৈতিক চরিত্র সবচেয়ে সুন্দর", "গ) যে অনেক বেশি কথা বলে", "ঘ) যে বেশি ভ্রমণ করে"], "answer": "খ) যার নৈতিক চরিত্র সবচেয়ে সুন্দর"},
-            {"q": "যাকাত প্রদানের মাধ্যমে ধনীদের সম্পদ-", "options": ["ক) কমে যায়", "খ) পবিত্র ও বৃদ্ধি পায়", "গ) নষ্ট হয়", "ঘ) অপরিবর্তিত থাকে"], "answer": "খ) পবিত্র ও বৃদ্ধি পায়"},
-            {"q": "পরিবেশ পরিচ্ছন্ন রাখা ইসলামে কোনটির অন্তর্ভুক্ত?", "options": ["ক) ঈমানের অঙ্গ", "খ) ফরজ নয়", "গ) অপ্রয়োজনীয় কাজ", "ঘ) কেবল সামাজিক দায়িত্ব"], "answer": "ক) ঈমানের অঙ্গ"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: জামিল সাহেব সবসময় মুখে মিষ্টি কথা বলেন, কিন্তু কাজের বেলায় ওয়াদা বরখেলাপ করেন এবং বন্ধুদের গোপন কথা অন্যের কাছে ফাঁস করে দেন। অন্যদিকে তার ভাই খালিদ কথা দিলে তা রক্ষা করেন এবং সততার সাথে জীবনযাপন করেন।",
-              "ka": "মুনাফিকের নিদর্শন কয়টি?",
-              "kha": "নিফাক মানুষের আখিরাতের জীবনের জন্য চরম ক্ষতিকর কেন—ব্যাখ্যা কর।",
-              "ga": "উদ্দীপকের জামিল সাহেবের আচরণের মধ্যে কোন সামাজিক অপরাধটি পরিলক্ষিত হয়—ব্যাখ্যা কর।",
-              "gha": "\"খালিদের মতো আমানতদারী ও ওয়াদা পালনের মনোভাবই সমাজে শান্তি প্রতিষ্ঠা করতে পারে।\"—পাঠ্যবইয়ের আলোকে বক্তব্যটি পর্যালোচনা কর।"
-            },
-            {
-              "stem": "উদ্দীপক ২: আরিয়ান তার উপার্জিত অর্থের একটি নির্দিষ্ট অংশ প্রতি বছর দরিদ্র স্বজন ও এলাকার অসহায়দের মধ্যে বণ্টন করে দেয়। এতে তার সম্পত্তির পরিমাণ কমে না গিয়ে বরকত ও পবিত্রতা বৃদ্ধি পায়।",
-              "ka": "যাকাত শব্দের অর্থ কী?",
-              "kha": "ইসলামে যাকাত ব্যবস্থার অর্থনৈতিক গুরুত্ব বুঝিয়ে লেখ।",
-              "ga": "উদ্দীপকের আরিয়ানের কাজে ইসলামের কোন ফরজ বিধানটি পালিত হয়েছে—ব্যাখ্যা কর।",
-              "gha": "\"যাকাত ভিত্তিক অর্থনীতি সমাজে ধনী ও দরিদ্রের বৈষম্য দূর করতে ভূমিকা রাখে।\"—মূল্যায়ন কর।"
-            }
-          ]
-        }
-      }
-    },
-    "তথ্য ও যোগাযোগ প্রযুক্তি": {
-      "ই-লার্নিং ও বিশ্বগ্রাম": {
-        "তথ্যপ্রযুক্তির আধুনিক প্রয়োগ": {
-          "MCQ": [
-            {"q": "বিশ্বগ্রাম (Global Village) ধারণার প্রবক্তা কে?", "options": ["ক) বিল গেটস", "খ) মার্শাল ম্যাকলুহান", "গ) স্টিভ জবস", "ঘ) মার্ক জুকারবার্গ"], "answer": "খ) মার্শাল ম্যাকলুহান"},
-            {"q": "ই-লার্নিং এর মূল ভিত্তি কোনটি?", "options": ["ক) ইন্টারনেট ও কম্পিউটার প্রযুক্তি", "খ) কেবল বই", "গ) রেডিও", "ঘ) টেলিভিশন"], "answer": "ক) ইন্টারনেট ও কম্পিউটার প্রযুক্তি"},
-            {"q": "নিচের কোনটি ই-কমার্স (E-commerce) এর উদাহরণ?", "options": ["ক) অনলাইনে পণ্য কেনাবেচা", "খ) ই-মেইল পাঠানো", "গ) গান শোনা", "ঘ) গেম খেলা"], "answer": "ক) অনলাইনে পণ্য কেনাবেচা"},
-            {"q": "Wi-Fi এর পূর্ণরূপ কী?", "options": ["ক) Wireless Fidelity", "খ) Wired Filter", "গ) Wide Field", "ঘ) Web Finance"], "answer": "ক) Wireless Fidelity"},
-            {"q": "কম্পিউটার নেটওয়ার্কের সবচেয়ে বড় ক্ষেত্র কোনটি?", "options": ["ক) PAN", "খ) LAN", "গ) MAN", "ঘ) WAN"], "answer": "ঘ) WAN"},
-            {"q": "অপটিক্যাল ফাইবারের মধ্য দিয়ে কী প্রবাহিত হয়?", "options": ["ক) বিদ্যুৎ সংকেত", "খ) আলোর সংকেত", "গ) শব্দ তরঙ্গ", "ঘ) চুম্বক ক্ষেত্র"], "answer": "খ) আলোর সংকেত"},
-            {"q": "ভিডিও কনফারেন্সিং এর প্রধান সুবিধা কী?", "options": ["A) দূর থেকে দেখা ও কথা বলা", "খ) কম খরচে প্রিন্ট করা", "গ) দ্রুত টাইপ করা", "ঘ) হিসাব করা"], "answer": "A) দূর থেকে দেখা ও কথা বলা"},
-            {"q": "ইন্টারনেটে ক্ষতিকর সফটওয়্যার বা ম্যালওয়্যার থেকে রক্ষা পেতে কোনটি ব্যবহার করা হয়?", "options": ["ক) অ্যান্টিভাইরাস", "খ) এমএস ওয়ার্ড", "গ) ব্রাউজার", "ঘ) ক্যালকুলেটর"], "answer": "ক) অ্যান্টিভাইরাস"},
-            {"q": "তথ্য ও যোগাযোগ প্রযুক্তির প্রধান হাতিয়ার কোনটি?", "options": ["ক) কম্পিউটার", "খ) সাইকেল", "গ) ঘড়ি", "ঘ) রেডিও"], "answer": "ক) কম্পিউটার"},
-            {"q": "নিচের কোনটি আউটপুট ডিভাইস?", "options": ["ক) কিবোর্ড", "খ) মাউস", "গ) প্রিন터", "ঘ) স্ক্যানার"], "answer": "গ) প্রিন터"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: রনি ঘরে বসেই ল্যাপটপ ও ইন্টারনেটের সাহায্যে বিদেশি একটি বিশ্ববিদ্যালয়ের অনলাইন কোর্সে অংশ নিচ্ছে, পরীক্ষা দিচ্ছে এবং ডিজিটাল লাইব্রেরি থেকে বই পড়ছে।",
-              "ka": "ই-লার্নিং কী?",
-              "kha": "শিক্ষাক্ষেত্রে ইন্টারনেটের দুটি সুফল ব্যাখ্যা কর।",
-              "ga": "উদ্দীপকে রনির শিক্ষাগ্রহণের মাধ্যমটি পাঠ্যবইয়ের ই-লার্নিং ধারণার সাথে কীভাবে সম্পর্কিত—ব্যাখ্যা কর।",
-              "gha": "\"ই-লার্নিং ঐতিহ্যগত শিক্ষা ব্যবস্থাকে আরও সহজ ও গতিশীল করেছে।\"—বিশ্লেষণ কর।"
-            },
-            {
-              "stem": "উদ্দীপক ২: রহিম সাহেব ঢাকায় বসে ইন্টারনেটের মাধ্যমে দেশের বাইরে অবস্থানকারী ব্যবসায়িক অংশীদারদের সাথে লাইভ মিটিং করলেন এবং মুহূর্তের মধ্যে গুরুত্বপূর্ণ ফাইল ও চুক্তিপত্র আদান-প্রদান করলেন।",
-              "ka": "গ্লোবাল ভিলেজ বা বিশ্বগ্রাম কী?",
-              "kha": "ভিডিও কনফারেন্সিং এর প্রয়োজনীয়তা ব্যাখ্যা কর।",
-              "ga": "উদ্দীপকের যোগাযোগ ব্যবস্থায় আইসিটি কীভাবে ভূমিকা রাখছে তা বর্ণনা কর।",
-              "gha": "\"তথ্য ও যোগাযোগ প্রযুক্তির প্রসারে পৃথিবী আজ একটি বিশ্বপল্লীতে পরিণত হয়েছে।\"—উক্তিটি মূল্যায়ন কর।"
-            }
-          ]
-        }
-      }
-    },
         },
-
-  "নবম শ্রেণি": {
-    "বাংলা ১ম পত্র": {
-      "সাহিত্য": {
-        "গদ্য ও পদ্য": {
-          "MCQ": [
-            {"q": "'শুভা' গল্পে শুভার প্রকৃত নাম কী ছিল?", "options": ["ক) সুভাষিণী", "খ) সুকেশিনী", "গ) সুহাসিনী", "ঘ) সুচরিতা"], "answer": "ক) সুভাষিণী"},
-            {"q": "বই পড়া অনুশীলনের জন্য কিসের প্রয়োজন সবচেয়ে বেশি?", "options": ["ক) লাইব্রেরি", "খ) বিদ্যালয়", "গ) বিশ্ববিদ্যালয়", "ঘ) গৃহ"], "answer": "ক) লাইব্রেরি"},
-            {"q": "'বঙ্গবাণী' কবিতায় কবি কাদের প্রতি ক্ষোভ প্রকাশ করেছেন?", "options": ["ক) যারা বাংলাদেশে জন্মে বাংলা ভাষাকে অবজ্ঞা করে", "খ) যারা বিদেশি ভাষা জানে না", "গ) যারা পড়াশোনা করে না", "ঘ) যারা কাব্যচর্চা করে না"], "answer": "ক) যারা বাংলাদেশে জন্মে বাংলা ভাষাকে অবজ্ঞা করে"},
-            {"q": "কপোতাক্ষ নদ কবিতার মূল সুর কোনটি?", "options": ["ক) স্বদেশপ্রেম", "খ) প্রকৃতিপ্রীতি", "গ) রোমান্টিকতা", "ঘ) স্মৃতিচারণ"], "answer": "ক) স্বদেশপ্রেম"},
-            {"q": "'মানুষ' কবিতায় সাম্যবাদের বার্তা কে প্রচার করেছেন?", "options": ["ক) কাজী নজরুল ইসলাম", "খ) রবীন্দ্রনাথ ঠাকুর", "গ) জসীমউদ্দীন", "ঘ) জীবনানন্দ দাশ"], "answer": "ক) কাজী নজরুল ইসলাম"},
-            {"q": "মমতাদি কত টাকা মাইনে আশা করেছিল?", "options": ["ক) ১২ টাকা", "খ) ১৫ টাকা", "গ) ২০ টাকা", "ঘ) ২৫ টাকা"], "answer": "ক) ১২ টাকা"},
-            {"q": "আম আঁটির ভেঁপু গল্পের মূল চরিত্র কোনটি?", "options": ["ক) অপু ও দুর্গা", "খ) হরিহর", "গ) সর্বজয়া", "ঘ) রায়পিসি"], "answer": "ক) অপু ও দুর্গা"},
-            {"q": "'পল্লীসাহিত্য' প্রবন্ধে কোন বিষয়টি সংরক্ষণের ওপর জোর দেওয়া হয়েছে?", "options": ["ক) লোকসাহিত্য ও লোকসংস্কৃতি", "খ) শহুরে সাহিত্য", "গ) উপন্যাস", "ঘ) নাট্যচর্চা"], "answer": "ক) লোকসাহিত্য ও লোকসংস্কৃতি"},
-            {"q": "'জীবন-সংগীত' কবিতার মূল বার্তা কী?", "options": ["ক) কর্মময় জীবনের গুরুত্ব", "খ) অলস জীবনযাপন", "গ) বৈরাগ্য সাধন", "ঘ) সংসারের মায়া ত্যাগ"], "answer": "ক) কর্মময় জীবনের গুরুত্ব"},
-            {"q": "'একাত্তরের দিনগুলি' কোন জাতীয় রচনা?", "options": ["ক) দিনলিপি/স্মৃতিচারণ", "খ) উপন্যাস", "গ) নাটক", "ঘ) ভ্রমণকাহিনী"], "answer": "ক) দিনলিপি/স্মৃতিচারণ"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: সলিমুল্লাহ গ্রামে এক প্রতিবন্ধী শিশুকে গভীর মমতায় আগলে রাখেন। সমাজের মানুষ তাকে অবহেলা করলেও তিনি মনে করেন ভালোবাসাই সকল মানুষের অধিকার।",
-              "ka": "শুভার বাকপ্রতিবন্ধী দুই সখীর নাম কী?",
-              "kha": "শুভা প্রকৃতির মাঝে আশ্রয় খুঁজে পেয়েছিল কেন?",
-              "ga": "উদ্দীপকের সলিমুল্লাহর মনোভাব 'শুভা' গল্পের কোন দিকটি ফুটিয়ে তোলে—ব্যাখ্যা কর।",
-              "gha": "\"বিশেষ চাহিদাসম্পন্ন শিশুদের প্রতি সহানুভূতিশীল দৃষ্টিভঙ্গিই মানবিক সমাজ গঠনের পূর্বশর্ত।\"—বিশ্লেষণ কর।"
+        "নবম শ্রেণি": {
+            "বাংলা প্রথম পত্র": {
+                "সাহিত্য": {
+                    "গদ্য ও পদ্য": {
+                        "MCQ": [
+                            {"q": "'শুভা' গল্পে শুভার প্রকৃত নাম কী ছিল?", "options": ["ক) সুভাষিণী", "খ) সুকেশিনী", "গ) সুহাসিনী", "ঘ) সুচরিতা"], "answer": "ক) সুভাষিণী"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: সলিমুল্লাহ গ্রামে এক প্রতিবন্ধী শিশুকে গভীর মমতায় আগলে রাখেন। সমাজের মানুষ তাকে অবহেলা করলেও তিনি মনে করেন ভালোবাসাই সকল মানুষের অধিকার।",
+                                "ka": "শুভার বাকপ্রতিবন্ধী দুই সখীর নাম কী?",
+                                "kha": "শুভা প্রকৃতির মাঝে আশ্রয় খুঁজে পেয়েছিল কেন?",
+                                "ga": "উদ্দীপকের সলিমুল্লাহর মনোভাব 'শুভা' গল্পের কোন দিকটি ফুটিয়ে তোলে—ব্যাখ্যা কর।",
+                                "gha": "\"বিশেষ চাহিদাসম্পন্ন শিশুদের প্রতি সহানুভূতিশীল দৃষ্টিভঙ্গিই মানবিক সমাজ গঠনের পূর্বশর্ত।\"—বিশ্লেষণ কর।"
+                            }
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: প্রবাসে দীর্ঘদিন অবস্থান করেও সজল তার নিজ গ্রামের নদী ও মাটির গন্ধ ভুলতে পারেন না। সুযোগ পেলেই তিনি মাতৃভূমির স্মৃতিচারণ করেন।",
-              "ka": "'কপোতাক্ষ নদ' কোন ধরণের কবিতা?",
-              "kha": "কবি কপোতাক্ষ নদকে স্নেহের ডোরে বাঁধার কথা বলেছেন কেন?",
-              "ga": "উদ্দীপকের সজলের অনুভূতির সাথে 'কপোতাক্ষ নদ' কবিতার কবির মানসিকতার তুলনা কর।",
-              "gha": "\"স্বদেশপ্রীতি ও স্বদেশের স্মৃতিকাতরতা মানুষের হৃদয়ে চির অমলিন থাকে।\"—উক্তিটি মূল্যায়ন কর।"
-            }
-          ]
-        }
-      }
-    },
-    "বাংলা ২য় পত্র": {
-      "ব্যাকরণ ও নির্মিতি": {
-        "ধ্বনিতত্ত্ব ও সমাস": {
-          "MCQ": [
-            {"q": "বাংলা ভাষায় মৌলিক স্বরধ্বনি কয়টি?", "options": ["ক) ৭টি", "খ) ১১টি", "গ) ৩৯টি", "ঘ) ২৫টি"], "answer": "ক) ৭টি"},
-            {"q": "ণ-ত্ব ও ষ-ত্ব বিধান ব্যাকরণের কোন অংশে আলোচিত হয়?", "options": ["ক) ধ্বনিতত্ত্ব", "খ) রূপতত্ত্ব", "গ) বাক্যতত্ত্ব", "ঘ) অর্থতত্ত্ব"], "answer": "ক) ধ্বনিতত্ত্ব"},
-            {"q": "পরপদের অর্থ প্রধান হয় কোন সমাসে?", "options": ["ক) তৎপুরুষ সমাস", "খ) দ্বন্দ্ব সমাস", "গ) বহুব্রীহি সমাস", "ঘ) অব্যয়ীভাব সমাস"], "answer": "ক) তৎপুরুষ সমাস"},
-            {"q": "'রাজর্ষি' শব্দটির সঠিক ব্যাসবাক্য কোনটি?", "options": ["ক) যিনি রাজা তিনিই ঋষি", "খ) রাজার ঋষি", "গ) রাজা ও ঋষি", "ঘ) রাজার ন্যায় ঋষি"], "answer": "ক) যিনি রাজা তিনিই ঋষি"},
-            {"q": "স্বরসন্ধির উদাহরণ কোনটি?", "options": ["ক) বিদ্যালয় (বিদ্যা + আলয়)", "খ) দিগন্ত", "গ) সংবাদ", "ঘ) নিচ্ছল"], "answer": "ক) বিদ্যালয় (বিদ্যা + আলয়)"},
-            {"q": "কৃৎ প্রত্যয় সাধিত শব্দকে কী বলে?", "options": ["ক) কৃদন্ত পদ", "খ) তদ্ধিতান্ত পদ", "গ) সমাসবদ্ধ পদ", "ঘ) উপসর্গ"], "answer": "ক) কৃদন্ত পদ"},
-            {"q": "বিশেষ্যের পরিবর্তে যে পদ ব্যবহৃত হয় তাকে কী বলে?", "options": ["ক) সর্বনাম পদ", "খ) বিশেষণ পদ", "গ) অব্যয় পদ", "ঘ) ক্রিয়াপদ"], "answer": "ক) সর্বনাম পদ"},
-            {"q": "বাক্যের অর্থগত শ্রেণিবিভাগ কয়টি?", "options": ["ক) ৫টি", "খ) ৩টি", "গ) ৪টি", "ঘ) ২টি"], "answer": "ক) ৫টি"},
-            {"q": "'হাতে খড়ি' কোন সমাসের উদাহরণ?", "options": ["ক) বহুব্রীহি সমাস (অলুক বহুব্রীহি)", "খ) তৎপুরুষ সমাস", "গ) কর্মধারয় সমাস", "ঘ) দ্বিগু সমাস"], "answer": "ক) বহুব্রীহি সমাস (অলুক বহুব্রীহি)"},
-            {"q": "ণ-ত্ব বিধান অনুযায়ী কোন যুক্তবর্ণে 'ণ' হয়?", "options": ["ক) ট-বর্গের পূর্বে", "খ) ত-বর্গের পূর্বে", "গ) ক-বর্গের পূর্বে", "ঘ) চ-বর্গের পূর্বে"], "answer": "ক) ট-বর্গের পূর্বে"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: ব্যাকরণগত সঠিক শব্দ প্রয়োগ ও সঠিক পদ সংযোগ ভাষার সৌন্দর্য ও ভাব প্রকাশের স্পষ্টতা বাড়ায়। সমাস ও প্রত্যয় সাধিত শব্দ ভাষাকে সংক্ষেপ করে।",
-              "ka": "সমাস শব্দের অর্থ কী?",
-              "kha": "দ্বন্দ্ব সমাস ও বহুব্রীহি সমাসের দুটি প্রধান পার্থক্য লেখ।",
-              "ga": "উদ্দীপকের আলোকে পদসংক্ষেপণে সমাসের ভূমিকা ব্যাখ্যা কর।",
-              "gha": "\"শব্দ গঠনের প্রক্রিয়া জানা ছাড়া প্রমিত ভাষারীতি অনুসরণ করা সম্ভব নয়।\"—বিশ্লেষণ কর।"
+            "বাংলা দ্বিতীয় পত্র": {
+                "ব্যাকরণ ও নির্মিতি": {
+                    "ধ্বনিতত্ত্ব ও সমাস": {
+                        "MCQ": [
+                            {"q": "পরপদের অর্থ কোন সমাসে প্রধান হয়?", "options": ["ক) তৎপুরুষ সমাস", "খ) দ্বন্দ্ব সমাস", "গ) বহুব্রীহি সমাস", "ঘ) অব্যয়ীভাব সমাস"], "answer": "ক) তৎপুরুষ সমাস"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: ব্যাকরণগত সঠিক শব্দ প্রয়োগ ও সঠিক পদ সংযোগ ভাষার সৌন্দর্য ও ভাব প্রকাশের স্পষ্টতা বাড়ায়। সমাস ও প্রত্যয় সাধিত শব্দ ভাষাকে সংক্ষেপ করে।",
+                                "ka": "সমাস শব্দের অর্থ কী?",
+                                "kha": "দ্বন্দ্ব সমাস ও বহুব্রীহি সমাসের দুটি প্রধান পার্থক্য লেখ।",
+                                "ga": "উদ্দীপকের আলোকে পদসংক্ষেপণে সমাসের ভূমিকা ব্যাখ্যা কর।",
+                                "gha": "\"শব্দ গঠনের প্রক্রিয়া জানা ছাড়া প্রমিত ভাষারীতি অনুসরণ করা সম্ভব নয়।\"—বিশ্লেষণ কর।"
+                            }
+                        ],
+                        "Written": [
+                            {"title": "সারাংশ/সারমর্ম", "desc": "যৌবনের কাজ আত্মাকে উন্নত করা... (অনুশীলন করুন)।"},
+                            {"title": "প্রতিবেদন লিখন", "desc": "বিদ্যালয়ে আন্তর্জাতিক মাতৃভাষা দিবস উদ্‌যাপন উপলক্ষে একটি প্রতিবেদন তৈরি করো।"}
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: ধ্বনির সঠিক উচ্চারণ ও যুক্তবর্ণের নিয়ম না জানলে লেখার ক্ষেত্রে ভুল হওয়ার সম্ভাবনা থাকে। ণ-ত্ব ও ষ-ত্ব বিধান তৎসম শব্দ ব্যবহারের সঠিক নিয়ম নির্ধারণ করে।",
-              "ka": "ষ-ত্ব বিধান বলতে কী বোঝায়?",
-              "kha": "কোন কোন ক্ষেত্রে ণ-ত্ব বিধান প্রযোজ্য হয় না—উদাহরণসহ লেখ।",
-              "ga": "উদ্দীপকে উল্লিখিত বিধান দুটি বাংলা বানানের শুদ্ধতায় কী ভূমিকা রাখে তা ব্যাখ্যা কর।",
-              "gha": "\"বাংলা ভাষার প্রমিত রূপ বজায় রাখতে ব্যাকরণের নিয়ম মানা অপরিহার্য।\"—উক্তিটির সত্যতা যাচাই কর।"
-            }
-          ]
-        }
-      }
-    },
-    "English 1st Paper": {
-      "Reading & Writing": {
-        "Unit 1: Good Citizens & Environment": {
-          "MCQ": [
-            {"q": "What is the primary responsibility of a good citizen?", "options": ["a) Obeying laws and helping others", "b) Accumulating wealth", "c) Living in isolation", "d) Ignoring society"], "answer": "a) Obeying laws and helping others"},
-            {"q": "What causes environmental pollution significantly?", "options": ["a) Industrial waste and deforestation", "b) Tree plantation", "c) Clean energy", "d) Organic farming"], "answer": "a) Industrial waste and deforestation"},
-            {"q": "Which one is a renewable energy source?", "options": ["a) Solar power", "b) Coal", "c) Petroleum", "d) Natural gas"], "answer": "a) Solar power"},
-            {"q": "What is the synonym of 'Responsibility'?", "options": ["a) Duty", "b) Neglect", "c) Freedom", "d) Avoidance"], "answer": "a) Duty"},
-            {"q": "Antonym of 'Destroy' is-", "options": ["a) Create", "b) Damage", "c) Ruin", "d) Harm"], "answer": "a) Create"},
-            {"q": "Global warming is mainly caused by-", "options": ["a) Greenhouse gases", "b) Oxygen", "c) Fresh water", "d) Reforestation"], "answer": "a) Greenhouse gases"},
-            {"q": "Which organization works for global peace and cooperation?", "options": ["a) UNO", "b) FIFA", "c) ICC", "d) WTO"], "answer": "a) UNO"},
-            {"q": "What does 'E-learning' stand for?", "options": ["a) Electronic Learning", "b) Easy Learning", "c) Early Learning", "d) Essential Learning"], "answer": "a) Electronic Learning"},
-            {"q": "Choose the correct sentence:", "options": ["a) Honesty is the best policy.", "b) Honesty is a best policy.", "c) Honesty is best policy.", "d) Honesty is an best policy."], "answer": "a) Honesty is the best policy."},
-            {"q": "What is the key factor to success according to good habits?", "options": ["a) Perseverance and discipline", "b) Laziness", "c) Luck only", "d) Procrastination"], "answer": "a) Perseverance and discipline"}
-          ],
-          "CQ": [
-            {
-              "stem": "Read the text: To be a good citizen, a person needs to acquire knowledge, skill, and a good attitude towards society. Good citizens respect laws and contribute to environmental conservation.",
-              "ka": "What qualities make a person a good citizen?",
-              "kha": "Why is obeying laws essential for social harmony?",
-              "ga": "Summarize the key duties of a good citizen based on the passage.",
-              "gha": "\"Individual responsibility leads to national growth.\" Evaluate the statement in light of the text."
+            "ইংরেজি প্রথম পত্র": {
+                "Reading & Writing": {
+                    "Unit 1: Good Citizens & Environment": {
+                        "MCQ": [
+                            {"q": "What is the primary responsibility of a good citizen?", "options": ["a) Obeying laws and helping others", "b) Accumulating wealth", "c) Living in isolation", "d) Ignoring society"], "answer": "a) Obeying laws and helping others"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "Read the text: To be a good citizen, a person needs to acquire knowledge, skill, and a good attitude towards society. Good citizens respect laws and contribute to environmental conservation.",
+                                "ka": "What qualities make a person a good citizen?",
+                                "kha": "Why is obeying laws essential for social harmony?",
+                                "ga": "Summarize the key duties of a good citizen based on the passage.",
+                                "gha": "\"Individual responsibility leads to national growth.\" Evaluate the statement in light of the text."
+                            }
+                        ],
+                        "Written": [
+                            {"title": "Graph/Chart", "desc": "Describe a graph showing the literacy rate in Bangladesh."}
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "Read the text: Deforestation and excessive carbon emissions are threatening global climate stability. Planting trees and using renewable energy can save our planet.",
-              "ka": "What is the main cause of climate change?",
-              "kha": "How can tree plantation help combat global warming?",
-              "ga": "Explain the importance of adopting renewable energy sources.",
-              "gha": "\"Environmental protection is not an option, but a necessity for human survival.\" Justify."
-            }
-          ]
-        }
-      }
-    },
-    "English 2nd Paper": {
-      "Grammar & Composition": {
-        "Grammar Rules & Transformation": {
-          "MCQ": [
-            {"q": "Change the voice: 'She writes a letter.'", "options": ["a) A letter is written by her.", "b) A letter was written by her.", "c) A letter has been written by her.", "d) A letter is writing by her."], "answer": "a) A letter is written by her."},
-            {"q": "Which one is a Complex sentence?", "options": ["a) Though he is poor, he is honest.", "b) He is poor but honest.", "c) He is a poor and honest man.", "d) Being poor, he is honest."], "answer": "a) Though he is poor, he is honest."},
-            {"q": "Identify the tag question: 'Let us go for a walk, ___?'", "options": ["a) shall we", "b) don't we", "c) won't we", "d) can we"], "answer": "a) shall we"},
-            {"q": "Fill in the blank: 'He is senior ___ me.'", "options": ["a) to", "b) than", "c) from", "d) with"], "answer": "a) to"},
-            {"q": "Which tense expresses an action completed in the recent past?", "options": ["a) Present Perfect", "b) Past Simple", "c) Present Continuous", "d) Future Simple"], "answer": "a) Present Perfect"},
-            {"q": "Choose the correct indirect speech: He said, 'I am ill.'", "options": ["a) He said that he was ill.", "b) He said that I was ill.", "c) He says that he is ill.", "d) He said that he is ill."], "answer": "a) He said that he was ill."},
-            {"q": "Noun form of the verb 'Know' is-", "options": ["a) Knowledge", "b) Known", "c) Knowing", "d) Knowable"], "answer": "a) Knowledge"},
-            {"q": "Identify the degree: 'No other boy in the class is as good as Rahi.'", "options": ["a) Positive", "b) Comparative", "c) Superlative", "d) None"], "answer": "a) Positive"},
-            {"q": "Choose the correct right form of verb: 'Neither he nor his friends ___ present.'", "options": ["a) were", "b) was", "c) is", "d) has"], "answer": "a) were"},
-            {"q": "What is the antonym of 'Optimistic'?", "options": ["a) Pessimistic", "b) Hopeful", "c) Confident", "d) Positive"], "answer": "a) Pessimistic"}
-          ],
-          "CQ": [
-            {
-              "stem": "Transform the following sentences as directed: (a) Bangladesh is a beautiful country. (Exclamatory) (b) It is richer in natural beauty than most other countries. (Superlative) (c) Who does not love his motherland? (Assertive) (d) We should protect our nature. (Passive)",
-              "ka": "What is a compound sentence?",
-              "kha": "Explain the rule of converting Comparative degree into Superlative degree.",
-              "ga": "Transform sentences (a), (b), (c), and (d) according to instructions.",
-              "gha": "\"Mastery over sentence transformation improves overall writing clarity.\" Analyze."
+            "ইংরেজি দ্বিতীয় পত্র": {
+                "Grammar & Composition": {
+                    "Grammar Rules & Transformation": {
+                        "MCQ": [
+                            {"q": "Change the voice: 'She writes a letter.'", "options": ["a) A letter is written by her.", "b) A letter was written.", "c) A letter has been written.", "d) None"], "answer": "a) A letter is written by her."}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "Transform the following sentences as directed: (a) Bangladesh is a beautiful country. (Exclamatory) (b) It is richer in natural beauty than most other countries. (Superlative) (c) Who does not love his motherland? (Assertive) (d) We should protect our nature. (Passive)",
+                                "ka": "What is a compound sentence?",
+                                "kha": "Explain the rule of converting Comparative degree into Superlative degree.",
+                                "ga": "Transform sentences (a), (b), (c), and (d) according to instructions.",
+                                "gha": "\"Mastery over sentence transformation improves overall writing clarity.\" Analyze."
+                            }
+                        ],
+                        "Written": [
+                            {"title": "CV & Cover Letter", "desc": "Write a CV with a cover letter for the post of an Assistant Teacher."}
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "Complete the passage with suitable verbs in correct forms: Education (a) ___ (enlighten) the mind. It (b) ___ (help) us distinguish between right and wrong. A person who (c) ___ (be) educated contributes to national progress.",
-              "ka": "What is Subject-Verb Agreement?",
-              "kha": "State the rule for using Present Perfect Tense with 'recently' or 'already'.",
-              "ga": "Supply the correct form of verbs for (a), (b), and (c).",
-              "gha": "\"Grammatical correctness is the foundation of effective language skills.\" Discuss."
-            }
-          ]
-        }
-      }
-    },
-    "গণিত": {
-      "বীজগণিত ও জ্যামিতি": {
-        "বীজগণিতীয় রাশি ও সেটের ধারণা": {
-          "MCQ": [
-            {"q": "A = {1, 2, 3} হলে সেট A-এর উপসেট (Subset) সংখ্যা কত?", "options": ["ক) ৮টি", "খ) ৬টি", "গ) ৪টি", "ঘ) ২টি"], "answer": "ক) ৮টি"},
-            {"q": "(a + b)³ এর সঠিক সূত্র কোনটি?", "options": ["ক) a³ + 3a²b + 3ab² + b³", "খ) a³ - 3a²b + 3ab² - b³", "গ) a³ + b³ + ab", "ঘ) a³ + 3ab + b³"], "answer": "ক) a³ + 3a²b + 3ab² + b³"},
-            {"q": "ফাঁকা সেটকে (Empty Set) কোন প্রতীক দিয়ে প্রকাশ করা হয়?", "options": ["ক) ∅", "খ) ∈", "গ) ⊂", "ঘ) ∪"], "answer": "ক) ∅"},
-            {"q": "log₁₀ 100 এর মান কত?", "options": ["ক) ২", "খ) ১০", "গ) ১", "ঘ) ০"], "answer": "ক) ২"},
-            {"q": "2x + 3y = 12 এবং x - y = 1 সমীকরণের সমাধান কোনটি?", "options": ["ক) (3, 2)", "খ) (2, 3)", "গ) (4, 1)", "ঘ) (1, 4)"], "answer": "ক) (3, 2)"},
-            {"q": "একটি ত্রিভুজের তিন কোণের যোগফল কত ডিগ্রি?", "options": ["ক) ১৮০°", "খ) ৯০°", "গ) ৩৬০°", "ঘ) ২৭০°"], "answer": "ক) ১৮০°"},
-            {"q": "বৃত্তের বৃহত্তম জ্যা-কে কী বলা হয়?", "options": ["ক) ব্যাস", "খ) ব্যাসার্ধ", "গ) পরিধি", "ঘ) চাপ"], "answer": "ক) ব্যাস"},
-            {"q": "x² - 5x + 6 = 0 সমীকরণের মূলদ্বয় কোনটি?", "options": ["ক) 2, 3", "খ) -2, -3", "গ) 1, 6", "ঘ) -1, -6"], "answer": "ক) 2, 3"},
-            {"q": "বৃত্তস্থ চতুর্ভুজের বিপরীত কোণদ্বয়ের যোগফল কত?", "options": ["ক) ১৮০°", "খ) ৯০°", "গ) ৩৬০°", "ঘ) ২৭০°"], "answer": "ক) ১৮০°"},
-            {"q": "a⁰ এর মান কত (যেখানে a ≠ 0)?", "options": ["ক) ১", "খ) ০", "গ) a", "ঘ) অসংজ্ঞায়িত"], "answer": "ক) ১"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: U = {1, 2, 3, 4, 5, 6, 7}, A = {2, 4, 6} এবং B = {3, 5, 6} তিনটি সেট।",
-              "ka": "A ∩ B নির্ণয় কর।",
-              "kha": "A ∪ B এবং (A ∪ B)′ নির্ণয় কর।",
-              "ga": "ডি মরগানের নিয়মঃ (A ∪ B)′ = A′ ∩ B′ সত্যতা যাচাই কর।",
-              "gha": "\"ভেনচিত্র ও সেট তত্ত্ব গাণিতিক বিন্যাসকে সহজতর করে।\"—বিশ্লেষণ কর।"
+            "গণিত": {
+                "বীজগণিত ও জ্যামিতি": {
+                    "বীজগণিতীয় রাশি ও সেটের ধারণা": {
+                        "MCQ": [
+                            {"q": "A = {1, 2, 3} হলে সেট A-এর উপসেটের সংখ্যা কত?", "options": ["ক) ৮টি", "খ) ৬টি", "গ) ৪টি", "ঘ) ২টি"], "answer": "ক) ৮টি"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: U={1,2,3,4,5,6,7}, A={2,4,6} এবং B={3,5,6} তিনটি সেট।",
+                                "ka": "A ∩ B নির্ণয় কর।",
+                                "kha": "A U B এবং (A U B)' নির্ণয় কর।",
+                                "ga": "ডি মরগানের নিয়মের সত্যতা যাচাই কর।",
+                                "gha": "\"ভেনচিত্র ও সেট তত্ত্ব গাণিতিক বিন্যাসকে সহজতর করে।\"—বিশ্লেষণ কর।"
+                            }
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: x + 1/x = 3 একটি বীজগণিতীয় সমীকরণ।",
-              "ka": "x - 1/x এর মান কত?",
-              "kha": "প্রমাণ কর যে, x³ + 1/x³ = 18।",
-              "ga": "x⁴ + 1/x⁴ এর মান নির্ণয় কর।",
-              "gha": "\"বীজগণিতীয় সূত্রের সঠিক রূপান্তর জটিল রাশিমালা সমাধানে সহায়ক।\"—গাণিতিকভাবে প্রমাণ কর।"
-            }
-          ]
-        }
-      }
-    },
-    "বিজ্ঞান": {
-      "পদার্থ ও জীববিজ্ঞান": {
-        "বল, শক্তি ও জীবনের গঠন": {
-          "MCQ": [
-            {"q": "নিউটন-এর গতির দ্বিতীয় সূত্র থেকে কিসের পরিমাপ পাওয়া যায়?", "options": ["ক) বল", "খ) ভরবেগ", "গ) কাজ", "ঘ) ত্বরণ"], "answer": "ক) বল"},
-            {"q": "কাজ করার সামর্থ্যকে কী বলে?", "options": ["ক) শক্তি", "খ) ক্ষমতা", "গ) বল", "ঘ) বেগ"], "answer": "ক) শক্তি"},
-            {"q": "উদ্ভিদের শালোকসংশ্লেষণ প্রক্রিয়ায় উৎপন্ন প্রধান উপাদান কোনটি?", "options": ["ক) গ্লুকোজ ও অক্সিজেন", "খ) নাইট্রোজেন", "গ) কার্বন ডাই অক্সাইড", "ঘ) মিথেন"], "answer": "ক) গ্লুকোজ ও অক্সিজেন"},
-            {"q": "মানবদেহের প্রধান রেচন অঙ্গ কোনটি?", "options": ["ক) বৃক্ক (Kidney)", "খ) যকৃৎ", "গ) ফুসফুস", "ঘ) ত্বক"], "answer": "ক) বৃক্ক (Kidney)"},
-            {"q": "মহাকর্ষীয় ধ্রুবক (G) এর একক কোনটি?", "options": ["ক) N m² kg⁻²", "খ) N m kg⁻¹", "গ) N m/s", "ঘ) m/s²"], "answer": "ক) N m² kg⁻²"},
-            {"q": "কোষের বংশগতির ধারক ও বাহক কাকে বলা হয়?", "options": ["ক) ক্রোমোজোম/DNA", "খ) আরএনএ", "গ) প্লাস্টিড", "ঘ) সাইটোপ্লাজম"], "answer": "ক) ক্রোমোজোম/DNA"},
-            {"q": "শব্দ সঞ্চালনের বেগ সবচেয়ে বেশি কোন মাধ্যমে?", "options": ["ক) কঠিন", "খ) তরল", "গ) বায়বীয়", "ঘ) শূন্যস্থান"], "answer": "ক) কঠিন"},
-            {"q": "নিচের কোনটি পরিপাকতন্ত্রের অংশ?", "options": ["ক) পাকস্থলী", "খ) ধমনি", "গ) নিউরন", "ঘ) ট্রাকিয়া"], "answer": "ক) পাকস্থলী"},
-            {"q": "শক্তির এসআই (SI) একক কোনটি?", "options": ["ক) জুল (Joule)", "খ) ওয়াট", "গ) পাউণ্ড", "ঘ) নিউটন"], "answer": "ক) জুল (Joule)"},
-            {"q": "নিউক্লিয়াস আবিষ্কার করেন কে?", "options": ["ক) রবার্ট ব্রাউন", "খ) রবার্ট হুক", "গ) ডাল্টন", "ঘ) মেনডেল"], "answer": "ক) রবার্ট ব্রাউন"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: ১০ কেজি ভরের একটি বস্তুকে ৫ m/s² ত্বরণে ধাক্কা দেওয়া হলো। বস্তুটি ২০ মিটার দূরত্ব অতিক্রম করে থেমে গেল।",
-              "ka": "বল কাকে বলে?",
-              "kha": "নিউটন ও ডাইনের মধ্যে সম্পর্ক ব্যাখ্যা কর।",
-              "ga": "প্রযুক্ত বলের মান হিসাব কর।",
-              "gha": "\"শক্তির রূপান্তর ও কাজের পরিমাণ প্রযুক্ত বলের ওপর নির্ভরশীল।\"—উদ্দীপকের তথ্যের আলোকে গাণিতিক বিশ্লেষণ কর।"
+            "পদার্থবিজ্ঞান": {
+                "বল ও গতি": {
+                    "গতি ও শক্তি": {
+                        "MCQ": [
+                            {"q": "ত্বরণের একক কোনটি?", "options": ["ক) m/s^2", "খ) m/s", "গ) N/m", "ঘ) kg-m/s"], "answer": "ক) m/s^2"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: ১০ কেজি ভরের একটি বস্তুকে ৫ m/s^2 ত্বরণে ধাক্কা দেওয়া হলো। বস্তুটি ২০ মিটার দূরত্ব অতিক্রম করে থেমে গেল।",
+                                "ka": "বল কাকে বলে?",
+                                "kha": "নিউটন ও ডাইনের মধ্যে সম্পর্ক ব্যাখ্যা কর।",
+                                "ga": "প্রযুক্ত বলের মান হিসাব কর।",
+                                "gha": "\"শক্তির রূপান্তর ও কাজের পরিমাণ প্রযুক্ত বলের ওপর নির্ভরশীল।\"—বিশ্লেষণ কর।"
+                            }
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: উদ্ভিদ সূর্যালোক ও কার্বন ডাই অক্সাইড ব্যবহার করে শর্করা জাতীয় খাদ্য তৈরি করে। অপরদিকে মানুষ শ্বসনের মাধ্যমে সেই খাদ্য ভেঙে শক্তি লাভ করে।",
-              "ka": "শালোকসংশ্লেষণ কী?",
-              "kha": "শ্বসন ও শালোকসংশ্লেষণের প্রধান পার্থক্যগুলো কী কী?",
-              "ga": "উদ্দীপকে বর্ণিত শক্তি উৎপাদন প্রক্রিয়াটি উদ্ভিদদেহে কীভাবে ঘটে ব্যাখ্যা কর।",
-              "gha": "\"শালোকসংশ্লেষণ ও শ্বসনের পারস্পরিক সামঞ্জস্যের ওপরই পৃথিবীর জীবজগতের অস্তিত্ব টিকে রয়েছে।\"—মূল্যায়ন কর।"
-            }
-          ]
-        }
-      }
-    },
-    "বাংলাদেশ ও বিশ্বপরিচয়": {
-      "ইতিহাস ও সমাজ ব্যবস্থা": {
-        "রাষ্ট্র, সংবিধান ও সমাজচিত্র": {
-          "MCQ": [
-            {"q": "বাংলাদেশের স্বাধীনতার ঘোষণা প্রথম কে পাঠ করেন/প্রদান করেন?", "options": ["ক) বঙ্গবন্ধু শেখ মুজিবুর রহমান", "খ) তাজউদ্দীন আহমদ", "গ) সৈয়দ নজরুল ইসলাম", "ঘ) এম এ জি ওসমানী"], "answer": "ক) বঙ্গবন্ধু শেখ মুজিবুর রহমান"},
-            {"q": "বাংলাদেশের সংবিধান কার্যকর হয় কত তারিখে?", "options": ["ক) ১৬ই ডিসেম্বর ১৯৭২", "খ) ২৬শে মার্চ ১৯৭২", "গ) ১৭ই এপ্রিল ১৯৭১", "ঘ) ২৬শে নভেম্বর ১৯৭২"], "answer": "ক) ১৬ই ডিসেম্বর ১৯৭২"},
-            {"q": "রাষ্ট্রের উপাদান কয়টি?", "options": ["ক) ৪টি", "খ) ৩টি", "গ) ৫টি", "ঘ) ৬টি"], "answer": "ক) ৪টি"},
-            {"q": "জাতিসংঘের নিরাপত্তা পরিষদের স্থায়ী সদস্য সংখ্যা কত?", "options": ["ক) ৫টি", "খ) ১০টি", "গ) ১৫টি", "ঘ) ৭টি"], "answer": "ক) ৫টি"},
-            {"q": "বাঙালি সংস্কৃতিতে 'পহেলা বৈশাখ' উদযাপনের প্রবর্তক কে?", "options": ["ক) সম্রাট আকবর", "খ) লক্ষণ সেন", "গ) আলাউদ্দিন হোসেন শাহ", "ঘ) সিরাজউদ্দৌলা"], "answer": "ক) সম্রাট আকবর"},
-            {"q": "বাংলাদেশের সর্বোচ্চ আইন কোনটি?", "options": ["ক) সংবিধান", "খ) দণ্ডবিধি", "গ) দেওয়ানি আইন", "ঘ) প্রথাগত আইন"], "answer": "ক) সংবিধান"},
-            {"q": "সামাজিক নিয়মনীতি লঙ্ঘনের ফলে সমাজে কী সৃষ্টি হয়?", "options": ["ক) সামাজিক অবক্ষয় ও বিশৃঙ্খলা", "খ) উন্নয়ন", "গ) প্রবৃদ্ধি", "ঘ) সমতা"], "answer": "ক) সামাজিক অবক্ষয় ও বিশৃঙ্খলা"},
-            {"q": "টেকসই উন্নয়ন লক্ষ্যমাত্রা (SDG) এর লক্ষ্য সংখ্যা কতটি?", "options": ["ক) ১৭টি", "খ) ৮টি", "গ) ১২টি", "ঘ) ২০টি"], "answer": "ক) ১৭টি"},
-            {"q": "বাংলাদেশের জাতীয় সংসদের আসন সংখ্যা কতটি?", "options": ["ক) ৩৫০টি", "খ) ৩০০টি", "গ) ৪০০টি", "ঘ) ৩২০টি"], "answer": "ক) ৩৫০টি"},
-            {"q": "অর্থনৈতিক উন্নয়নের অন্যতম প্রধান সূচক কোনটি?", "options": ["ক) মাথাপিছু আয়", "খ) মোট জনসংখ্যা", "গ) জমির পরিমাণ", "ঘ) আমদানির পরিমাণ"], "answer": "ক) মাথাপিছু আয়"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: ১৯৭২ সালে প্রণীত বাংলাদেশের সংবিধানের অন্যতম মূলনীতি হলো গণতন্ত্র, সমাজতন্ত্র, ধর্মনিরপেক্ষতা ও জাতীয়তাবাদ। এই সংবিধান আইনের শাসন প্রতিষ্ঠায় মূল ভিত্তি হিসেবে কাজ করছে।",
-              "ka": "বাংলাদেশের সংবিধান প্রণয়ন কমিটির প্রধান কে ছিলেন?",
-              "kha": "সংবিধানকে রাষ্ট্রের সর্বোচ্চ দলিল বলা হয় কেন?",
-              "ga": "উদ্দীপকে বর্ণিত চার মূলনীতির আলোকে আমাদের গণতান্ত্রিক ব্যবস্থার ব্যাখ্যা দাও।",
-              "gha": "\"সংবিধান রক্ষা করা এবং সংবিধানের অনুশাসন মেনে চলা প্রতিটি নাগরিকের মৌলিক দায়িত্ব।\"—আলোচনা কর।"
+            "রসায়ন": {
+                "পদার্থের গঠন": {
+                    "পরমাণু ও বন্ধন": {
+                        "MCQ": [
+                            {"q": "সোডিয়াম (Na) এর পারমাণবিক সংখ্যা কত?", "options": ["ক) ১১", "খ) ১২", "গ) ১৩", "ঘ) ১৯"], "answer": "ক) ১১"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: মৌল A (পারমাণবিক সংখ্যা ১১) এবং মৌল B (পারমাণবিক সংখ্যা ১৭) পরস্পর যুক্ত হয়ে AB যৌগ গঠন করে।",
+                                "ka": "যোজনী কাকে বলে?",
+                                "kha": "নিষ্ক্রিয় গ্যাসগুলো রাসায়নিকভাবে নিষ্ক্রিয় কেন?",
+                                "ga": "A ও B মৌলের মধ্যে বন্ধন গঠন প্রক্রিয়া ইলেকট্রন বিন্যাসের সাহায্যে ব্যাখ্যা কর।",
+                                "gha": "\"গঠিত AB যৌগটি পানিতে দ্রবণীয় এবং জলীয় দ্রবণে বিদ্যুৎ পরিবহন করে।\"—যাচাই কর।"
+                            }
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: একটি সমাজে যুবসমাজের একটি অংশ উপযুক্ত শিক্ষার অভাবে বিভিন্ন সামাজিক অপরাধ ও মাদকে জড়িয়ে পড়ছে। স্থানীয় সচেতন নাগরিকেরা তাদের পুনর্বাসনে উদ্যোগ গ্রহণ করেছেন।",
-              "ka": "সামাজিক ব্যাধি কী?",
-              "kha": "কিশোর অপরাধের প্রধান কারণগুলো ব্যাখ্যা কর।",
-              "ga": "উদ্দীপকের সমস্যার জন্য সমাজ কাঠামোর কোন ঘাটতি দায়ী তা আলোচনা কর।",
-              "gha": "\"সামাজিক সচেতনতা ও সঠিক শিক্ষা প্রয়োগই অপরাধমুক্ত সমাজ গঠনের পথ দেখাতে পারে।\"—মতামত দাও।"
-            }
-          ]
-        }
-      }
-    },
-    "রসায়ন": {
-      "বিজ্ঞান শাখা": {
-        "পদার্থের গঠন ও রাসায়নিক বন্ধন": {
-          "MCQ": [
-            {"q": "সোডিয়াম (Na) এর পারমাণবিক সংখ্যা কত?", "options": ["ক) ১১", "খ) ১২", "গ) ১৩", "ঘ) ১৯"], "answer": "ক) ১১"},
-            {"q": "নিচের কোনটি নিষ্ক্রিয় গ্যাস?", "options": ["ক) আর্গন (Ar)", "খ) অক্সিজেন (O₂)", "গ) ক্লোরিন (Cl₂)", "ঘ) নাইট্রোজেন (N₂)"], "answer": "ক) আর্গন (Ar)"},
-            {"q": "আয়নিক বন্ধন গঠিত হয় কাদের মধ্যে?", "options": ["ক) ধাতু ও অধাতু", "খ) দুই অধাতু", "গ) দুই ধাতু", "ঘ) নিষ্ক্রিয় গ্যাস"], "answer": "ক) ধাতু ও অধাতু"},
-            {"q": "পানি (H₂O) অনুতে কোন ধরণের বন্ধন বিদ্যমান?", "options": ["ক) সমযোজী বন্ধন", "খ) আয়নিক বন্ধন", "গ) ধাতু বন্ধন", "ঘ) হাইড্রোজেন বন্ধন"], "answer": "ক) সমযোজী বন্ধন"},
-            {"q": "কার্বনের যোজনী সাধারণ অবস্থায় কত?", "options": ["ক) ৪", "খ) ২", "গ) ৩", "ঘ) ১"], "answer": "ক) ৪"},
-            {"q": "১ মোল পদার্থে কতটি অণু থাকে?", "options": ["ক) ৬.০২৩ × ১০²³", "খ) ৩.০১ × ১০²³", "গ) ১.৬৬ × ১০⁻²⁴", "ঘ) ৯.৮ × ১০⁸"], "answer": "ক) ৬.০২৩ × ১০²³"},
-            {"q": "পর্যায় সারণির মূল ভিত্তি কোনটি?", "options": ["ক) পারমাণবিক সংখ্যা (ইলেকট্রন বিন্যাস)", "খ) ভর সংখ্যা", "গ) গলনাঙ্ক", "ঘ) ঘনত্ব"], "answer": "ক) পারমাণবিক সংখ্যা (ইলেকট্রন বিন্যাস)"},
-            {"q": "ক্ষার ধাতুর সমূহের গ্রুপ নম্বর কত?", "options": ["ক) গ্রুপ ১", "খ) গ্রুপ ২", "গ) গ্রুপ ১৭", "ঘ) গ্রুপ ১৮"], "answer": "ক) গ্রুপ ১"},
-            {"q": "মিথেন (CH₄) গ্যাসে কার্বনের শতকরা পরিমাণ কত?", "options": ["ক) ৭৫%", "খ) ২৫%", "গ) ৫০%", "ঘ) ৮০%"], "answer": "ক) ৭৫%"},
-            {"q": "নিচের কোনটি এসিডের জলীয় দ্রবণে উৎপন্ন হয়?", "options": ["ক) H⁺ আয়ন", "খ) OH⁻ আয়ন", "গ) Na⁺ আয়ন", "ঘ) Cl⁻ আয়ন"], "answer": "ক) H⁺ আয়ন"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: মৌল A (পারমাণবিক সংখ্যা ১১) এবং মৌল B (পারমাণবিক সংখ্যা ১৭) পরস্পর যুক্ত হয়ে AB যৌগ গঠন করে।",
-              "ka": "যোজনী কাকে বলে?",
-              "kha": "নিষ্ক্রিয় গ্যাসগুলো রাসায়নিকভাবে নিষ্ক্রিয় কেন?",
-              "ga": "A ও B মৌলের মধ্যে বন্ধন গঠন প্রক্রিয়া ইলেকট্রন বিন্যাসের সাহায্যে ব্যাখ্যা কর।",
-              "gha": "\"গঠিত AB যৌগটি পানিতে দ্রবণীয় এবং জলীয় দ্রবণে বিদ্যুৎ পরিবহন করে।\"—যাচাই কর।"
+            "জীববিজ্ঞান": {
+                "জীবকোষ টিস্যু": {
+                    "কোষ বিভাজন": {
+                        "MCQ": [
+                            {"q": "কোন বিভাজনের মাধ্যমে জননকোষ গঠিত হয়?", "options": ["ক) মিওসিস", "খ) অ্যামাইটোসিস", "গ) মাইটোসিস", "ঘ) সাইটোকাইনেসিস"], "answer": "ক) মিওসিস"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: কোষ বিভাজনের দুটি চিত্র লক্ষ্য করা হলো: 'A' প্রক্রিয়ায় দেহের বৃদ্ধি ঘটে এবং 'B' প্রক্রিয়ায় অপত্য কোষে ক্রোমোজোম সংখ্যা অর্ধেক হয়ে যায়।",
+                                "ka": "অ্যামাইটোসিস বিভাজন কাকে বলে?",
+                                "kha": "মাইটোসিসকে সমীকরণিক বিভাজন বলা হয় কেন?",
+                                "ga": "উদ্দীপকের 'A' ও 'B' প্রক্রিয়ার বৈসাদৃশ্য তুলনা কর।",
+                                "gha": "\"জীবের ধারাবাহিকতা ও প্রজাতি রক্ষায় 'B' প্রক্রিয়ার গুরুত্ব অপরিসীম।\"—মূল্যায়ন কর।"
+                            }
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: গবেষণাগারে ৫ গ্রাম কার্বনকে প্রয়োজনীয় অক্সিজেনে দহন করে কার্বন ডাই অক্সাইড (CO₂) তৈরি করা হলো।",
-              "ka": "মোলার ভর কী?",
-              "kha": "এসটিপি (STP)-তে ১ মোল গ্যাসের আয়তন কত?",
-              "ga": "উদ্দীপকে উৎপন্ন CO₂ এর মোলার ভর ও অনুর সংখ্যা হিসাব কর।",
-              "gha": "\"ভরের সংরক্ষণ সূত্র রাসায়নিক বিক্রিয়ার সমতা রক্ষা করে।\"—বিশ্লেষণ কর।"
-            }
-          ]
-        }
-      }
-    },
-    "পদার্থবিজ্ঞান": {
-      "বিজ্ঞান শাখা": {
-        "গতি, বল ও শক্তি": {
-          "MCQ": [
-            {"q": "পরন্ত বস্তুর সূত্র প্রদান করেন কে?", "options": ["ক) গ্যালিলিও", "খ) নিউটন", "গ) আইন্সটাইন", "ঘ) আর্কিমিডিস"], "answer": "ক) গ্যালিলিও"},
-            {"q": "ত্বরণের একক কোনটি?", "options": ["ক) m/s²", "খ) m/s", "গ) N/m", "ঘ) kg·m/s"], "answer": "ক) m/s²"},
-            {"q": "ভরবেগের একক কোনটি?", "options": ["ক) kg·m/s", "খ) N·m", "গ) J/s", "ঘ) m/s²"], "answer": "ক) kg·m/s"},
-            {"q": "১ অশ্বক্ষমতা (HP) = কত ওয়াট?", "options": ["ক) ৭৪৬ ওয়াট", "খ) ১০০০ ওয়াট", "গ) ৫০০ ওয়াট", "ঘ) ৭০০ ওয়াট"], "answer": "ক) ৭৪৬ ওয়াট"},
-            {"q": "শব্দ একটি কী ধরণের তরঙ্গ?", "options": ["ক) অনুদৈর্ঘ্য তরঙ্গ", "খ) অনুপ্রস্থ তরঙ্গ", "গ) তড়িৎচুম্বকীয় তরঙ্গ", "ঘ) স্থিতিস্থাপক তরঙ্গ নয়"], "answer": "ক) অনুদৈর্ঘ্য তরঙ্গ"},
-            {"q": "অবতল দর্পণে ফোকাস দূরত্ব ব্যাসার্ধের কত গুণ?", "options": ["ক) অর্ধেক (r/2)", "খ) দ্বিগুণ", "গ) সমান", "ঘ) তিনগুণ"], "answer": "ক) অর্ধেক (r/2)"},
-            {"q": "স্থির অবস্থান থেকে বিনামূল্যে পড়ন্ত বস্তুর বেগ সময়ের সাথে-", "options": ["ক) সমানুপাতিক", "খ) ব্যস্তানুপাতিক", "গ) বর্গের সমানুপাতিক", "ঘ) অপরিবর্তিত"], "answer": "ক) সমানুপাতিক"},
-            {"q": "তাপমাত্রার পরিমাপক স্কেল কেলভিনে সেলসিয়াসের সম্পর্ক কোনটি?", "options": ["ক) K = C + ২৭৩.১৫", "খ) K = C - ২৭৩", "গ) K = ২৭৩ - C", "ঘ) C = K + ২৭৩"], "answer": "ক) K = C + ২৭৩.১৫"},
-            {"q": "কোন বলের কারণে গ্রহগুলো সূর্যের চারদিকে ঘোরে?", "options": ["ক) মহাকর্ষ বল", "খ) নিউক্লীয় বল", "গ) তড়িৎ বল", "ঘ) ঘর্ষণ বল"], "answer": "ক) মহাকর্ষ বল"},
-            {"q": "কাজ করার হারকে কী বলে?", "options": ["ক) ক্ষমতা", "খ) শক্তি", "গ) বেগ", "ঘ) ভরবেগ"], "answer": "ক) ক্ষমতা"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: ৫ কেজি ভরের একটি বস্তুকে ৫০ মিটার উঁচু দালানের ছাদ থেকে নিচে ফেলে দেওয়া হলো। (g = 9.8 m/s²)",
-              "ka": "মুক্তভাবে পড়ন্ত বস্তু কী?",
-              "kha": "গতিশক্তি ও বিভব শক্তির মধ্যে সম্পর্ক লেখ।",
-              "ga": "ভূমি স্পর্শ করার পূর্বমুহূর্তে বস্তুটির বেগ নির্ণয় কর।",
-              "gha": "\"পড়ন্ত বস্তুর ক্ষেত্রে যান্ত্রিক শক্তির সংরক্ষণশীলতা নীতি সংরক্ষিত হয়।\"—গাণিতিক প্রমাণের সাহায্যে বিশ্লেষণ কর।"
+            "হিসাববিজ্ঞান": {
+                "হিসাব সমীকরণ": {
+                    "জাবেদা ও খতিয়ান": {
+                        "MCQ": [
+                            {"q": "হিসাব সমীকরণের মূল উপাদান কোনটি?", "options": ["ক) A = L + E", "খ) A = L - E", "গ) E = A + L", "ঘ) L = A + E"], "answer": "ক) A = L + E"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: জনাব রফিক ২০২৪ সালের ১ জানুয়ারি তারিখে ৫০,০০০ টাকা নগদ ও ২০,০০০ টাকার আসবাবপত্র নিয়ে ব্যবসা শুরু করলেন।",
+                                "ka": "প্রারম্ভিক মূলধনের পরিমাণ কত?",
+                                "kha": "জানুয়ারি মাসের লেনদেনগুলোর জাবেদা দাখিলা দেখাও।",
+                                "ga": "লেনদেনগুলোর প্রভাব হিসাব সমীকরণে (A = L + E) ছকে দেখাও।",
+                                "gha": "\"সঠিক জাবেদা ভুক্তির ওপর নির্ভুল খতিয়ান প্রস্তুত নির্ভর করে।\"—বিশ্লেষণ কর।"
+                            }
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: একটি গাড়ির বেগ ১০ সেকেন্ডে স্থির অবস্থান থেকে বৃদ্ধি পেয়ে ২০ m/s হলো। গাড়িটির ভর ১০০০ কেজি।",
-              "ka": "ত্বরণ কাকে বলে?",
-              "kha": "ঘর্ষণ বল কীভাবে গতির বিপরীত কাজ করে—ব্যাখ্যা কর।",
-              "ga": "গাড়িটির ত্বরণ এবং প্রযুক্ত বলের মান হিসাব কর।",
-              "gha": "\"ত্বরণ ও ভরের গুণফলই প্রযুক্ত বল নির্দেশ করে।\"—নিউটনীয় গতির আলোকে মূল্যায়ন কর।"
-            }
-          ]
-        }
-      }
-    },
-    "জীববিজ্ঞান": {
-      "বিজ্ঞান শাখা": {
-        "কোষ ও অঙ্গসংস্থান": {
-          "MCQ": [
-            {"q": "কোষের শক্তিঘর (Powerhouse) কাকে বলে?", "options": ["ক) মাইটোকন্ড্রিয়া", "খ) গলগি বডি", "গ) নিউক্লিয়াস", "ঘ) লাইসোসোম"], "answer": "ক) মাইটোকন্ড্রিয়া"},
-            {"q": "ডিএনএ (DNA) এর দ্বিসূত্রক মডেল আবিষ্কার করেন কে?", "options": ["ক) ওয়াটসন ও ক্রিক", "খ) রবার্ট হুক", "গ) মেনডেল", "ঘ) ল্যামার্ক"], "answer": "ক) ওয়াটসন ও ক্রিক"},
-            {"q": "উদ্ভিদ কোষের প্রধান বৈশিষ্ট্য কোনটি?", "options": ["ক) কোষ প্রাচীরের উপস্থিতি", "খ) সেন্টিওল", "গ) ছোট কোষগহ্বর", "ঘ) লাইসোসোমের সংখ্যাধিক্য"], "answer": "ক) কোষ প্রাচীরের উপস্থিতি"},
-            {"q": "মানুষের লোহিত রক্তকণিকায় কোনটি অনুপস্থিত?", "options": ["ক) নিউক্লিয়াস", "খ) হিমোগ্লোবিন", "গ) প্লাজমা", "ঘ) ঝিল্লি"], "answer": "ক) নিউক্লিয়াস"},
-            {"q": "কোন বিভাজনের মাধ্যমে জননকোষ গঠিত হয়?", "options": ["ক) মিওসিস", "খ) অ্যামাইটোসিস", "গ) মাইটোসিস", "ঘ) সাইটোকাইনেসিস"], "answer": "ক) মিওসিস"},
-            {"q": "সালোকসংশ্লেষণের প্রধান উপজাত দ্রব্য কোনটি?", "options": ["ক) অক্সিজেন", "খ) কার্বন ডাই অক্সাইড", "গ) নাইট্রোজেন", "ঘ) হাইড্রোজেন"], "answer": "ক) অক্সিজেন"},
-            {"q": "উদ্ভিদের পানি পরিহনের জন্য দায়ী কলা কোনটি?", "options": ["ক) জাইলেম", "খ) ফ্লোয়েম", "গ) প্যারেনকাইমা", "ঘ) স্ক্লেরেনকাইমা"], "answer": "ক) জাইলেম"},
-            {"q": "মানবদেহের বৃহত্তম গ্রন্থি কোনটি?", "options": ["ক) যকৃৎ (Liver)", "খ) অগ্ন্যাশয়", "গ) থাইরয়েড", "ঘ) পিটুইটারি"], "answer": "ক) যকৃৎ (Liver)"},
-            {"q": "কোন ভিটামিনের অভাবে রিকেটস রোগ হয়?", "options": ["ক) ভিটামিন D", "খ) ভিটামিন A", "গ) ভিটামিন C", "ঘ) ভিটামিন K"], "answer": "ক) ভিটামিন D"},
-            {"q": "অনুচক্রিকার মূল কাজ কোনটি?", "options": ["ক) রক্ত তঞ্চনে (জমাট বাঁধতে) সাহায্য করা", "খ) অক্সিজেন বহন", "গ) জীবাণু ধ্বংস", "ঘ) তাপ নিয়ন্ত্রণ"], "answer": "ক) রক্ত তঞ্চনে (জমাট বাঁধতে) সাহায্য করা"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: কোষ বিভাজনের দুটি চিত্র লক্ষ্য করা হলো: 'A' প্রক্রিয়ায় দেহের বৃদ্ধি ঘটে এবং 'B' প্রক্রিয়ায় অপত্য কোষে ক্রোমোজোম সংখ্যা অর্ধেক হয়ে যায়।",
-              "ka": "অ্যামাইটোসিস বিভাজন কাকে বলে?",
-              "kha": "মাইটোসিসকে সমীকরণিক বিভাজন বলা হয় কেন?",
-              "ga": "উদ্দীপকের 'A' ও 'B' প্রক্রিয়ার বৈসাদৃশ্য তুলনা কর।",
-              "gha": "\"জীবের ধারাবাহিকতা ও প্রজাতি রক্ষায় 'B' প্রক্রিয়ার গুরুত্ব অপরিসীম।\"—উক্তিটি মূল্যায়ন কর।"
+            "ব্যবসায় উদ্যোগ": {
+                "উদ্যোগ ও পরিকল্পনা": {
+                    "ব্যবসায়িক ধারণা": {
+                        "MCQ": [
+                            {"q": "ব্যবসায়ের প্রধান ও মূল উদ্দেশ্য কোনটি?", "options": ["ক) মুনাফা অর্জন", "খ) জনকল্যাণ", "গ) পণ্য উৎপাদন", "ঘ) সেবা প্রদান"], "answer": "ক) মুনাফা অর্জন"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: তরুণ উদ্যোক্তা তৌহিদ তার এলাকায় প্লাস্টিক বর্জ্য প্রক্রিয়াজাত করে নতুন পণ্য তৈরির কারখানা গড়ে তোলেন।",
+                                "ka": "ব্যবসায় উদ্যোক্তা কে?",
+                                "kha": "ঝুঁকি গ্রহণ ও ব্যবসায়ের সাফল্যের সম্পর্ক ব্যাখ্যা কর।",
+                                "ga": "উদ্দীপকের তৌহিদের উদ্যোগটি কীভাবে স্থানীয় অর্থনীতিতে প্রভাব ফেলছে—ব্যাখ্যা কর।",
+                                "gha": "\"উদ্ভাবনী ক্ষমতাই একজন সফল উদ্যোক্তাকে সাধারণ ব্যবসায়ী থেকে আলাদা করে।\"—বিশ্লেষণ কর।"
+                            }
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: রফিক পর্যবেক্ষণ করল যে, গাছ মূলের সাহায্যে পানি শোষণ করে পাতায় পাঠায় এবং সূর্যালোকের সাহায্যে শর্করা তৈরি করে।",
-              "ka": "প্রস্বেদন কী?",
-              "kha": "জাইলেম ও ফ্লোয়েমের কাজ ব্যাখ্যা কর।",
-              "ga": "উদ্দীপকে বর্ণিত প্রক্রিয়ায় উদ্ভিদের খাদ্য তৈরি ও পরিবহন প্রক্রিয়া আলোচনা কর।",
-              "gha": "\"উদ্ভিদের প্রস্বেদন প্রক্রিয়াকে প্রয়োজনীয় ক্ষতিকর প্রক্রিয়া (Necessary evil) বলা হয়।\"—বিশ্লেষণ কর।"
-            }
-          ]
-        }
-      }
-    },
-    "উচ্চতর গণিত": {
-      "বিজ্ঞান শাখা": {
-        "সেট, ফাংশন ও জ্যামিতি": {
-          "MCQ": [
-            {"q": "f(x) = 2x + 1 হলে f(2) এর মান কত?", "options": ["ক) ৫", "খ) ৪", "গ) ৩", "ঘ) ১"], "answer": "ক) ৫"},
-            {"q": "ত্রিভুজের পরিকেন্দ্র, ভরকেন্দ্র ও লম্ববিন্দু সম্পর্কিত উপপাদ্য কোনটি?", "options": ["ক) ইউলারের রেখা", "খ) পিথাগোরাসের উপপাদ্য", "গ) অ্যাপোলোনিয়াসের উপপাদ্য", "ঘ) টলেমির উপপাদ্য"], "answer": "ক) ইউলারের রেখা"},
-            {"q": "aˣ = b হলে x = কত?", "options": ["ক) logₐ b", "খ) log_b a", "গ) a/b", "ঘ) b/a"], "answer": "ক) logₐ b"},
-            {"q": "দ্বিপদী বিস্তৃতি (1 + x)ⁿ এর পদসংখ্যা কত?", "options": ["ক) n + 1", "খ) n", "গ) n - 1", "ঘ) 2n"], "answer": "ক) n + 1"},
-            {"q": "একটি ঘনকের ধারের দৈর্ঘ্য a হলে তার আয়তন কত?", "options": ["ক) a³", "খ) 6a²", "গ) √3a", "ঘ) 3a²"], "answer": "ক) a³"},
-            {"q": "sin²θ + cos²θ = কত?", "options": ["ক) ১", "খ) ০", "গ) ২", "ঘ) -১"], "answer": "ক) ১"},
-            {"q": "(2, 3) ও (5, 7) বিন্দুদ্বয়ের মধ্যবর্তী দূরত্ব কত?", "options": ["ক) ৫", "খ) ২৫", "গ) ৭", "ঘ) ৩"], "answer": "ক) ৫"},
-            {"q": "সমকোণী ত্রিভুজের ক্ষেত্রে অ্যাপোলোনিয়াসের উপপাদ্য কিসের বর্ধিত রূপ?", "options": ["ক) পিথাগোরাসের উপপাদ্য", "খ) ইউক্লিডের পদ্ধতি", "গ) টলেমির সূত্র", "ঘ) ভেনচিত্র"], "answer": "ক) পিথাগোরাসের উপপাদ্য"},
-            {"q": "Vector A = 2i + 3j হলে এর মান (Magnitude) কত?", "options": ["ক) √13", "খ) ৫", "গ) ১৩", "ঘ) √5"], "answer": "ক) √13"},
-            {"q": "tan 45° এর মান কত?", "options": ["ক) ১", "খ) ০", "গ) √৩", "ঘ) ১/√৩"], "answer": "ক) ১"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: F(x) = (2x + 2) / (x - 1) একটি ফাংশন (x ≠ 1)।",
-              "ka": "ফাংশনের ডোমেন কাকে বলে?",
-              "kha": "উক্ত ফাংশনের ডোমেন ও রেঞ্জ নির্ণয় কর।",
-              "ga": "F⁻¹(x) অর্থাৎ বিপরীত ফাংশন নির্ণয় কর।",
-              "gha": "\"এক-এক ও অনটূ ফাংশন হওয়ার ওপর বিপরীত ফাংশনের অস্তিত্ব নির্ভর করে।\"—যাচাই কর।"
+            "বাংলাদেশের ইতিহাস ও বিশ্বসভ্যতা": {
+                "প্রাচীন সভ্যতা": {
+                    "ইতিহাসের ধারা": {
+                        "MCQ": [
+                            {"q": "ইতিহাসের জনক কাকে বলা হয়?", "options": ["ক) হেরোডোটাস", "খ) থুসিডাইডিস", "গ) এরিস্টটল", "ঘ) ইবনে খালদুন"], "answer": "ক) হেরোডোটাস"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: শশাঙ্কের মৃত্যুর পর বাংলাজুড়ে তীব্র অরাজকতা ও বিশৃঙ্খলা দেখা দেয়, যেখানে শক্তিশালী ব্যক্তি দুর্বলদের ওপর অত্যাচার করত।",
+                                "ka": "মৎস্যন্যায় কী?",
+                                "kha": "পাল রাজত্বকে বাংলার স্বর্ণযুগ বলা হয় কেন?",
+                                "ga": "উদ্দীপকে বর্ণিত ঐতিহাসিক প্রেক্ষাপট ও পাল বংশের শাসনের সূচনা আলোচনা কর।",
+                                "gha": "\"জনগণের সর্বসম্মত সিদ্ধান্তই বাংলায় প্রথম স্থায়ী ও দীর্ঘস্থায়ী বংশের ভিত্তি গড়ে দিয়েছিল।\"—বিশ্লেষণ কর।"
+                            }
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: ΔABC এর AD একটি মধ্যমা। AB = 6 cm, AC = 8 cm এবং BC = 10 cm।",
-              "ka": "অ্যাপোলোনিয়াসের উপপাদ্যের বাক্যটি লেখ।",
-              "kha": "অ্যাপোলোনিয়াসের উপপাদ্য ব্যবহার করে মধ্যমা AD এর দৈর্ঘ্য নির্ণয় কর।",
-              "ga": "প্রমাণ কর যে, AB² + AC² = 2(AD² + BD²)।",
-              "gha": "\"জ্যামিতিক উপপাদ্য ভেক্টরের সাহায্যেও প্রমাণ করা সম্ভব।\"—উক্তিটির সত্যতা বিচার কর।"
-            }
-          ]
-        }
-      }
-    },
-    "হিসাববিজ্ঞান": {
-      "ব্যবসায় শিক্ষা শাখা": {
-        "হিসাব সমীকরণ ও জাবেদা": {
-          "MCQ": [
-            {"q": "হিসাব সমীকরণের মূল উপাদান কোনটি?", "options": ["ক) A = L + E", "খ) A = L - E", "গ) E = A + L", "ঘ) L = A + E"], "answer": "ক) A = L + E"},
-            {"q": "হিসাববিজ্ঞানের প্রথম ও প্রাথমিক বই কোনটি?", "options": ["ক) জাবেদা (Journal)", "খ) খতিয়ান (Ledger)", "গ) রেওয়ামিল", "ঘ) নগদান বই"], "answer": "ক) জাবেদা (Journal)"},
-            {"q": "খতিয়ানকে বলা হয় হিসাবের-", "options": ["ক) পাকা বই/রাজা", "খ) সহকারী বই", "গ) প্রাথমিক বই", "ঘ) সাময়িক বই"], "answer": "ক) পাকা বই/রাজা"},
-            {"q": "ক্যাশ মেমো কে তৈরি করেন?", "options": ["ক) বিক্রেতা", "খ) ক্রেতা", "গ) ব্যাংক", "ঘ) ম্যানেজার"], "answer": "ক) বিক্রেতা"},
-            {"q": "সম্পদ বাড়লে ডেবিট এবং কমলে কী হয়?", "options": ["ক) ক্রেডিট", "খ) ডেবিট", "গ) অপরিবর্তিত", "ঘ) সমতা"], "answer": "ক) ক্রেডিট"},
-            {"q": "ব্যবসায়িক লেনদেনের লিখিত প্রমাণপত্রকে কী বলে?", "options": ["ক) ভাউচার/দলিল", "খ) খতিয়ান", "গ) রেওয়ামিল", "ঘ) চালান"], "answer": "ক) ভাউচার/দলিল"},
-            {"q": "হিসাববিজ্ঞানের জনক কে?", "options": ["ক) লুকা প্যাসিওলি", "খ) অ্যাডাম স্মিথ", "গ) ফিলিপ কোটলার", "ঘ) মার্শাল"], "answer": "ক) লুকা প্যাসিওলি"},
-            {"q": "উৎপাদন ব্যয় বা বেতন প্রদান কোন ধরণের হিসাব?", "options": ["ক) নামিক/ব্যয় হিসাব", "খ) সম্পত্তি হিসাব", "গ) দায় হিসাব", "ঘ) মালিকানা স্বত্ব"], "answer": "ক) নামিক/ব্যয় হিসাব"},
-            {"q": "দুপাformat জমা পদ্ধতির মূল ভিত্তি কোনটি?", "options": ["ক) ডেবিট ও ক্রেডিট সমতা", "খ) একক হিসাব", "গ) নগদ গ্রহণ", "ঘ) অবচয়"], "answer": "ক) ডেবিট ও ক্রেডিট সমতা"},
-            {"q": "রেওয়ামিলের মূল উদ্দেশ্য কী?", "options": ["ক) হিসাবের গাণিতিক শুদ্ধতা যাচাই", "খ) মুনাফা নির্ণয়", "গ) কর নির্ধারণ", "ঘ) দেনা পরিশোধ"], "answer": "ক) হিসাবের গাণিতিক শুদ্ধতা যাচাই"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: জনাব রফিক ২০২৪ সালের ১ জানুয়ারি তারিখে ৫০,০০০ টাকা নগদ ও ২০,০০০ টাকার আসবাবপত্র নিয়ে ব্যবসা শুরু করলেন। উক্ত মাসে নগদ লেনদেন: পণ্য ক্রয় ১৫,০০০ টাকা, ধারে পণ্য বিক্রয় ২৫,০০০ টাকা।",
-              "ka": "প্রারম্ভিক মূলধনের পরিমাণ কত?",
-              "kha": "জানুয়ারি মাসের লেনদেনগুলোর জাবেদা দাখিলা দেখাও।",
-              "ga": "লেনদেনগুলোর প্রভাব হিসাব সমীকরণে (A = L + E) ছকে দেখাও।",
-              "gha": "\"সঠিক জাবেদা ভুক্তির ওপর নির্ভুল খতিয়ান প্রস্তুত নির্ভর করে।\"—বিশ্লেষণ কর।"
+            "পৌরনীতি ও নাগরিকতা": {
+                "রাষ্ট্র ও সরকার": {
+                    "নাগরিক ও সুনাগরিক": {
+                        "MCQ": [
+                            {"q": "সুনাগরিকের প্রধান গুণ কয়টি?", "options": ["ক) ৩টি (বুদ্ধি, বিবেক, আত্মসংযম)", "খ) ২টি", "গ) ৪টি", "ঘ) ৫টি"], "answer": "ক) ৩টি (বুদ্ধি, বিবেক, আত্মসংযম)"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: সায়ান একজন বিবেকবান নাগরিক। সে কর প্রদান করে, সৎ প্রার্থীকে ভোট দেয় এবং রাষ্ট্রের সম্পদ রক্ষা করে।",
+                                "ka": "সুনাগরিক কাকে বলে?",
+                                "kha": "অধিকার ও কর্তব্যের পারস্পরিক সম্পর্ক ব্যাখ্যা কর।",
+                                "ga": "উদ্দীপকের সায়ানের আচরণের মাধ্যমে সুনাগরিকের কোন গুণাবলি প্রকাশ পেয়েছে—ব্যাখ্যা কর।",
+                                "gha": "\"সুনাগরিকই একটি দেশের টেকসই উন্নয়ন ও সুশাসনের মূল চালিকাশক্তি।\"—বিশ্লেষণ কর।"
+                            }
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: ব্যবসায়ী সাজিদের ব্যবসায়িক খতিয়ান উদ্বৃত্ত: নগদ তহবিল ১০,০০০ টাকা, ব্যাংক জমা ২০,০০০ টাকা, দেনাদার ১৫,০০০ টাকা, পাওনাদার ১০,০০০ টাকা এবং মূলধন ৩৫,০০০ টাকা।",
-              "ka": "রেওয়ামিল কী?",
-              "kha": "কোন কোন ভুল রেওয়ামিলে ধরা পড়ে না—ব্যাখ্যা কর।",
-              "ga": "উদ্দীপকের উদ্বৃত্তগুলো নিয়ে একটি শুদ্ধ রেওয়ামিল প্রস্তুত কর।",
-              "gha": "\"রেওয়ামিল প্রস্তুতের মাধ্যমে আর্থিক বিবরণী তৈরির পথ সুগম হয়।\"—উক্তিটি মূল্যায়ন কর।"
+            "অর্থনীতি": {
+                "মৌলিক অর্থনীতি": {
+                    "চাহিদা ও যোগান": {
+                        "MCQ": [
+                            {"q": "অর্থনীতির জনক কাকে বলা হয়?", "options": ["ক) অ্যাডাম স্মিথ", "খ) লর্ড রবিন্স", "গ) আলফ্রেড মার্শাল", "ঘ) কেয়ন্স"], "answer": "ক) অ্যাডাম স্মিথ"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: বাজারে আলুর দাম প্রতি কেজি ২০ টাকা থেকে বেড়ে ৩০ টাকা হলে চাহিদার পরিমাণ ৫০ কেজি থেকে কমে ৩০ কেজি হয়।",
+                                "ka": "চাহিদা কাকে বলে?",
+                                "kha": "দুষ্প্রাপ্যতা বলতে কী বোঝায়?",
+                                "ga": "উদ্দীপকের তথ্য থেকে একটি চাহিদা রেখা অঙ্কন কর।",
+                                "gha": "\"দাম ও চাহিদার বিপরীতমুখী সম্পর্কই চাহিদা বিধির ভিত্তি।\"—মূল্যায়ন কর।"
+                            }
+                        ]
+                    }
+                }
             }
-          ]
-        }
-      }
-    },
-    "ব্যবসায় পরিচিতি": {
-      "ব্যবসায় শিক্ষা শাখা": {
-        "ব্যবসায়ের পরিবেশ ও উৎপত্তি": {
-          "MCQ": [
-            {"q": "ব্যবসায়ের প্রধান ও মূল উদ্দেশ্য কোনটি?", "options": ["ক) মুনাফা অর্জন", "খ) জনকল্যাণ", "গ) পণ্য উৎপাদন", "ঘ) সেবা প্রদান"], "answer": "ক) মুনাফা অর্জন"},
-            {"q": "উৎপাদনের মূল উপাদান কয়টি?", "options": ["ক) ৪টি (ভূমি, শ্রম, মূলধন, সংগঠন)", "খ) ২টি", "গ) ৩টি", "ঘ) ৫টি"], "answer": "ক) ৪টি (ভূমি, শ্রম, মূলধন, সংগঠন)"},
-            {"q": "শিল্পকে মূলত প্রধানত কয় ভাগে ভাগ করা যায়?", "options": ["ক) ৫ ভাগে", "খ) ৩ ভাগে", "গ) ৪ ভাগে", "ঘ) ৬ ভাগে"], "answer": "ক) ৫ ভাগে"},
-            {"q": "বাণিজ্য (Commerce) বলতে কী বোঝায়?", "options": ["ক) পণ্য বণ্টন সংক্রান্ত কাজ", "খ) পণ্য উৎপাদন", "গ) কাঁচামাল সংগ্রহ", "ঘ) যন্ত্রপাতি স্থাপন"], "answer": "ক) পণ্য বণ্টন সংক্রান্ত কাজ"},
-            {"q": "একমালিকানা ব্যবসায়ের বড় সুবিধা কোনটি?", "options": ["ক) দ্রুত সিদ্ধান্ত গ্রহণ ও একক মালিকানা", "খ) প্রচুর মূলধন", "গ) স্থায়ী স্থায়িত্ব", "ঘ) যৌথ ঝুঁকি"], "answer": "ক) দ্রুত সিদ্ধান্ত গ্রহণ ও একক মালিকানা"},
-            {"q": "ব্যবসায়িক পরিবেশের প্রাকৃতিক উপাদান কোনটি?", "options": ["ক) জলবায়ু ও ভূ-প্রকৃতি", "খ) আইন-কানুন", "গ) শিক্ষা", "ঘ) প্রযুক্তি"], "answer": "ক) জলবায়ু ও ভূ-প্রকৃতি"},
-            {"q": "পণ্যসামগ্রী দূর-দূরান্তে পৌঁছানোর বাধা দূর করে কোনটি?", "options": ["ক) পরিবহন", "খ) গুদামজাতকরণ", "গ) ব্যাংক", "ঘ) বীমা"], "answer": "ক) পরিবহন"},
-            {"q": "ঝুঁকিজনিত বাধা দূর করে ব্যবসায়ের কোন অঙ্গ?", "options": ["ক) বীমা (Insurance)", "খ) পরিবহন", "গ) বিজ্ঞাপন", "ঘ) ব্যাংক"], "answer": "ক) বীমা (Insurance)"},
-            {"q": "অংশীদারি ব্যবসায়ের মূল ভিত্তি কোনটি?", "options": ["ক) চুক্তি", "খ) নিবন্ধন", "গ) মূলধন", "ঘ) অংশীদার সংখ্যা"], "answer": "ক) চুক্তি"},
-            {"q": "পাবলিক লিমিটেড কোম্পানির সর্বনিম্ন সদস্য সংখ্যা কত?", "options": ["ক) ৭ জন", "খ) ২ জন", "গ) ৫০ জন", "ঘ) ২০ জন"], "answer": "ক) ৭ জন"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: সজল সাহেব অল্প পুঁজি নিয়ে একা একটি মুদি দোকান চালু করেন। নিজের বুদ্ধিমত্তায় দ্রুত সিদ্ধান্ত নিয়ে তিনি ভালো মুনাফা করছেন। তবে ব্যবসার সমস্ত ঝুঁকি তাকে একাই বহন করতে হয়।",
-              "ka": "একমালিকানা ব্যবসা কী?",
-              "kha": "একমালিকানা ব্যবসা সবচেয়ে জনপ্রিয় কেন—ব্যাখ্যা কর।",
-              "ga": "উদ্দীপকের সজলের ব্যবসার বৈশিষ্ট্যগুলো পাঠ্যবইয়ের আলোকে আলোচনা কর।",
-              "gha": "\"সীমাবদ্ধ ঝুঁকি ও অসীম দায় থাকা সত্ত্বেও একমালিকানা ব্যবসা যুগের পর যুগ টিকে আছে।\"—বিশ্লেষণ কর।"
+        },
+        "দশম শ্রেণি": {
+            "বাংলা প্রথম পত্র": {
+                "সাহিত্য": {
+                    "গদ্য ও পদ্য": {
+                        "MCQ": [
+                            {"q": "'বই পড়া' প্রবন্ধের লেখক কে?", "options": ["ক) প্রমথ চৌধুরী", "খ) রবীন্দ্রনাথ ঠাকুর", "গ) কাজী নজরুল ইসলাম", "ঘ) শরৎচন্দ্র চট্টোপাধ্যায়"], "answer": "ক) প্রমথ চৌধুরী"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: লাইব্রেরি হলো জাতির আত্মিক উন্নতির কেন্দ্র। সেখানে বসে মানুষ নিজের পছন্দমতো বই পড়ে জ্ঞানের আলোয় নিজেকে সমৃদ্ধ করে।",
+                                "ka": "প্রমথ চৌধুরীর ছদ্মনাম কী?",
+                                "kha": "লেখক কেন লাইব্রেরিকে হাসপাতালের চেয়েও বেশি গুরুত্বপূর্ণ বলেছেন?",
+                                "ga": "উদ্দীপকের সাথে 'বই পড়া' প্রবন্ধের মূল চেতনার সাদৃশ্য কোথায়—ব্যাখ্যা করো।",
+                                "gha": "\"স্বশিক্ষিত হওয়ার সবচেয়ে বড় উপায় হলো লাইব্রেরি বা বই পড়া।\"—বিশ্লেষণ করো।"
+                            }
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: তিন বন্ধু মিলে লিখিত চুক্তির ভিত্তিতে একটি ফলের আড়ত শুরু করলেন। ব্যবসায় অর্জিত লাভ-ক্ষতি তারা চুক্তির শর্তানুযায়ী ভাগ করে নেন।",
-              "ka": "অংশীদারি কারবার কী?",
-              "kha": "\"চুক্তিই অংশীদারি কারবারের মূল ভিত্তি\"—বুঝিয়ে লেখ।",
-              "ga": "উদ্দীপকে বর্ণিত ব্যবসার ধরণ ও পরিচালনার নিয়ম ব্যাখ্যা কর।",
-              "gha": "\"নিবন্ধন না থাকলেও অংশীদারি ব্যবসা বৈধ, তবে নিবন্ধিত হওয়া অধিক নিরাপদ।\"—উক্তিটি মূল্যায়ন কর।"
-            }
-          ]
-        }
-      }
-    },
-    "ব্যবসায় উদ্যোগ": {
-      "ব্যবসায় শিক্ষা শাখা": {
-        "উদ্যোগ ও ব্যবসায়িক পরিকল্পনা": {
-          "MCQ": [
-            {"q": "যেকোনো কাজের ঝুঁকি নিয়ে পথ চলাই হলো-", "options": ["ক) উদ্যোগ", "খ) চাকরি", "গ) অলসতা", "ঘ) চুক্তি"], "answer": "ক) উদ্যোগ"},
-            {"q": "ব্যবসায় উদ্যোগের প্রধান গুণ কোনটি?", "options": ["ক) উদ্ভাবনী শক্তি ও ঝুঁকি নেওয়ার সাহস", "খ) অধিক মূলধন থাকা", "গ) কায়িক শ্রম", "ঘ) উচ্চ শিক্ষা"], "answer": "ক) ব্যবসায় উদ্যোগের প্রধান গুণ কোনটি?"},
-            {"q": "SWOT বিশ্লেষণের 'O' অক্ষরটি কী নির্দেশ করে?", "options": ["ক) Opportunity (সুযোগ)", "খ) Organization", "গ) Operation", "ঘ) Ownership"], "answer": "ক) Opportunity (সুযোগ)"},
-            {"q": "ক্ষুদ্র ও কুটির শিল্পের বড় সুবিধা কী?", "options": ["ক) কম মূলধন ও স্থানীয় কর্মসংস্থান", "খ) ভারী যন্ত্রপাতি ব্যবহার", "গ) বিদেশি বিনিয়োগ", "ঘ) উচ্চ কর প্রদান"], "answer": "ক) কম মূলধন ও স্থানীয় কর্মসংস্থান"},
-            {"q": "ব্যবসায়িক পরিকল্পনার প্রথম ধাপ কোনটি?", "options": ["ক) প্রকল্প নির্বাচন/ধারণা চিহ্নিতকরণ", "খ) ঋণ গ্রহণ", "গ) বিজ্ঞাপন প্রদান", "ঘ) কর্মী নিয়োগ"], "answer": "ক) প্রকল্প নির্বাচন/ধারণা চিহ্নিতকরণ"},
-            {"q": "ব্যবসায়িক ঝুঁকি হ্রাসের উপায় কোনটি?", "options": ["ক) বীমা করা ও সঠিক পরিকল্পনা", "খ) বেশি দামে বিক্রি", "গ) বিজ্ঞাপন বন্ধ করা", "ঘ) ঋণ না নেওয়া"], "answer": "ক) বীমা করা ও সঠিক পরিকল্পনা"},
-            {"q": "সফল উদ্যোক্তার অন্যতম মানদণ্ড কোনটি?", "options": ["ক) অধ্যবসায় ও সততা", "খ) দ্রুত কাজ বন্ধ করা", "গ) অন্যকে অনুকরণ করা", "ঘ) ঝুঁকি না নেওয়া"], "answer": "ক) অধ্যবসায় ও সততা"},
-            {"q": "বিপণনের (Marketing) প্রথম কাজ কোনটি?", "options": ["ক) ক্রয়", "খ) বিক্রয়", "গ) গুদামজাতকরণ", "ঘ) পরিবহন"], "answer": "ক) ক্রয়"},
-            {"q": "পণ্য ঢাকাকে কী বলা হয়?", "options": ["ক) মোড়কীকরণ (Packaging)", "খ) প্রমিতকরণ", "গ) পর্যায়িতকরণ", "ঘ) পরিবহন"], "answer": "ক) মোড়কীকরণ (Packaging)"},
-            {"q": "বাংলাদেশ ক্ষুদ্র ও কুটির শিল্প সংস্থা কোনটি?", "options": ["ক) BSCIC", "খ) EPB", "গ) BGMEA", "ঘ) FBCCI"], "answer": "ক) BSCIC"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: তরুণ উদ্যোক্তা তৌহিদ তার এলাকায় প্লাস্টিক বর্জ্য প্রক্রিয়াজাত করে নতুন পণ্য তৈরির কারখানা গড়ে তোলেন। নতুন এই চিন্তায় প্রথম দিকে ঝুঁকি থাকলেও তিনি এখন একজন সফল ব্যবসায়ী।",
-              "ka": "ব্যবসায় উদ্যোক্তা কে?",
-              "kha": "ঝুঁকি গ্রহণ ও ব্যবসায়ের সাফল্যের সম্পর্ক ব্যাখ্যা কর।",
-              "ga": "উদ্দীপকের তৌহিদের উদ্যোগটি কীভাবে স্থানীয় অর্থনীতিতে প্রভাব ফেলছে—ব্যাখ্যা কর।",
-              "gha": "\"উদ্ভাবনী ক্ষমতাই একজন সফল উদ্যোক্তাকে সাধারণ ব্যবসায়ী থেকে আলাদা করে।\"—বিশ্লেষণ কর।"
+            "বাংলা দ্বিতীয় পত্র": {
+                "ব্যাকরণ ও নির্মিতি": {
+                    "কারক ও বিভক্তি": {
+                        "MCQ": [
+                            {"q": "বাক্যে ক্রিয়াপদের সাথে কার সাথে কার সম্পর্ককে কারক বলে?", "options": ["ক) বিশেষ্যের", "খ) সর্বনামের", "গ) নামপদের সাথে ক্রিয়াপদের", "ঘ) অব্যয়ের"], "answer": "গ) নামপদের সাথে ক্রিয়াপদের"}
+                        ],
+                        "CQ": [],
+                        "Written": [
+                            {"title": "ভাবসম্প্রসারণ", "desc": "দুর্লভ জনম মিলিয়াছে যবে, সুকর্মে তা করো দান।"},
+                            {"title": "আবেদনপত্র", "desc": "বন্যা দুর্গত এলাকায় ত্রাণের ব্যবস্থা করার জন্য জেলা প্রশাসকের নিকট আবেদনপত্র লেখো।"}
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: রিনা আক্তার একটি হস্তশিল্প প্রতিষ্ঠান চালুর পূর্বে বাজারের চাহিদা, মূলধনের উৎস ও কাঁচামালের সহজলভ্যতা যাচাই করে একটি নীল নকশা তৈরি করলেন।",
-              "ka": "ব্যবসায়িক পরিকল্পনা কী?",
-              "kha": "SWOT বিশ্লেষণ ব্যবসায়ের জন্য কেন গুরুত্বপূর্ণ?",
-              "ga": "উদ্দীপকে রিনা আক্তারের গৃহীত পদক্ষেপটি কেন প্রয়োজনীয় তা আলোচনা কর।",
-              "gha": "\"পূর্ব পরিকল্পনা ছাড়া ব্যবসায় সফল হওয়া অসম্ভব বললেই চলে।\"—উক্তিটির যথার্থতা মূল্যায়ন কর।"
-            }
-          ]
-        }
-      }
-    },
-    "বাংলাদেশের ইতিহাস ও বিশ্বসভ্যতা": {
-      "মানবিক শাখা": {
-        "প্রাচীন সভ্যতা ও প্রাচীন বাংলা": {
-          "MCQ": [
-            {"q": "ইতিহাসের জনক কাকে বলা হয়?", "options": ["ক) হেরোডোটাস", "খ) থুসিডাইডিস", "গ) এরিস্টটল", "ঘ) ইবনে খালদুন"], "answer": "ক) হেরোডোটাস"},
-            {"q": "সিন্ধু সভ্যতা কোন যুগের সভ্যতা?", "options": ["ক) তাম্র-ব্রোঞ্জ যুগ", "খ) লৌহ যুগ", "গ) প্রস্তর যুগ", "ঘ) আধুনিক যুগ"], "answer": "ক) তাম্র-ব্রোঞ্জ যুগ"},
-            {"q": "প্রাচীন বাংলার প্রথম স্বাধীন নরপতি কে ছিলেন?", "options": ["ক) শশাঙ্ক", "খ) ধর্মপাল", "গ) গোপাল", "ঘ) লক্ষণ সেন"], "answer": "ক) শশাঙ্ক"},
-            {"q": "পাল বংশের প্রতিষ্ঠাতা কে ছিলেন?", "options": ["ক) গোপাল", "খ) ধর্মপাল", "গ) দেবপাল", "ঘ) মহিপাল"], "answer": "ক) গোপাল"},
-            {"q": "মৎস্যন্যায় বলতে কোন সময়কে বোঝায়?", "options": ["ক) শশাঙ্কের মৃত্যুর পর ১০০ বছরের অরাজকতা", "খ) পাল শাসনের স্বর্ণযুগ", "গ) সেন বংশের সময়", "ঘ) সুলতানি আমল"], "answer": "ক) শশাঙ্কের মৃত্যুর পর ১০০ বছরের অরাজকতা"},
-            {"q": "মিশরীয় সভ্যতার সবচেয়ে বড় অবদান কোনটি?", "options": ["ক) পিরামিড ও হায়ারোগ্লিফিক লিপি", "খ) চাকা আবিষ্কার", "গ) পাত্র তৈরি", "ঘ) ভাস্কর্য"], "answer": "ক) পিরামিড ও হায়ারোগ্লিফিক লিপি"},
-            {"q": "প্রাচীন জনপদ 'গৌড়' এর অন্তর্ভুক্ত অঞ্চল কোনটি ছিল?", "options": ["ক) চাঁপাইনবাবগঞ্জ ও মুর্শিদাবাদ", "খ) চট্টগ্রাম", "গ) বরিশাল", "ঘ) সিলেট"], "answer": "ক) চাঁপাইনবাবগঞ্জ ও মুর্শিদাবাদ"},
-            {"q": "সেন বংশের শেষ রাজা কে ছিলেন?", "options": ["ক) লক্ষণ সেন", "খ) বিজয় সেন", "গ) বল্লাল সেন", "ঘ) সামন্ত সেন"], "answer": "ক) লক্ষণ সেন"},
-            {"q": "কত সালে ইখতিয়ার উদ্দিন মুহম্মদ বিন বখতিয়ার খলজি বাংলা জয় করেন?", "options": ["ক) ১২০৪ সালে", "খ) ১২০৬ সালে", "গ) ১১৯৯ সালে", "ঘ) ১২৫৮ সালে"], "answer": "ক) ১২০৪ সালে"},
-            {"q": "পাহাড়পুরের সোমপুর মহাবিহার কে নির্মাণ করেন?", "options": ["ক) ধর্মপাল", "খ) দেবপাল", "গ) গোপাল", "ঘ) শশাঙ্ক"], "answer": "ক) ধর্মপাল"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: শশাঙ্কের মৃত্যুর পর বাংলাজুড়ে তীব্র অরাজকতা ও বিশৃঙ্খলা দেখা দেয়, যেখানে শক্তিশালী ব্যক্তি দুর্বলদের ওপর অত্যাচার করত। দীর্ঘ ১০০ বছর পর জনগণ মিলে গোপালকে রাজা নির্বাচিত করে শান্তি ফিরিয়ে আনে।",
-              "ka": "মৎস্যন্যায় কী?",
-              "kha": "পাল রাজত্বকে বাংলার স্বর্ণযুগ বলা হয় কেন?",
-              "ga": "উদ্দীপকে বর্ণিত ঐতিহাসিক প্রেক্ষাপট ও পাল বংশের শাসনের সূচনা আলোচনা কর।",
-              "gha": "\"জনগণের সর্বসম্মত সিদ্ধান্তই বাংলায় প্রথম স্থায়ী ও দীর্ঘস্থায়ী বংশের ভিত্তি গড়ে দিয়েছিল।\"—বিশ্লেষণ কর।"
+            "ইংরেজি প্রথম পত্র": {
+                "Reading & Writing": {
+                    "Unit 4: Environment & Heritage": {
+                        "MCQ": [
+                            {"q": "What is the primary goal of sustainable development?", "options": ["a) Destroying nature", "b) Meeting current needs without harming future generations", "c) Urbanization only", "d) Industrial waste"], "answer": "b) Meeting current needs without harming future generations"}
+                        ],
+                        "CQ": [],
+                        "Written": [
+                            {"title": "Paragraph Writing", "desc": "Write a paragraph on 'Deforestation and Its Consequences'."},
+                            {"title": "Formal Letter", "desc": "Write a letter to the editor about the nuisance of reckless driving."}
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: সিন্ধু নদের অববাহিকায় গড়ে ওঠা প্রাচীন নগর পরিকল্পনা ও নর্দমা ব্যবস্থা আধুনিক সভ্যতার প্রকৌশলীদের বিস্মিত করে।",
-              "ka": "হায়ারোগ্লিফিক কী?",
-              "kha": "সিন্ধু সভ্যতার নগর পরিকল্পনার দুটি বৈশিষ্ট্য লেখ।",
-              "ga": "উদ্দীপকের আলোকে প্রাচীন সভ্যতার অবদান ও আধুনিক জীবনে তার প্রভাব ব্যাখ্যা কর।",
-              "gha": "\"ইতিহাস পাঠ আমাদের অতীত ঐতিহ্যকে চিনে ভবিষ্যতের সিদ্ধান্ত নিতে সাহায্য করে।\"—মূল্যায়ন কর।"
-            }
-          ]
-        }
-      }
-    },
-    "পৌরনীতি ও নাগরিকতা": {
-      "মানবিক শাখা": {
-        "রাষ্ট্র, সরকার ও নাগরিকতা": {
-          "MCQ": [
-            {"q": "পৌরনীতির ইংরেজি প্রতিশব্দ 'Civics' এসেছে কোন ভাষা থেকে?", "options": ["ক) ল্যাটিন ভাষা (Civis ও Civitas)", "খ) গ্রিক ভাষা", "গ) ফরাসি ভাষা", "ঘ) ইংরেজি"], "answer": "ক) ল্যাটিন ভাষা (Civis ও Civitas)"},
-            {"q": "পরিবারের প্রধানতম সামাজিক কাজ কোনটি?", "options": ["ক) সন্তান লালন-পালন ও বংশ রক্ষা", "খ) বিনোদন", "গ) অর্থনৈতিক লেনদেন", "ঘ) আইন প্রণয়ন"], "answer": "ক) সন্তান লালন-পালন ও বংশ রক্ষা"},
-            {"q": "নাগরিকতা অর্জনের প্রধান পদ্ধতি কয়টি?", "options": ["ক) ২টি (জন্মসূত্র ও অনুমোদন সূত্র)", "খ) ৩টি", "গ) ৪টি", "ঘ) ৫টি"], "answer": "ক) ২টি (জন্মসূত্র ও অনুমোদন সূত্র)"},
-            {"q": "রাষ্ট্রের অপরিহার্য উপাদান কোনটি?", "options": ["ক) সার্বভৌমত্ব", "খ) লিখিত সংবিধান", "গ) রাজনৈতিক দল", "ঘ) বিচার বিভাগ"], "answer": "ক) সার্বভৌমত্ব"},
-            {"q": "গণতন্ত্রের মূল ভিত্তি কোনটি?", "options": ["ক) জনগণের মতামত ও ভোটাধিকার", "খ) সামরিক শাসন", "গ) একনায়কত্ব", "ঘ) রাজতন্ত্র"], "answer": "ক) জনগণের মতামত ও ভোটাধিকার"},
-            {"q": "আইনের প্রধান উৎস কোনটি?", "options": ["ক) প্রথা, ধর্ম ও আইনসভা", "খ) ব্যক্তির আদেশ", "গ) শক্তি প্রয়োগ", "ঘ) চুক্তি"], "answer": "ক) প্রথা, ধর্ম ও আইনসভা"},
-            {"q": "মানবাধিকার সনদের সর্বজনীন ঘোষণা জাতিসংঘ কবে দেয়?", "options": ["ক) ১০ ডিসেম্বর ১৯৪৮", "খ) ২৪ অক্টোবর ১৯৪৫", "গ) ২৬ মার্চ ১৯৭১", "ঘ) ১ মে ১৮৮৬"], "answer": "ক) ১০ ডিসেম্বর ১৯৪৮"},
-            {"q": "সরকারের অঙ্গ কয়টি?", "options": ["ক) ৩টি (আইন, শাসন ও বিচার বিভাগ)", "খ) ২টি", "গ) ৪টি", "ঘ) ৫টি"], "answer": "ক) ৩টি (আইন, শাসন ও বিচার বিভাগ)"},
-            {"q": "সুনাগরিকের প্রধান গুণ কয়টি?", "options": ["ক) ৩টি (বুদ্ধি, বিবেক, আত্মসংযম)", "খ) ২টি", "গ) ৪টি", "ঘ) ৫টি"], "answer": "ক) ৩টি (বুদ্ধি, বিবেক, আত্মসংযম)"},
-            {"q": "দ্বৈত নাগরিকতা বলতে কী বোঝায়?", "options": ["ক) একই সাথে দুই দেশের নাগরিক হওয়া", "খ) দুই রাজ্যের অধিবাসী হওয়া", "গ) জন্মসূত্রে নাগরিক হওয়া", "ঘ) অনুমোদন সূত্রে নাগরিক হওয়া"], "answer": "ক) একই সাথে দুই দেশের নাগরিক হওয়া"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: সায়ান একজন বিবেকবান নাগরিক। সে কর প্রদান করে, সৎ প্রার্থীকে ভোট দেয় এবং রাষ্ট্রের সম্পদ রক্ষা করে। সে মনে করে নাগরিকের অধিকার ও কর্তব্য একে অপরের পরিপূরক।",
-              "ka": "সুনাগরিক কাকে বলে?",
-              "kha": "অধিকার ও কর্তব্যের পারস্পরিক সম্পর্ক ব্যাখ্যা কর।",
-              "ga": "উদ্দীপকের সায়ানের আচরণের মাধ্যমে সুনাগরিকের কোন গুণাবলি প্রকাশ পেয়েছে—ব্যাখ্যা কর।",
-              "gha": "\"সুনাগরিকই একটি দেশের টেকসই উন্নয়ন ও সুশাসনের মূল চালিকাশক্তি।\"—বিশ্লেষণ কর।"
+            "ইংরেজি দ্বিতীয় পত্র": {
+                "Grammar & Composition": {
+                    "Completing Sentences": {
+                        "MCQ": [
+                            {"q": "Complete the sentence: 'Had I been a king, I ______'", "options": ["a) will help the poor", "b) would help the poor", "c) would have helped the poor", "d) helped"], "answer": "c) would have helped the poor"}
+                        ],
+                        "CQ": [],
+                        "Written": [
+                            {"title": "CV & Cover Letter", "desc": "Write a CV with a cover letter for the post of a Senior Teacher in English."},
+                            {"title": "Composition", "desc": "Write a short composition on 'The Student Life and Duties of Students'."}
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: ক দেশে আইনসভার মাধ্যমে গঠিত সরকার জনগণের নিকট দায়ী থাকে। দেশের সার্বভৌম ক্ষমতার মালিক জনগণ এবং সেখানে নিয়মিত নির্বাচন অনুষ্ঠিত হয়।",
-              "ka": "সরকার কী?",
-              "kha": "একনায়কতন্ত্র ও গণতন্ত্রের প্রধান পার্থক্য লেখ।",
-              "ga": "উদ্দীপকের 'ক' দেশে কোন ধরণের সরকার ব্যবস্থা বিদ্যমান পাঠ্যবইয়ের আলোকে আলোচনা কর।",
-              "gha": "\"জনগণের অংশগ্রহণ ও সুশাসন নিশ্চিত করাই আধুনিক গণতান্ত্রিক রাষ্ট্রের প্রধান লক্ষ্য।\"—মূল্যায়ন কর।"
-            }
-          ]
-        }
-      }
-    },
-    "অর্থনীতি": {
-      "মানবিক শাখা": {
-        "মৌলিক অর্থনৈতিক ধারণা ও বাজার": {
-          "MCQ": [
-            {"q": "অর্থনীতির জনক কাকে বলা হয়?", "options": ["ক) অ্যাডাম স্মিথ", "খ) লর্ড রবিন্স", "গ) আলফ্রেড মার্শাল", "ঘ) কেয়ন্স"], "answer": "ক) অ্যাডাম স্মিথ"},
-            {"q": "অর্থনৈতিক প্রধান সমস্যা দুটি কী কী?", "options": ["ক) দুষ্প্রাপ্যতা ও অসীম অভাব", "খ) মূলধন ও জমি", "গ) আয় ও ব্যয়", "ঘ) আমদানি ও রপ্তানি"], "answer": "ক) দুষ্প্রাপ্যতা ও অসীম অভাব"},
-            {"q": "চাহিদার বিধি অনুযায়ী দাম বাড়লে চাহিদার পরিমাণ-", "options": ["ক) কমে", "খ) বাড়ে", "গ) স্থির থাকে", "ঘ) শূন্য হয়"], "answer": "ক) কমে"},
-            {"q": "সম্পূর্ণ প্রতিযোগিতামূলক বাজারে পণ্যের দাম কীভাবে নির্ধারিত হয়?", "options": ["ক) চাহিদা ও যোগানের পারস্পরিক প্রভাবে", "খ) বিক্রেতার ইচ্ছায়", "গ) ক্রেতার ইচ্ছায়", "ঘ) সরকারের নির্দেশে"], "answer": "ক) চাহিদা ও যোগানের পারস্পরিক প্রভাবে"},
-            {"q": "উৎপাদনের উপাদানের খাজনা কার বিনিময় মূল্য?", "options": ["ক) জমি", "খ) শ্রম", "গ) মূলধন", "ঘ) সংগঠন"], "answer": "ক) জমি"},
-            {"q": "জাতীয় আয় পরিমাপের পদ্ধতি কয়টি?", "options": ["ক) ৩টি", "খ) ২টি", "গ) ৪টি", "ঘ) ৫টি"], "answer": "ক) ৩টি"},
-            {"q": "যে বাজারে একজনমাত্র বিক্রেতা থাকে তাকে কী বলে?", "options": ["ক) একচেটিয়া বাজার (Monopoly)", "খ) প্রতিযোগিতা বাজার", "গ) পাইকারি বাজার", "ঘ) শেয়ার বাজার"], "answer": "ক) একচেটিয়া বাজার (Monopoly)"},
-            {"q": "অর্থনীতির প্রধান অর্থনৈতিক ব্যবস্থা কয়টি?", "options": ["ক) ৪টি (ধনতান্ত্রিক, সমাজতান্ত্রিক, মিশ্র, ইসলামী)", "খ) ৩টি", "গ) ২টি", "ঘ) ৫টি"], "answer": "ক) ৪টি (ধনতান্ত্রিক, সমাজতান্ত্রিক, মিশ্র, ইসলামী)"},
-            {"q": "যোগান বিধি অনুযায়ী দাম ও যোগানের সম্পর্ক কেমন?", "options": ["ক) সমমুখী/প্রত্যক্ষ", "খ) বিপরীতমুখী", "গ) কোনো সম্পর্ক নেই", "ঘ) স্থির"], "answer": "ক) সমমুখী/প্রত্যক্ষ"},
-            {"q": "জিডিপি (GDP) এর পূর্ণরূপ কী?", "options": ["ক) Gross Domestic Product", "খ) Gross Development Product", "গ) General Domestic Price", "ঘ) Global Domestic Product"], "answer": "ক) Gross Domestic Product"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: বাজারে আলুর দাম প্রতি কেজি ২০ টাকা থেকে বেড়ে ৩০ টাকা হলে চাহিদার পরিমাণ ৫০ কেজি থেকে কমে ৩০ কেজি হয়। আবার দাম কমলে ক্রেতারা বেশি আলু কেনেন।",
-              "ka": "চাহিদা কাকে বলে?",
-              "kha": "দুষ্প্রাপ্যতা বলতে কী বোঝায়?",
-              "ga": "উদ্দীপকের তথ্য থেকে একটি চাহিদা রেখা অঙ্কন কর।",
-              "gha": "\"দাম ও চাহিদার বিপরীতমুখী সম্পর্কই চাহিদা বিধির ভিত্তি।\"—উদ্দীপকের তথ্যের সাহায্যে মূল্যায়ন কর।"
+            "গণিত": {
+                "ত্রিকোণমিতি ও পরিমিতি": {
+                    "দূরত্ব ও উচ্চতা": {
+                        "MCQ": [
+                            {"q": "sin^2(theta) + cos^2(theta) = কত?", "options": ["ক) ১", "খ) ০", "গ) ২", "ঘ) -১"], "answer": "ক) ১"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: একটি সমকোণী ত্রিভুজের লম্ব ও ভূমির দৈর্ঘ্য যথাক্রমে ৩ সেমি ও ৪ সেমি।",
+                                "ka": "পিথাগোরাসের উপপাদ্যটি বিবৃত কর।",
+                                "kha": "ত্রিভুজটির অতিভুজের দৈর্ঘ্য নির্ণয় কর।",
+                                "ga": "ত্রিভুজটির অতিভুজের ওপর অঙ্কিত বর্গক্ষেত্রের ক্ষেত্রফল অপর দুই বাহুর ওপর অঙ্কিত বর্গক্ষেত্রদ্বয়ের ক্ষেত্রফলের সমষ্টির সমান—যাচাই কর।",
+                                "gha": "\"জ্যামিতিক উপপাদ্যের সঠিক প্রয়োগ পরিমিতির জটিল সমস্যার সমাধান সহজ করে।\"—বিশ্লেষণ কর।"
+                            }
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: একটি দেশে সরকারি ও বেসরকারি উভয় খাতের যৌথ অংশগ্রহণে শিল্পকারখানা পরিচালিত হয় এবং মুক্ত বাজার ব্যবস্থার সাথে সামাজিক কল্যাণ রক্ষা করা হয়।",
-              "ka": "মিশ্র অর্থব্যবস্থা কী?",
-              "kha": "সমাজতান্ত্রিক অর্থব্যবস্থার দুটি মূল বৈশিষ্ট্য লেখ।",
-              "ga": "উদ্দীপকের দেশটি কোন ধরণের অর্থনৈতিক ব্যবস্থা অনুসরণ করছে তা ব্যাখ্যা কর।",
-              "gha": "\"জনকল্যাণ ও অর্থনৈতিক প্রবৃদ্ধির সমতা রক্ষায় মিশ্র অর্থব্যবস্থা অত্যন্ত কার্যকর।\"—বিশ্লেষণ কর।"
-            }
-          ]
-        }
-      }
-    },
-    "ইসলাম ও নৈতিক শিক্ষা": {
-      "ধর্মীয় বিষয়": {
-        "ঈমান, শরিয়ত ও নৈতিকতা": {
-          "MCQ": [
-            {"q": "ইসলাম শব্দের অর্থ কী?", "options": ["ক) শান্তি ও আত্মসমর্পণ", "খ) ইবাদত", "গ) বিশ্বাস", "ঘ) অনুসরণ"], "answer": "ক) শান্তি ও আত্মসমর্পণ"},
-            {"q": "শরিয়তের প্রধান উৎস কোনটি?", "options": ["ক) কুরআন মজিদ", "খ) হাদিস", "গ) ইজমা", "ঘ) কিয়াস"], "answer": "ক) কুরআন মজিদ"},
-            {"q": "কুরআন মজিদের আয়াত সংখ্যা কত?", "options": ["ক) ৬৬৬৬টি (প্রচলিত মত)", "খ) ৬২৩৬টি", "গ) ৭০০০টি", "ঘ) ৫০০০টি"], "answer": "ক) ৬৬৬৬টি (প্রচলিত মত)"},
-            {"q": "সাদাকাহ শব্দের অর্থ কী?", "options": ["ক) দান/দয়া", "খ) নামাজ", "গ) রোজা", "ঘ) ফরজ"], "answer": "ক) দান/দয়া"},
-            {"q": "শরিয়তের দ্বিতীয় উৎস কোনটি?", "options": ["ক) সুন্নাহ/হাদিস", "খ) ইজমা", "গ) কিয়াস", "ঘ) ফিকহ"], "answer": "ক) সুন্নাহ/হাদিস"},
-            {"q": "আখলাক-এ হামিদা কী?", "options": ["ক) প্রশংসনীয় চরিত্র", "খ) নিন্দনীয় চরিত্র", "গ) অহংকার", "ঘ) প্রতারণা"], "answer": "ক) প্রশংসনীয় চরিত্র"},
-            {"q": "জাহিলিয়াত শব্দের অর্থ কী?", "options": ["ক) অজ্ঞতা ও বর্বরতা", "খ) জ্ঞান", "গ) সভ্যতা", "ঘ) শান্তি"], "answer": "ক) অজ্ঞতা ও বর্বরতা"},
-            {"q": "হুদায়বিয়ার সন্ধি কত হিজরিতে স্বাক্ষরিত হয়?", "options": ["ক) ৬ হিজরিতে", "খ) ৮ হিজরিতে", "গ) ৫ হিজরিতে", "ঘ) ১০ হিজরিতে"], "answer": "ক) ৬ হিজরিতে"},
-            {"q": "বিদায় হজের ভাষণ মহানবী (সা.) কোথায় প্রদান করেন?", "options": ["ক) আরাফাতের ময়দানে", "খ) মিনার ময়দানে", "গ) কাবা প্রাঙ্গণে", "ঘ) মদিনায়"], "answer": "ক) আরাফাতের ময়দানে"},
-            {"q": "সর্বশ্রেষ্ঠ ও সর্বশেষ আসমানি কিতাব কোনটি?", "options": ["ক) আল-কুরআন", "খ) তাওরাত", "গ) ইঞ্জিল", "ঘ) যবুর"], "answer": "ক) আল-কুরআন"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: শাহেদ সামাজিক কাজে নিয়োজিত থাকে। সে প্রতিবেশীর বিপদে সাহায্য করে এবং মিথ্যা বলা থেকে বিরত থাকে। সে বিশ্বাস করে প্রতিটি কাজের হিসাব হাশরের মাঠে দিতে হবে।",
-              "ka": "আখিরাত শব্দের অর্থ কী?",
-              "kha": "শরিয়তের বিধিবিধান পালনে ঈমানের ভূমিকা ব্যাখ্যা কর।",
-              "ga": "উদ্দীপকের শাহেদের আচরণের মধ্যে ভালো চরিত্রের কোন দিকটি ফুটে উঠেছে—ব্যাখ্যা কর।",
-              "gha": "\"পরকালে বিশ্বাসই মানুষকে ইহকালে সত্য ও নৈতিকতার পথে পরিচালিত করে।\"—বিশ্লেষণ কর।"
+            "পদার্থবিজ্ঞান": {
+                "বল ও আলো": {
+                    "চলতড়িৎ ও বল": {
+                        "MCQ": [
+                            {"q": "রোধের একক কোনটি?", "options": ["ক) ওহম (Ohm)", "খ) ভোল্ট", "গ) অ্যাম্পিয়ার", "ঘ) ওয়াট"], "answer": "ক) ওহম (Ohm)"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: একটি বৈদ্যুতিক বাল্বের গায়ে '২২০V - ১০০W' লেখা আছে। বাল্বটিকে ২২০ ভোল্ট উৎসের সাথে যুক্ত করা হলো।",
+                                "ka": "তড়িৎ ক্ষমতা কাকে বলে?",
+                                "kha": "ওহমের সূত্রটি ব্যাখ্যা কর।",
+                                "ga": "বাল্বটির মধ্য দিয়ে প্রবাহিত তড়িৎ প্রবাহের মান ও এর রোধ নির্ণয় কর।",
+                                "gha": "\"তড়িৎ শক্তির সঠিক ব্যবহারে শক্তির অপচয় রোধ করা সম্ভব।\"—গাণিতিক যুক্তিসহ মূল্যায়ন কর।"
+                            }
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: মহানবী (সা.) শত্রুর সাথে হুদায়বিয়ার অসম চুক্তিতে আবদ্ধ হয়ে শান্তিকামী মানসিকতার পরিচয় দিয়েছিলেন, যা পরবর্তীতে মক্কা বিজয়ের পথ সহজ করেছিল।",
-              "ka": "হুদায়বিয়ার সন্ধি কত বছরের জন্য হয়েছিল?",
-              "kha": "রাসূল (সা.) এর দূরদর্শিতা কীভাবে শান্তি এনেছিল—ব্যাখ্যা কর।",
-              "ga": "উদ্দীপকের ঐতিহাসিক ঘটনাটির গুরুত্ব শরিয়ত ও জীবনের আলোকে বর্ণনা কর।",
-              "gha": "\"মহানবী (সা.) এর শান্তি ও ক্ষমার আদর্শই আধুনিক বিশ্বের সংঘাত নিরসনের উপায়।\"—উক্তিটি মূল্যায়ন কর।"
-            }
-          ]
-        }
-      }
-    },
-    "তথ্য ও যোগাযোগ প্রযুক্তি": {
-      "আবশ্যিক বিষয়": {
-        "ডিজিটাল বাংলাদেশ ও সিকিউরিটি": {
-          "MCQ": [
-            {"q": "তথ্যপ্রযুক্তির প্রসারে 'ডিজিটাল বাংলাদেশ' রূপকল্প কত সালে ঘোষিত হয়?", "options": ["ক) ২০০৮ সালে", "খ) ২০১০ সালে", "গ) ২০১৫ সালে", "ঘ) ২০২০ সালে"], "answer": "ক) ২০০৮ সালে"},
-            {"q": "ই-পাসপোর্ট ও ই-গভর্ন্যান্সের প্রধান লক্ষ্য কী?", "options": ["ক) সেবা সহজ ও দ্রুত করা", "খ) খরচ বাড়ানো", "গ) কাগজের ব্যবহার বাড়ানো", "ঘ) সময় নষ্ট করা"], "answer": "ক) সেবা সহজ ও দ্রুত করা"},
-            {"q": "কম্পিউটার ভাইরাস হলো এক ধরণের-", "options": ["ক) ক্ষতিকারক প্রোগ্রাম", "খ) হার্ডওয়্যার ডিভাইস", "গ) নেটওয়ার্ক ক্যাবল", "ঘ) মেমোরি চিপ"], "answer": "ক) ক্ষতিকারক প্রোগ্রাম"},
-            {"q": "দ্বিমাত্রিক বারকোডকে সংক্ষেপে কী বলে?", "options": ["ক) QR Code", "খ) PIN", "গ) URL", "ঘ) IP"], "answer": "ক) QR Code"},
-            {"q": "কম্পিউটার সুরক্ষার জন্য কোনটি ব্যবহার করা উচিত?", "options": ["ক) অ্যান্টিভাইরাস সফটওয়্যার", "খ) কেবল গেম", "গ) নতুন মনিটর", "ঘ) উচ্চগতির প্রসেসর"], "answer": "ক) অ্যান্টিভাইরাস সফটওয়্যার"},
-            {"q": "সামাজিক যোগাযোগ মাধ্যম কোনটি?", "options": ["ক) Facebook", "খ) Google Search", "গ) MS Word", "ঘ) Photoshop"], "answer": "ক) Facebook"},
-            {"q": "ইন্টারনেটে নিরাপদে থাকার প্রধান নিয়ম কোনটি?", "options": ["ক) শক্তিশালী পাসওয়ার্ড ব্যবহার ও তথ্য গোপন রাখা", "খ) সবাইকে পাসওয়ার্ড দেওয়া", "গ) অচেনা লিংকে ক্লিক করা", "ঘ) অ্যান্টিভাইরাস বন্ধ রাখা"], "answer": "ক) শক্তিশালী পাসওয়ার্ড ব্যবহার ও তথ্য গোপন রাখা"},
-            {"q": "ডিজিটাল কনটেন্ট কত প্রকার হতে পারে?", "options": ["ক) ৪ প্রকার (টেক্সট, ছবি, অডিও, ভিডিও)", "খ) ২ প্রকার", "গ) ৩ প্রকার", "ঘ) ৫ প্রকার"], "answer": "ক) ৪ প্রকার (টেক্সট, ছবি, অডিও, ভিডিও)"},
-            {"q": "ই-বই বা ইলেকট্রনিক বুক পড়ার জনপ্রিয় ডিভাইস কোনটি?", "options": ["ক) ই-বুক রিডার (Kindle)", "খ) প্রিন্টার", "গ) প্রজেক্টর", "ঘ) স্ক্যানার"], "answer": "ক) ই-বুক রিডার (Kindle)"},
-            {"q": "অন্যের কম্পিউটার বা সিস্টেমে অবৈধ প্রবেশকে কী বলে?", "options": ["ক) হ্যাকিং (Hacking)", "খ) ব্রাউজিং", "গ) আপলোডিং", "ঘ) প্রোগ্রামিং"], "answer": "ক) হ্যাকিং (Hacking)"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: তানভীর অনলাইন ব্যাংকিং ব্যবহার করে ঘরে বসেই স্কুলের ফি প্রদান করল। তবে একদিন সে একটি ভুয়া ই-মেইল লিংকে ক্লিক করে তার অ্যাকাউন্টের পাসওয়ার্ড হারিয়ে বিপদে পড়ল।",
-              "ka": "সাইবার অপরাধ কী?",
-              "kha": "পাসওয়ার্ড শক্তিশালী করার দুটি উপায় লেখ।",
-              "ga": "উদ্দীপকে তানভীরের অসাবধানতার কারণ আইসিটি নিরাপত্তার আলোকে ব্যাখ্যা কর।",
-              "gha": "\"সচেতনতা ও সতর্কতা অবলম্বনই সাইবার জগতে নিরাপদ থাকার প্রধান চাবিকাঠি।\"—বিশ্লেষণ কর।"
+            "রসায়ন": {
+                "খনিজ সম্পদ ও এসিড": {
+                    "রাসায়নিক বিক্রিয়া": {
+                        "MCQ": [
+                            {"q": "এসিড নীল লিটমাসকে কোন রঙে পরিণত করে?", "options": ["ক) লাল", "খ) নীল", "গ) হলুদ", "ঘ) সবুজ"], "answer": "ক) লাল"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: ল্যাবরেটরিতে হাইড্রোক্লোরিক এসিডের সাথে সোডিয়াম হাইড্রোক্সাইড দ্রবণ মিশ্রিত করায় একটি প্রশমন বিক্রিয়া ঘটে লবণ ও পানি উৎপন্ন হলো।",
+                                "ka": "প্রশমন বিক্রিয়া কাকে বলে?",
+                                "kha": "এসিড ব্যবহারের সতর্কতাসমূহ লেখো।",
+                                "ga": "উদ্দীপকে সংঘটিত বিক্রিয়াটির সমীকরণ লিখে এর প্রকৃতি ব্যাখ্যা কর।",
+                                "gha": "\"দৈনন্দিন জীবনে এসিড ও ক্ষারকের সঠিক ব্যবহার আমাদের স্বাস্থ্য সুরক্ষায় গুরুত্বপূর্ণ ভূমিকা রাখে।\"—বিশ্লেষণ কর।"
+                            }
+                        ]
+                    }
+                }
             },
-            {
-              "stem": "উদ্দীপক ২: একটি সরকারি দপ্তরে ফাইলপত্র আগে ম্যানুয়ালি সংরক্ষণ করা হতো। বর্তমানে ই-সেবা ও ই-ফাইলিং চালুর ফলে নাগরিকেরা দ্রুত সেবা পাচ্ছেন।",
-              "ka": "ই-গভর্ন্যান্স কী?",
-              "kha": "ই-সেবার মাধ্যমে নাগরিক সুবিধা বৃদ্ধির দুটি উদাহরণ দাও।",
-              "ga": "উদ্দীপকের সেবা ব্যবস্থার পরিবর্তনের ফলে কীভাবে সময় ও অর্থ সাশ্রয় হচ্ছে তা আলোচনা কর।",
-              "gha": "\"ডিজিটাল প্রযুক্তি প্রবর্তন একটি স্বচ্ছ ও দুর্নীতিমুক্ত সমাজ গঠনে সহায়ক।\"—উক্তিটি মূল্যায়ন কর।"
+            "জীববিজ্ঞান": {
+                "জীবপ্রযুক্তি ও বংশগতি": {
+                    "প্রজনন ও বাস্তুতন্ত্র": {
+                        "MCQ": [
+                            {"q": "বাস্তুতন্ত্রের প্রধান উপাদান কয়টি?", "options": ["ক) ২টি (জৈব ও অজৈব)", "খ) ৩টি", "গ) ৪টি", "ঘ) ৫টি"], "answer": "ক) ২টি (জৈব ও অজৈব)"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: একটি বনের বাস্তুতন্ত্রে উৎপাদক হিসেবে গাছপালা সৌরশক্তি ব্যবহার করে খাদ্য তৈরি করে, যা তৃণভোজী ও মাংসাশী প্রাণীরা গ্রহণ করে শক্তি প্রবাহ বজায় রাখে।",
+                                "ka": "বাস্তুতন্ত্রের প্রধান উপাদান কয়টি?",
+                                "kha": "খাদ্য জাল ও খাদ্য শৃঙ্খলের মধ্যে পার্থক্য লেখো।",
+                                "ga": "উদ্দীপকের বাস্তুতন্ত্রে শক্তি প্রবাহের রূপান্তর প্রক্রিয়াটি ব্যাখ্যা কর।",
+                                "gha": "\"বাস্তুতন্ত্রের পারস্পরিক ভারসাম্যের ওপরই পৃথিবীর জীববৈচিত্র্যের অস্তিত্ব টিকে রয়েছে।\"—মূল্যায়ন কর।"
+                            }
+                        ]
+                    }
+                }
+            },
+            "হিসাববিজ্ঞান": {
+                "আর্থিক বিবরণী": {
+                    "মজুদ পণ্য ও রেওয়ামিল": {
+                        "MCQ": [
+                            {"q": "রেওয়ামিল প্রস্তুতের প্রধান উদ্দেশ্য কী?", "options": ["ক) হিসাবের গাণিতিক শুদ্ধতা যাচাই", "খ) মুনাফা নির্ণয়", "গ) দেনা পরিশোধ", "ঘ) কর নির্ধারণ"], "answer": "ক) হিসাবের গাণিতিক শুদ্ধতা যাচাই"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: একটি ব্যবসায়ের লেনদেন থেকে প্রস্তুতকৃত হিসাবের ডেবিট ও ক্রেডিট উদ্বৃত্তগুলোর যোগফল সমান না হওয়ায় হিসাবরক্ষক গাণিতিক ত্রুটি খুঁজে বের করার উদ্যোগ নিলেন।",
+                                "ka": "রেওয়ামিল কী?",
+                                "kha": "কোন কোন ভুল রেওয়ামিলে ধরা পড়ে না—ব্যাখ্যা কর।",
+                                "ga": "হিসাবের গাণিতিক শুদ্ধতা রক্ষায় রেওয়ামিলের ভূমিকা আলোচনা কর।",
+                                "gha": "\"ত্রুটিমুক্ত রেওয়ামিল প্রস্তুত আর্থিক বিবরণী তৈরির পথ সুগম করে।\"—বিশ্লেষণ কর।"
+                            }
+                        ]
+                    }
+                }
+            },
+            "ব্যবসায় উদ্যোগ": {
+                "ব্যবসায় পরিকল্পনা": {
+                    "বিপণন ও পরিকল্পনা": {
+                        "MCQ": [
+                            {"q": "SWOT বিশ্লেষণে 'O' দ্বারা কী বোঝায়?", "options": ["ক) Opportunity (সুযোগ)", "খ) Organization", "গ) Operation", "ঘ) Ownership"], "answer": "ক) Opportunity (সুযোগ)"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: রিনা আক্তার একটি হস্তশিল্প কারখানা চালুর পূর্বে বাজারের চাহিদা, মূলধনের উৎস ও প্রতিযোগীদের অবস্থান বিবেচনা করে একটি পূর্ণাঙ্গ নীল নকশা বা পরিকল্পনা তৈরি করলেন।",
+                                "ka": "ব্যবসায়িক পরিকল্পনা কী?",
+                                "kha": "SWOT বিশ্লেষণ কেন জরুরি—ব্যাখ্যা কর।",
+                                "ga": "উদ্দীপকে রিনা আক্তারের গৃহীত পদক্ষেপটির প্রয়োজনীয়তা আলোচনা কর।",
+                                "gha": "\"পূর্ব পরিকল্পনা ও সঠিক ঝুঁকি মূল্যায়ন ছাড়া ব্যবসায় সফলতা অর্জন অসম্ভব।\"—মূল্যায়ন কর।"
+                            }
+                        ]
+                    }
+                }
+            },
+            "বাংলাদেশের ইতিহাস ও বিশ্বসভ্যতা": {
+                "আধুনিক বাংলাদেশ": {
+                    "ব্রিটিশ ও পাকিস্তান আমল": {
+                        "MCQ": [
+                            {"q": "কত সালে পলাশীর যুদ্ধ সংঘটিত হয়?", "options": ["ক) ১৭৫৭ সালে", "খ) ১৭৬৪ সালে", "গ) ১৯০৫ সালে", "ঘ) ১৯৪৭ সালে"], "answer": "ক) ১৭৫৭ সালে"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: ১৯৫২ সালের ২১ ফেব্রুয়ারি রাষ্ট্রভাষা বাংলার দাবিতে এদেশের ছাত্র-জনতা রাজপথে রক্তিম রক্ত ঢেলে দিয়েছিল, যা পরবর্তীতে বাঙালির স্বাধিকার আন্দোলনের চূড়ান্ত বিজয়ের পথ উন্মুক্ত করে।",
+                                "ka": "ভাষা আন্দোলনের শহীদদের স্মরণে নির্মিত মিনারের প্রথম স্থপতি কে ছিলেন?",
+                                "kha": "বায়ান্নর ভাষা আন্দোলনের ঐতিহাসিক গুরুত্ব ব্যাখ্যা কর।",
+                                "ga": "উদ্দীপকে বাঙালি জাতির আত্মত্যাগের সাথে কোন জাতীয় চেতনার প্রকাশ ঘটেছে—আলোচনা কর।",
+                                "gha": "\"ভাষা আন্দোলনই বাঙালি জাতীয়তাবাদের বীজ বপন করেছিল।\"—মূল্যায়ন কর।"
+                            }
+                        ]
+                    }
+                }
+            },
+            "পৌরনীতি ও নাগরিকতা": {
+                "আইন ও সরকার": {
+                    "সংবিধান ও গণতন্ত্র": {
+                        "MCQ": [
+                            {"q": "বাংলাদেশের সংবিধান কার্যকর হয় কত তারিখে?", "options": ["ক) ১৬ ডিসেম্বর ১৯৭২", "খ) ২৬ মার্চ ১৯৭১", "গ) ১৭ এপ্রিল ১৯৭১", "ঘ) ১০ জানুয়ারি ১৯৭২"], "answer": "ক) ১৬ ডিসেম্বর ১৯৭২"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: ১৯৭২ সালে প্রণীত বাংলাদেশের সংবিধানে গণতন্ত্র, সমাজতন্ত্র, ধর্মনিরপেক্ষতা ও জাতীয়তাবাদ—এই চার মূলনীতিকে ভিত্তি করে রাষ্ট্র পরিচালনার পথ নির্দেশ করা হয়েছে।",
+                                "ka": "সংবিধান প্রণয়ন কমিটির প্রধান কে ছিলেন?",
+                                "kha": "সংবিধানকে রাষ্ট্রের সর্বোচ্চ দলিল বলা হয় কেন—ব্যাখ্যা কর।",
+                                "ga": "উদ্দীপকে বর্ণিত চার মূলনীতির আলোকে আমাদের গণতান্ত্রিক ব্যবস্থার স্বরূপ ব্যাখ্যা কর।",
+                                "gha": "\"সংবিধানের অনুশাসন মেনে চলা প্রতিটি নাগরিকের মৌলিক দায়িত্ব।\"—আলোচনা কর।"
+                            }
+                        ]
+                    }
+                }
+            },
+            "অর্থনীতি": {
+                "জাতীয় আয়": {
+                    "ব্যাংক ব্যবস্থা": {
+                        "MCQ": [
+                            {"q": "কেন্দ্রীয় ব্যাংককে কী বলা হয়?", "options": ["ক) ব্যাংকের ব্যাংক", "খ) সাধারণ ব্যাংক", "গ) বাণিজ্যিক ব্যাংক", "ঘ) সঞ্চয়ী ব্যাংক"], "answer": "ক) ব্যাংকের ব্যাংক"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: দেশের মুদ্রাবাজারের অভিভাবক হিসেবে একটি নির্দিষ্ট ব্যাংক অন্যান্য বাণিজ্যিক ব্যাংকগুলোকে নিয়ন্ত্রণ করে এবং দেশের অর্থনৈতিক স্থিতিশীলতা বজায় রাখে।",
+                                "ka": "বাংলাদেশের কেন্দ্রীয় ব্যাংকের নাম কী?",
+                                "kha": "বাণিজ্যিক ব্যাংক ও কেন্দ্রীয় ব্যাংকের মধ্যে প্রধান পার্থক্য লেখো।",
+                                "ga": "উদ্দীপকের ব্যাংকটির কার্যাবলি অর্থনীতির কোন দিকটিকে নির্দেশ করে—ব্যাখ্যা কর।",
+                                "gha": "\"কেন্দ্রীয় ব্যাংক দেশের সামগ্রিক আর্থিক ব্যবস্থার মূল চালিকাশক্তি।\"—বিশ্লেষণ কর।"
+                            }
+                        ]
+                    }
+                }
+            },
+            "তথ্য ও যোগাযোগ প্রযুক্তি": {
+                "ডিজিটাল বাংলাদেশ": {
+                    "মাল্টিমিডিয়া ও গ্রাফিক্স": {
+                        "MCQ": [
+                            {"q": "ডিজিটাল কনটেন্ট প্রধানত কয় ভাগে বিভক্ত?", "options": ["ক) ৪ ভাগে", "খ) ২ ভাগে", "গ) ৩ ভাগে", "ঘ) ৫ ভাগে"], "answer": "ক) ৪ ভাগে"}
+                        ],
+                        "CQ": [
+                            {
+                                "stem": "উদ্দীপক: একটি সরকারি দপ্তরে ফাইলপত্র আগে কাগজের মাধ্যমে সংরক্ষণ করা হতো। বর্তমানে ই-সেবা ও ই-ফাইলিং চালুর ফলে নাগরিকেরা ঘরে বসেই দ্রুত সেবা পাচ্ছেন।",
+                                "ka": "ই-গভর্নেন্স কী?",
+                                "kha": "ই-সেবার দুটি সুবিধা ব্যাখ্যা কর।",
+                                "ga": "উদ্দীপকে সেবা ব্যবস্থার পরিবর্তনের ফলে কীভাবে সময় ও অর্থ সাশ্রয় হচ্ছে তা আলোচনা কর।",
+                                "gha": "\"ডিজিটাল প্রযুক্তির প্রবর্তন একটি স্বচ্ছ ও দুর্নীতিমুক্ত সমাজ গঠনে সহায়ক।\"—উক্তিটি মূল্যায়ন কর।"
+                            }
+                        ]
+                    }
+                }
             }
-          ]
         }
-      }
     }
-  },
-  
-  "দশম শ্রেণি": {
-    "বাংলা ১ম পত্র": {
-      "সাহিত্য": {
-        "গদ্য ও পদ্য": {
-          "MCQ": [
-            {"q": "'শুভা' গল্পে শুভার প্রকৃত নাম কী ছিল?", "options": ["ক) সুভাষিণী", "খ) সুকেশিনী", "গ) সুহাসিনী", "ঘ) সুচরিতা"], "answer": "ক) সুভাষিণী"},
-            {"q": "বই পড়া অনুশীলনের জন্য কিসের প্রয়োজন সবচেয়ে বেশি?", "options": ["ক) লাইব্রেরি", "খ) বিদ্যালয়", "গ) বিশ্ববিদ্যালয়", "ঘ) গৃহ"], "answer": "ক) লাইব্রেরি"},
-            {"q": "'বঙ্গবাণী' কবিতায় কবি কাদের প্রতি ক্ষোভ প্রকাশ করেছেন?", "options": ["ক) যারা বাংলাদেশে জন্মে বাংলা ভাষাকে অবজ্ঞা করে", "খ) যারা বিদেশি ভাষা জানে না", "গ) যারা পড়াশোনা করে না", "ঘ) যারা কাব্যচর্চা করে না"], "answer": "ক) যারা বাংলাদেশে জন্মে বাংলা ভাষাকে অবজ্ঞা করে"},
-            {"q": "কপোতাক্ষ নদ কবিতার মূল সুর কোনটি?", "options": ["ক) স্বদেশপ্রেম", "খ) প্রকৃতিপ্রীতি", "গ) রোমান্টিকতা", "ঘ) স্মৃতিচারণ"], "answer": "ক) স্বদেশপ্রেম"},
-            {"q": "'মানুষ' কবিতায় সাম্যবাদের বার্তা কে প্রচার করেছেন?", "options": ["ক) কাজী নজরুল ইসলাম", "খ) রবীন্দ্রনাথ ঠাকুর", "গ) জসীমউদ্দীন", "ঘ) জীবনানন্দ দাশ"], "answer": "ক) কাজী নজরুল ইসলাম"},
-            {"q": "মমতাদি কত টাকা মাইনে আশা করেছিল?", "options": ["ক) ১২ টাকা", "খ) ১৫ টাকা", "গ) ২০ টাকা", "ঘ) ২৫ টাকা"], "answer": "ক) ১২ টাকা"},
-            {"q": "আম আঁটির ভেঁপু গল্পের মূল চরিত্র কোনটি?", "options": ["ক) অপু ও দুর্গা", "খ) হরিহর", "গ) সর্বজয়া", "ঘ) রায়পিসি"], "answer": "ক) অপু ও দুর্গা"},
-            {"q": "'পল্লীসাহিত্য' প্রবন্ধে কোন বিষয়টি সংরক্ষণের ওপর জোর দেওয়া হয়েছে?", "options": ["ক) লোকসাহিত্য ও লোকসংস্কৃতি", "খ) শহুরে সাহিত্য", "গ) উপন্যাস", "ঘ) নাট্যচর্চা"], "answer": "ক) লোকসাহিত্য ও লোকসংস্কৃতি"},
-            {"q": "'জীবন-সংগীত' কবিতার মূল বার্তা কী?", "options": ["ক) কর্মময় জীবনের গুরুত্ব", "খ) অলস জীবনযাপন", "গ) বৈরাগ্য সাধন", "ঘ) সংসারের মায়া ত্যাগ"], "answer": "ক) কর্মময় জীবনের গুরুত্ব"},
-            {"q": "'একাত্তরের দিনগুলি' কোন জাতীয় রচনা?", "options": ["ক) দিনলিপি/স্মৃতিচারণ", "খ) উপন্যাস", "গ) নাটক", "ঘ) ভ্রমণকাহিনী"], "answer": "ক) দিনলিপি/স্মৃতিচারণ"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: সলিমুল্লাহ গ্রামে এক প্রতিবন্ধী শিশুকে গভীর মমতায় আগলে রাখেন। সমাজের মানুষ তাকে অবহেলা করলেও তিনি মনে করেন ভালোবাসাই সকল মানুষের অধিকার।",
-              "ka": "শুভার বাকপ্রতিবন্ধী দুই সখীর নাম কী?",
-              "kha": "শুভা প্রকৃতির মাঝে আশ্রয় খুঁজে পেয়েছিল কেন?",
-              "ga": "উদ্দীপকের সলিমুল্লাহর মনোভাব 'শুভা' গল্পের কোন দিকটি ফুটিয়ে তোলে—ব্যাখ্যা কর।",
-              "gha": "\"বিশেষ চাহিদাসম্পন্ন শিশুদের প্রতি সহানুভূতিশীল দৃষ্টিভঙ্গিই মানবিক সমাজ গঠনের পূর্বশর্ত।\"—বিশ্লেষণ কর।"
-            },
-            {
-              "stem": "উদ্দীপক ২: প্রবাসে দীর্ঘদিন অবস্থান করেও সজল তার নিজ গ্রামের নদী ও মাটির গন্ধ ভুলতে পারেন না। সুযোগ পেলেই তিনি মাতৃভূমির স্মৃতিচারণ করেন।",
-              "ka": "'কপোতাক্ষ নদ' কোন ধরণের কবিতা?",
-              "kha": "কবি কপোতাক্ষ নদকে স্নেহের ডোরে বাঁধার কথা বলেছেন কেন?",
-              "ga": "উদ্দীপকের সজলের অনুভূতির সাথে 'কপোতাক্ষ নদ' কবিতার কবির মানসিকতার তুলনা কর।",
-              "gha": "\"স্বদেশপ্রীতি ও স্বদেশের স্মৃতিকাতরতা মানুষের হৃদয়ে চির অমলিন থাকে।\"—উক্তিটি মূল্যায়ন কর।"
-            }
-          ]
-        }
-      }
-    },
-    "বাংলা ২য় পত্র": {
-      "ব্যাকরণ ও নির্মিতি": {
-        "ধ্বনিতত্ত্ব ও সমাস": {
-          "MCQ": [
-            {"q": "বাংলা ভাষায় মৌলিক স্বরধ্বনি কয়টি?", "options": ["ক) ৭টি", "খ) ১১টি", "গ) ৩৯টি", "ঘ) ২৫টি"], "answer": "ক) ৭টি"},
-            {"q": "ণ-ত্ব ও ষ-ত্ব বিধান ব্যাকরণের কোন অংশে আলোচিত হয়?", "options": ["ক) ধ্বনিতত্ত্ব", "খ) রূপতত্ত্ব", "গ) বাক্যতত্ত্ব", "ঘ) অর্থতত্ত্ব"], "answer": "ক) ধ্বনিতত্ত্ব"},
-            {"q": "পরপদের অর্থ প্রধান হয় কোন সমাসে?", "options": ["ক) তৎপুরুষ সমাস", "খ) দ্বন্দ্ব সমাস", "গ) বহুব্রীহি সমাস", "ঘ) অব্যয়ীভাব সমাস"], "answer": "ক) তৎপুরুষ সমাস"},
-            {"q": "'রাজর্ষি' শব্দটির সঠিক ব্যাসবাক্য কোনটি?", "options": ["ক) যিনি রাজা তিনিই ঋষি", "খ) রাজার ঋষি", "গ) রাজা ও ঋষি", "ঘ) রাজার ন্যায় ঋষি"], "answer": "ক) যিনি রাজা তিনিই ঋষি"},
-            {"q": "স্বরসন্ধির উদাহরণ কোনটি?", "options": ["ক) বিদ্যালয় (বিদ্যা + আলয়)", "খ) দিগন্ত", "গ) সংবাদ", "ঘ) নিচ্ছল"], "answer": "ক) বিদ্যালয় (বিদ্যা + আলয়)"},
-            {"q": "কৃৎ প্রত্যয় সাধিত শব্দকে কী বলে?", "options": ["ক) কৃদন্ত পদ", "খ) তদ্ধিতান্ত পদ", "গ) সমাসবদ্ধ পদ", "ঘ) উপসর্গ"], "answer": "ক) কৃদন্ত পদ"},
-            {"q": "বিশেষ্যের পরিবর্তে যে পদ ব্যবহৃত হয় তাকে কী বলে?", "options": ["ক) সর্বনাম পদ", "খ) বিশেষণ পদ", "গ) অব্যয় পদ", "ঘ) ক্রিয়াপদ"], "answer": "ক) সর্বনাম পদ"},
-            {"q": "বাক্যের অর্থগত শ্রেণিবিভাগ কয়টি?", "options": ["ক) ৫টি", "খ) ৩টি", "গ) ৪টি", "ঘ) ২টি"], "answer": "ক) ৫টি"},
-            {"q": "'হাতে খড়ি' কোন সমাসের উদাহরণ?", "options": ["ক) বহুব্রীহি সমাস (অলুক বহুব্রীহি)", "খ) তৎপুরুষ সমাস", "গ) কর্মধারয় সমাস", "ঘ) দ্বিগু সমাস"], "answer": "ক) বহুব্রীহি সমাস (অলুক বহুব্রীহি)"},
-            {"q": "ণ-ত্ব বিধান অনুযায়ী কোন যুক্তবর্ণে 'ণ' হয়?", "options": ["ক) ট-বর্গের পূর্বে", "খ) ত-বর্গের পূর্বে", "গ) ক-বর্গের পূর্বে", "ঘ) চ-বর্গের পূর্বে"], "answer": "ক) ট-বর্গের পূর্বে"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: ব্যাকরণগত সঠিক শব্দ প্রয়োগ ও সঠিক পদ সংযোগ ভাষার সৌন্দর্য ও ভাব প্রকাশের স্পষ্টতা বাড়ায়। সমাস ও প্রত্যয় সাধিত শব্দ ভাষাকে সংক্ষেপ করে।",
-              "ka": "সমাস শব্দের অর্থ কী?",
-              "kha": "দ্বন্দ্ব সমাস ও বহুব্রীহি সমাসের দুটি প্রধান পার্থক্য লেখ।",
-              "ga": "উদ্দীপকের আলোকে পদসংক্ষেপণে সমাসের ভূমিকা ব্যাখ্যা কর।",
-              "gha": "\"শব্দ গঠনের প্রক্রিয়া জানা ছাড়া প্রমিত ভাষারীতি অনুসরণ করা সম্ভব নয়।\"—বিশ্লেষণ কর।"
-            },
-            {
-              "stem": "উদ্দীপক ২: ধ্বনির সঠিক উচ্চারণ ও যুক্তবর্ণের নিয়ম না জানলে লেখার ক্ষেত্রে ভুল হওয়ার সম্ভাবনা থাকে। ণ-ত্ব ও ষ-ত্ব বিধান তৎসম শব্দ ব্যবহারের সঠিক নিয়ম নির্ধারণ করে।",
-              "ka": "ষ-ত্ব বিধান বলতে কী বোঝায়?",
-              "kha": "কোন কোন ক্ষেত্রে ণ-ত্ব বিধান প্রযোজ্য হয় না—উদাহরণসহ লেখ।",
-              "ga": "উদ্দীপকে উল্লিখিত বিধান দুটি বাংলা বানানের শুদ্ধতায় কী ভূমিকা রাখে তা ব্যাখ্যা কর।",
-              "gha": "\"বাংলা ভাষার প্রমিত রূপ বজায় রাখতে ব্যাকরণের নিয়ম মানা অপরিহার্য।\"—উক্তিটির সত্যতা যাচাই কর।"
-            }
-          ]
-        }
-      }
-    },
-    "English 1st Paper": {
-      "Reading & Writing": {
-        "Unit 1: Good Citizens & Environment": {
-          "MCQ": [
-            {"q": "What is the primary responsibility of a good citizen?", "options": ["a) Obeying laws and helping others", "b) Accumulating wealth", "c) Living in isolation", "d) Ignoring society"], "answer": "a) Obeying laws and helping others"},
-            {"q": "What causes environmental pollution significantly?", "options": ["a) Industrial waste and deforestation", "b) Tree plantation", "c) Clean energy", "d) Organic farming"], "answer": "a) Industrial waste and deforestation"},
-            {"q": "Which one is a renewable energy source?", "options": ["a) Solar power", "b) Coal", "c) Petroleum", "d) Natural gas"], "answer": "a) Solar power"},
-            {"q": "What is the synonym of 'Responsibility'?", "options": ["a) Duty", "b) Neglect", "c) Freedom", "d) Avoidance"], "answer": "a) Duty"},
-            {"q": "Antonym of 'Destroy' is-", "options": ["a) Create", "b) Damage", "c) Ruin", "d) Harm"], "answer": "a) Create"},
-            {"q": "Global warming is mainly caused by-", "options": ["a) Greenhouse gases", "b) Oxygen", "c) Fresh water", "d) Reforestation"], "answer": "a) Greenhouse gases"},
-            {"q": "Which organization works for global peace and cooperation?", "options": ["a) UNO", "b) FIFA", "c) ICC", "d) WTO"], "answer": "a) UNO"},
-            {"q": "What does 'E-learning' stand for?", "options": ["a) Electronic Learning", "b) Easy Learning", "c) Early Learning", "d) Essential Learning"], "answer": "a) Electronic Learning"},
-            {"q": "Choose the correct sentence:", "options": ["a) Honesty is the best policy.", "b) Honesty is a best policy.", "c) Honesty is best policy.", "d) Honesty is an best policy."], "answer": "a) Honesty is the best policy."},
-            {"q": "What is the key factor to success according to good habits?", "options": ["a) Perseverance and discipline", "b) Laziness", "c) Luck only", "d) Procrastination"], "answer": "a) Perseverance and discipline"}
-          ],
-          "CQ": [
-            {
-              "stem": "Read the text: To be a good citizen, a person needs to acquire knowledge, skill, and a good attitude towards society. Good citizens respect laws and contribute to environmental conservation.",
-              "ka": "What qualities make a person a good citizen?",
-              "kha": "Why is obeying laws essential for social harmony?",
-              "ga": "Summarize the key duties of a good citizen based on the passage.",
-              "gha": "\"Individual responsibility leads to national growth.\" Evaluate the statement in light of the text."
-            },
-            {
-              "stem": "Read the text: Deforestation and excessive carbon emissions are threatening global climate stability. Planting trees and using renewable energy can save our planet.",
-              "ka": "What is the main cause of climate change?",
-              "kha": "How can tree plantation help combat global warming?",
-              "ga": "Explain the importance of adopting renewable energy sources.",
-              "gha": "\"Environmental protection is not an option, but a necessity for human survival.\" Justify."
-            }
-          ]
-        }
-      }
-    },
-    "English 2nd Paper": {
-      "Grammar & Composition": {
-        "Grammar Rules & Transformation": {
-          "MCQ": [
-            {"q": "Change the voice: 'She writes a letter.'", "options": ["a) A letter is written by her.", "b) A letter was written by her.", "c) A letter has been written by her.", "d) A letter is writing by her."], "answer": "a) A letter is written by her."},
-            {"q": "Which one is a Complex sentence?", "options": ["a) Though he is poor, he is honest.", "b) He is poor but honest.", "c) He is a poor and honest man.", "d) Being poor, he is honest."], "answer": "a) Though he is poor, he is honest."},
-            {"q": "Identify the tag question: 'Let us go for a walk, ___?'", "options": ["a) shall we", "b) don't we", "c) won't we", "d) can we"], "answer": "a) shall we"},
-            {"q": "Fill in the blank: 'He is senior ___ me.'", "options": ["a) to", "b) than", "c) from", "d) with"], "answer": "a) to"},
-            {"q": "Which tense expresses an action completed in the recent past?", "options": ["a) Present Perfect", "b) Past Simple", "c) Present Continuous", "d) Future Simple"], "answer": "a) Present Perfect"},
-            {"q": "Choose the correct indirect speech: He said, 'I am ill.'", "options": ["a) He said that he was ill.", "b) He said that I was ill.", "c) He says that he is ill.", "d) He said that he is ill."], "answer": "a) He said that he was ill."},
-            {"q": "Noun form of the verb 'Know' is-", "options": ["a) Knowledge", "b) Known", "c) Knowing", "d) Knowable"], "answer": "a) Knowledge"},
-            {"q": "Identify the degree: 'No other boy in the class is as good as Rahi.'", "options": ["a) Positive", "b) Comparative", "c) Superlative", "d) None"], "answer": "a) Positive"},
-            {"q": "Choose the correct right form of verb: 'Neither he nor his friends ___ present.'", "options": ["a) were", "b) was", "c) is", "d) has"], "answer": "a) were"},
-            {"q": "What is the antonym of 'Optimistic'?", "options": ["a) Pessimistic", "b) Hopeful", "c) Confident", "d) Positive"], "answer": "a) Pessimistic"}
-          ],
-          "CQ": [
-            {
-              "stem": "Transform the following sentences as directed: (a) Bangladesh is a beautiful country. (Exclamatory) (b) It is richer in natural beauty than most other countries. (Superlative) (c) Who does not love his motherland? (Assertive) (d) We should protect our nature. (Passive)",
-              "ka": "What is a compound sentence?",
-              "kha": "Explain the rule of converting Comparative degree into Superlative degree.",
-              "ga": "Transform sentences (a), (b), (c), and (d) according to instructions.",
-              "gha": "\"Mastery over sentence transformation improves overall writing clarity.\" Analyze."
-            },
-            {
-              "stem": "Complete the passage with suitable verbs in correct forms: Education (a) ___ (enlighten) the mind. It (b) ___ (help) us distinguish between right and wrong. A person who (c) ___ (be) educated contributes to national progress.",
-              "ka": "What is Subject-Verb Agreement?",
-              "kha": "State the rule for using Present Perfect Tense with 'recently' or 'already'.",
-              "ga": "Supply the correct form of verbs for (a), (b), and (c).",
-              "gha": "\"Grammatical correctness is the foundation of effective language skills.\" Discuss."
-            }
-          ]
-        }
-      }
-    },
-    "গণিত": {
-      "বীজগণিত ও জ্যামিতি": {
-        "বীজগণিতীয় রাশি ও সেটের ধারণা": {
-          "MCQ": [
-            {"q": "A = {1, 2, 3} হলে সেট A-এর উপসেট (Subset) সংখ্যা কত?", "options": ["ক) ৮টি", "খ) ৬টি", "গ) ৪টি", "ঘ) ২টি"], "answer": "ক) ৮টি"},
-            {"q": "(a + b)³ এর সঠিক সূত্র কোনটি?", "options": ["ক) a³ + 3a²b + 3ab² + b³", "খ) a³ - 3a²b + 3ab² - b³", "গ) a³ + b³ + ab", "ঘ) a³ + 3ab + b³"], "answer": "ক) a³ + 3a²b + 3ab² + b³"},
-            {"q": "ফাঁকা সেটকে (Empty Set) কোন প্রতীক দিয়ে প্রকাশ করা হয়?", "options": ["ক) ∅", "খ) ∈", "গ) ⊂", "ঘ) ∪"], "answer": "ক) ∅"},
-            {"q": "log₁₀ 100 এর মান কত?", "options": ["ক) ২", "খ) ১০", "গ) ১", "ঘ) ০"], "answer": "ক) ২"},
-            {"q": "2x + 3y = 12 এবং x - y = 1 সমীকরণের সমাধান কোনটি?", "options": ["ক) (3, 2)", "খ) (2, 3)", "গ) (4, 1)", "ঘ) (1, 4)"], "answer": "ক) (3, 2)"},
-            {"q": "একটি ত্রিভুজের তিন কোণের যোগফল কত ডিগ্রি?", "options": ["ক) ১৮০°", "খ) ৯০°", "গ) ৩৬০°", "ঘ) ২৭০°"], "answer": "ক) ১৮০°"},
-            {"q": "বৃত্তের বৃহত্তম জ্যা-কে কী বলা হয়?", "options": ["ক) ব্যাস", "খ) ব্যাসার্ধ", "গ) পরিধি", "ঘ) চাপ"], "answer": "ক) ব্যাস"},
-            {"q": "x² - 5x + 6 = 0 সমীকরণের মূলদ্বয় কোনটি?", "options": ["ক) 2, 3", "খ) -2, -3", "গ) 1, 6", "ঘ) -1, -6"], "answer": "ক) 2, 3"},
-            {"q": "বৃত্তস্থ চতুর্ভুজের বিপরীত কোণদ্বয়ের যোগফল কত?", "options": ["ক) ১৮০°", "খ) ৯০°", "গ) ৩৬০°", "ঘ) ২৭০°"], "answer": "ক) ১৮০°"},
-            {"q": "a⁰ এর মান কত (যেখানে a ≠ 0)?", "options": ["ক) ১", "খ) ০", "গ) a", "ঘ) অসংজ্ঞায়িত"], "answer": "ক) ১"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: U = {1, 2, 3, 4, 5, 6, 7}, A = {2, 4, 6} এবং B = {3, 5, 6} তিনটি সেট।",
-              "ka": "A ∩ B নির্ণয় কর।",
-              "kha": "A ∪ B এবং (A ∪ B)′ নির্ণয় কর।",
-              "ga": "ডি মরগানের নিয়মঃ (A ∪ B)′ = A′ ∩ B′ সত্যতা যাচাই কর।",
-              "gha": "\"ভেনচিত্র ও সেট তত্ত্ব গাণিতিক বিন্যাসকে সহজতর করে।\"—বিশ্লেষণ কর।"
-            },
-            {
-              "stem": "উদ্দীপক ২: x + 1/x = 3 একটি বীজগণিতীয় সমীকরণ।",
-              "ka": "x - 1/x এর মান কত?",
-              "kha": "প্রমাণ কর যে, x³ + 1/x³ = 18।",
-              "ga": "x⁴ + 1/x⁴ এর মান নির্ণয় কর।",
-              "gha": "\"বীজগণিতীয় সূত্রের সঠিক রূপান্তর জটিল রাশিমালা সমাধানে সহায়ক।\"—গাণিতিকভাবে প্রমাণ কর।"
-            }
-          ]
-        }
-      }
-    },
-    "বিজ্ঞান": {
-      "পদার্থ ও জীববিজ্ঞান": {
-        "বল, শক্তি ও জীবনের গঠন": {
-          "MCQ": [
-            {"q": "নিউটন-এর গতির দ্বিতীয় সূত্র থেকে কিসের পরিমাপ পাওয়া যায়?", "options": ["ক) বল", "খ) ভরবেগ", "গ) কাজ", "ঘ) ত্বরণ"], "answer": "ক) বল"},
-            {"q": "কাজ করার সামর্থ্যকে কী বলে?", "options": ["ক) শক্তি", "খ) ক্ষমতা", "গ) বল", "ঘ) বেগ"], "answer": "ক) শক্তি"},
-            {"q": "উদ্ভিদের শালোকসংশ্লেষণ প্রক্রিয়ায় উৎপন্ন প্রধান উপাদান কোনটি?", "options": ["ক) গ্লুকোজ ও অক্সিজেন", "খ) নাইট্রোজেন", "গ) কার্বন ডাই অক্সাইড", "ঘ) মিথেন"], "answer": "ক) গ্লুকোজ ও অক্সিজেন"},
-            {"q": "মানবদেহের প্রধান রেচন অঙ্গ কোনটি?", "options": ["ক) বৃক্ক (Kidney)", "খ) যকৃৎ", "গ) ফুসফুস", "ঘ) ত্বক"], "answer": "ক) বৃক্ক (Kidney)"},
-            {"q": "মহাকর্ষীয় ধ্রুবক (G) এর একক কোনটি?", "options": ["ক) N m² kg⁻²", "খ) N m kg⁻¹", "গ) N m/s", "ঘ) m/s²"], "answer": "ক) N m² kg⁻²"},
-            {"q": "কোষের বংশগতির ধারক ও বাহক কাকে বলা হয়?", "options": ["ক) ক্রোমোজোম/DNA", "খ) আরএনএ", "গ) প্লাস্টিড", "ঘ) সাইটোপ্লাজম"], "answer": "ক) ক্রোমোজোম/DNA"},
-            {"q": "শব্দ সঞ্চালনের বেগ সবচেয়ে বেশি কোন মাধ্যমে?", "options": ["ক) কঠিন", "খ) তরল", "গ) বায়বীয়", "ঘ) শূন্যস্থান"], "answer": "ক) কঠিন"},
-            {"q": "নিচের কোনটি পরিপাকতন্ত্রের অংশ?", "options": ["ক) পাকস্থলী", "খ) ধমনি", "গ) নিউরন", "ঘ) ট্রাকিয়া"], "answer": "ক) পাকস্থলী"},
-            {"q": "শক্তির এসআই (SI) একক কোনটি?", "options": ["ক) জুল (Joule)", "খ) ওয়াট", "গ) পাউণ্ড", "ঘ) নিউটন"], "answer": "ক) জুল (Joule)"},
-            {"q": "নিউক্লিয়াস আবিষ্কার করেন কে?", "options": ["ক) রবার্ট ব্রাউন", "খ) রবার্ট হুক", "গ) ডাল্টন", "ঘ) মেনডেল"], "answer": "ক) রবার্ট ব্রাউন"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: ১০ কেজি ভরের একটি বস্তুকে ৫ m/s² ত্বরণে ধাক্কা দেওয়া হলো। বস্তুটি ২০ মিটার দূরত্ব অতিক্রম করে থেমে গেল।",
-              "ka": "বল কাকে বলে?",
-              "kha": "নিউটন ও ডাইনের মধ্যে সম্পর্ক ব্যাখ্যা কর।",
-              "ga": "প্রযুক্ত বলের মান হিসাব কর।",
-              "gha": "\"শক্তির রূপান্তর ও কাজের পরিমাণ প্রযুক্ত বলের ওপর নির্ভরশীল।\"—উদ্দীপকের তথ্যের আলোকে গাণিতিক বিশ্লেষণ কর।"
-            },
-            {
-              "stem": "উদ্দীপক ২: উদ্ভিদ সূর্যালোক ও কার্বন ডাই অক্সাইড ব্যবহার করে শর্করা জাতীয় খাদ্য তৈরি করে। অপরদিকে মানুষ শ্বসনের মাধ্যমে সেই খাদ্য ভেঙে শক্তি লাভ করে।",
-              "ka": "শালোকসংশ্লেষণ কী?",
-              "kha": "শ্বসন ও শালোকসংশ্লেষণের প্রধান পার্থক্যগুলো কী কী?",
-              "ga": "উদ্দীপকে বর্ণিত শক্তি উৎপাদন প্রক্রিয়াটি উদ্ভিদদেহে কীভাবে ঘটে ব্যাখ্যা কর।",
-              "gha": "\"শালোকসংশ্লেষণ ও শ্বসনের পারস্পরিক সামঞ্জস্যের ওপরই পৃথিবীর জীবজগতের অস্তিত্ব টিকে রয়েছে।\"—মূল্যায়ন কর।"
-            }
-          ]
-        }
-      }
-    },
-    "বাংলাদেশ ও বিশ্বপরিচয়": {
-      "ইতিহাস ও সমাজ ব্যবস্থা": {
-        "রাষ্ট্র, সংবিধান ও সমাজচিত্র": {
-          "MCQ": [
-            {"q": "বাংলাদেশের স্বাধীনতার ঘোষণা প্রথম কে পাঠ করেন/প্রদান করেন?", "options": ["ক) বঙ্গবন্ধু শেখ মুজিবুর রহমান", "খ) তাজউদ্দীন আহমদ", "গ) সৈয়দ নজরুল ইসলাম", "ঘ) এম এ জি ওসমানী"], "answer": "ক) বঙ্গবন্ধু শেখ মুজিবুর রহমান"},
-            {"q": "বাংলাদেশের সংবিধান কার্যকর হয় কত তারিখে?", "options": ["ক) ১৬ই ডিসেম্বর ১৯৭২", "খ) ২৬শে মার্চ ১৯৭২", "গ) ১৭ই এপ্রিল ১৯৭১", "ঘ) ২৬শে নভেম্বর ১৯৭২"], "answer": "ক) ১৬ই ডিসেম্বর ১৯৭২"},
-            {"q": "রাষ্ট্রের উপাদান কয়টি?", "options": ["ক) ৪টি", "খ) ৩টি", "গ) ৫টি", "ঘ) ৬টি"], "answer": "ক) ৪টি"},
-            {"q": "জাতিসংঘের নিরাপত্তা পরিষদের স্থায়ী সদস্য সংখ্যা কত?", "options": ["ক) ৫টি", "খ) ১০টি", "গ) ১৫টি", "ঘ) ৭টি"], "answer": "ক) ৫টি"},
-            {"q": "বাঙালি সংস্কৃতিতে 'পহেলা বৈশাখ' উদযাপনের প্রবর্তক কে?", "options": ["ক) সম্রাট আকবর", "খ) লক্ষণ সেন", "গ) আলাউদ্দিন হোসেন শাহ", "ঘ) সিরাজউদ্দৌলা"], "answer": "ক) সম্রাট আকবর"},
-            {"q": "বাংলাদেশের সর্বোচ্চ আইন কোনটি?", "options": ["ক) সংবিধান", "খ) দণ্ডবিধি", "গ) দেওয়ানি আইন", "ঘ) প্রথাগত আইন"], "answer": "ক) সংবিধান"},
-            {"q": "সামাজিক নিয়মনীতি লঙ্ঘনের ফলে সমাজে কী সৃষ্টি হয়?", "options": ["ক) সামাজিক অবক্ষয় ও বিশৃঙ্খলা", "খ) উন্নয়ন", "গ) প্রবৃদ্ধি", "ঘ) সমতা"], "answer": "ক) সামাজিক অবক্ষয় ও বিশৃঙ্খলা"},
-            {"q": "টেকসই উন্নয়ন লক্ষ্যমাত্রা (SDG) এর লক্ষ্য সংখ্যা কতটি?", "options": ["ক) ১৭টি", "খ) ৮টি", "গ) ১২টি", "ঘ) ২০টি"], "answer": "ক) ১৭টি"},
-            {"q": "বাংলাদেশের জাতীয় সংসদের আসন সংখ্যা কতটি?", "options": ["ক) ৩৫০টি", "খ) ৩০০টি", "গ) ৪০০টি", "ঘ) ৩২০টি"], "answer": "ক) ৩৫০টি"},
-            {"q": "অর্থনৈতিক উন্নয়নের অন্যতম প্রধান সূচক কোনটি?", "options": ["ক) মাথাপিছু আয়", "খ) মোট জনসংখ্যা", "গ) জমির পরিমাণ", "ঘ) আমদানির পরিমাণ"], "answer": "ক) মাথাপিছু আয়"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: ১৯৭২ সালে প্রণীত বাংলাদেশের সংবিধানের অন্যতম মূলনীতি হলো গণতন্ত্র, সমাজতন্ত্র, ধর্মনিরপেক্ষতা ও জাতীয়তাবাদ। এই সংবিধান আইনের শাসন প্রতিষ্ঠায় মূল ভিত্তি হিসেবে কাজ করছে।",
-              "ka": "বাংলাদেশের সংবিধান প্রণয়ন কমিটির প্রধান কে ছিলেন?",
-              "kha": "সংবিধানকে রাষ্ট্রের সর্বোচ্চ দলিল বলা হয় কেন?",
-              "ga": "উদ্দীপকে বর্ণিত চার মূলনীতির আলোকে আমাদের গণতান্ত্রিক ব্যবস্থার ব্যাখ্যা দাও।",
-              "gha": "\"সংবিধান রক্ষা করা এবং সংবিধানের অনুশাসন মেনে চলা প্রতিটি নাগরিকের মৌলিক দায়িত্ব।\"—আলোচনা কর।"
-            },
-            {
-              "stem": "উদ্দীপক ২: একটি সমাজে যুবসমাজের একটি অংশ উপযুক্ত শিক্ষার অভাবে বিভিন্ন সামাজিক অপরাধ ও মাদকে জড়িয়ে পড়ছে। স্থানীয় সচেতন নাগরিকেরা তাদের পুনর্বাসনে উদ্যোগ গ্রহণ করেছেন।",
-              "ka": "সামাজিক ব্যাধি কী?",
-              "kha": "কিশোর অপরাধের প্রধান কারণগুলো ব্যাখ্যা কর।",
-              "ga": "উদ্দীপকের সমস্যার জন্য সমাজ কাঠামোর কোন ঘাটতি দায়ী তা আলোচনা কর।",
-              "gha": "\"সামাজিক সচেতনতা ও সঠিক শিক্ষা প্রয়োগই অপরাধমুক্ত সমাজ গঠনের পথ দেখাতে পারে।\"—মতামত দাও।"
-            }
-          ]
-        }
-      }
-    },
-    "রসায়ন": {
-      "বিজ্ঞান শাখা": {
-        "পদার্থের গঠন ও রাসায়নিক বন্ধন": {
-          "MCQ": [
-            {"q": "সোডিয়াম (Na) এর পারমাণবিক সংখ্যা কত?", "options": ["ক) ১১", "খ) ১২", "গ) ১৩", "ঘ) ১৯"], "answer": "ক) ১১"},
-            {"q": "নিচের কোনটি নিষ্ক্রিয় গ্যাস?", "options": ["ক) আর্গন (Ar)", "খ) অক্সিজেন (O₂)", "গ) ক্লোরিন (Cl₂)", "ঘ) নাইট্রোজেন (N₂)"], "answer": "ক) আর্গন (Ar)"},
-            {"q": "আয়নিক বন্ধন গঠিত হয় কাদের মধ্যে?", "options": ["ক) ধাতু ও অধাতু", "খ) দুই অধাতু", "গ) দুই ধাতু", "ঘ) নিষ্ক্রিয় গ্যাস"], "answer": "ক) ধাতু ও অধাতু"},
-            {"q": "পানি (H₂O) অনুতে কোন ধরণের বন্ধন বিদ্যমান?", "options": ["ক) সমযোজী বন্ধন", "খ) আয়নিক বন্ধন", "গ) ধাতু বন্ধন", "ঘ) হাইড্রোজেন বন্ধন"], "answer": "ক) সমযোজী বন্ধন"},
-            {"q": "কার্বনের যোজনী সাধারণ অবস্থায় কত?", "options": ["ক) ৪", "খ) ২", "গ) ৩", "ঘ) ১"], "answer": "ক) ৪"},
-            {"q": "১ মোল পদার্থে কতটি অণু থাকে?", "options": ["ক) ৬.০২৩ × ১০²³", "খ) ৩.০১ × ১০²³", "গ) ১.৬৬ × ১০⁻²⁴", "ঘ) ৯.৮ × ১০⁸"], "answer": "ক) ৬.০২৩ × ১০²³"},
-            {"q": "পর্যায় সারণির মূল ভিত্তি কোনটি?", "options": ["ক) পারমাণবিক সংখ্যা (ইলেকট্রন বিন্যাস)", "খ) ভর সংখ্যা", "গ) গলনাঙ্ক", "ঘ) ঘনত্ব"], "answer": "ক) পারমাণবিক সংখ্যা (ইলেকট্রন বিন্যাস)"},
-            {"q": "ক্ষার ধাতুর সমূহের গ্রুপ নম্বর কত?", "options": ["ক) গ্রুপ ১", "খ) গ্রুপ ২", "গ) গ্রুপ ১৭", "ঘ) গ্রুপ ১৮"], "answer": "ক) গ্রুপ ১"},
-            {"q": "মিথেন (CH₄) গ্যাসে কার্বনের শতকরা পরিমাণ কত?", "options": ["ক) ৭৫%", "খ) ২৫%", "গ) ৫০%", "ঘ) ৮০%"], "answer": "ক) ৭৫%"},
-            {"q": "নিচের কোনটি এসিডের জলীয় দ্রবণে উৎপন্ন হয়?", "options": ["ক) H⁺ আয়ন", "খ) OH⁻ আয়ন", "গ) Na⁺ আয়ন", "ঘ) Cl⁻ আয়ন"], "answer": "ক) H⁺ আয়ন"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: মৌল A (পারমাণবিক সংখ্যা ১১) এবং মৌল B (পারমাণবিক সংখ্যা ১৭) পরস্পর যুক্ত হয়ে AB যৌগ গঠন করে।",
-              "ka": "যোজনী কাকে বলে?",
-              "kha": "নিষ্ক্রিয় গ্যাসগুলো রাসায়নিকভাবে নিষ্ক্রিয় কেন?",
-              "ga": "A ও B মৌলের মধ্যে বন্ধন গঠন প্রক্রিয়া ইলেকট্রন বিন্যাসের সাহায্যে ব্যাখ্যা কর।",
-              "gha": "\"গঠিত AB যৌগটি পানিতে দ্রবণীয় এবং জলীয় দ্রবণে বিদ্যুৎ পরিবহন করে।\"—যাচাই কর।"
-            },
-            {
-              "stem": "উদ্দীপক ২: গবেষণাগারে ৫ গ্রাম কার্বনকে প্রয়োজনীয় অক্সিজেনে দহন করে কার্বন ডাই অক্সাইড (CO₂) তৈরি করা হলো।",
-              "ka": "মোলার ভর কী?",
-              "kha": "এসটিপি (STP)-তে ১ মোল গ্যাসের আয়তন কত?",
-              "ga": "উদ্দীপকে উৎপন্ন CO₂ এর মোলার ভর ও অনুর সংখ্যা হিসাব কর।",
-              "gha": "\"ভরের সংরক্ষণ সূত্র রাসায়নিক বিক্রিয়ার সমতা রক্ষা করে।\"—বিশ্লেষণ কর।"
-            }
-          ]
-        }
-      }
-    },
-    "পদার্থবিজ্ঞান": {
-      "বিজ্ঞান শাখা": {
-        "গতি, বল ও শক্তি": {
-          "MCQ": [
-            {"q": "পরন্ত বস্তুর সূত্র প্রদান করেন কে?", "options": ["ক) গ্যালিলিও", "খ) নিউটন", "গ) আইন্সটাইন", "ঘ) আর্কিমিডিস"], "answer": "ক) গ্যালিলিও"},
-            {"q": "ত্বরণের একক কোনটি?", "options": ["ক) m/s²", "খ) m/s", "গ) N/m", "ঘ) kg·m/s"], "answer": "ক) m/s²"},
-            {"q": "ভরবেগের একক কোনটি?", "options": ["ক) kg·m/s", "খ) N·m", "গ) J/s", "ঘ) m/s²"], "answer": "ক) kg·m/s"},
-            {"q": "১ অশ্বক্ষমতা (HP) = কত ওয়াট?", "options": ["ক) ৭৪৬ ওয়াট", "খ) ১০০০ ওয়াট", "গ) ৫০০ ওয়াট", "ঘ) ৭০০ ওয়াট"], "answer": "ক) ৭৪৬ ওয়াট"},
-            {"q": "শব্দ একটি কী ধরণের তরঙ্গ?", "options": ["ক) অনুদৈর্ঘ্য তরঙ্গ", "খ) অনুপ্রস্থ তরঙ্গ", "গ) তড়িৎচুম্বকীয় তরঙ্গ", "ঘ) স্থিতিস্থাপক তরঙ্গ নয়"], "answer": "ক) অনুদৈর্ঘ্য তরঙ্গ"},
-            {"q": "অবতল দর্পণে ফোকাস দূরত্ব ব্যাসার্ধের কত গুণ?", "options": ["ক) অর্ধেক (r/2)", "খ) দ্বিগুণ", "গ) সমান", "ঘ) তিনগুণ"], "answer": "ক) অর্ধেক (r/2)"},
-            {"q": "স্থির অবস্থান থেকে বিনামূল্যে পড়ন্ত বস্তুর বেগ সময়ের সাথে-", "options": ["ক) সমানুপাতিক", "খ) ব্যস্তানুপাতিক", "গ) বর্গের সমানুপাতিক", "ঘ) অপরিবর্তিত"], "answer": "ক) সমানুপাতিক"},
-            {"q": "তাপমাত্রার পরিমাপক স্কেল কেলভিনে সেলসিয়াসের সম্পর্ক কোনটি?", "options": ["ক) K = C + ২৭৩.১৫", "খ) K = C - ২৭৩", "গ) K = ২৭৩ - C", "ঘ) C = K + ২৭৩"], "answer": "ক) K = C + ২৭৩.১৫"},
-            {"q": "কোন বলের কারণে গ্রহগুলো সূর্যের চারদিকে ঘোরে?", "options": ["ক) মহাকর্ষ বল", "খ) নিউক্লীয় বল", "গ) তড়িৎ বল", "ঘ) ঘর্ষণ বল"], "answer": "ক) মহাকর্ষ বল"},
-            {"q": "কাজ করার হারকে কী বলে?", "options": ["ক) ক্ষমতা", "খ) শক্তি", "গ) বেগ", "ঘ) ভরবেগ"], "answer": "ক) ক্ষমতা"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: ৫ কেজি ভরের একটি বস্তুকে ৫০ মিটার উঁচু দালানের ছাদ থেকে নিচে ফেলে দেওয়া হলো। (g = 9.8 m/s²)",
-              "ka": "মুক্তভাবে পড়ন্ত বস্তু কী?",
-              "kha": "গতিশক্তি ও বিভব শক্তির মধ্যে সম্পর্ক লেখ।",
-              "ga": "ভূমি স্পর্শ করার পূর্বমুহূর্তে বস্তুটির বেগ নির্ণয় কর।",
-              "gha": "\"পড়ন্ত বস্তুর ক্ষেত্রে যান্ত্রিক শক্তির সংরক্ষণশীলতা নীতি সংরক্ষিত হয়।\"—গাণিতিক প্রমাণের সাহায্যে বিশ্লেষণ কর।"
-            },
-            {
-              "stem": "উদ্দীপক ২: একটি গাড়ির বেগ ১০ সেকেন্ডে স্থির অবস্থান থেকে বৃদ্ধি পেয়ে ২০ m/s হলো। গাড়িটির ভর ১০০০ কেজি।",
-              "ka": "ত্বরণ কাকে বলে?",
-              "kha": "ঘর্ষণ বল কীভাবে গতির বিপরীত কাজ করে—ব্যাখ্যা কর।",
-              "ga": "গাড়িটির ত্বরণ এবং প্রযুক্ত বলের মান হিসাব কর।",
-              "gha": "\"ত্বরণ ও ভরের গুণফলই প্রযুক্ত বল নির্দেশ করে।\"—নিউটনীয় গতির আলোকে মূল্যায়ন কর।"
-            }
-          ]
-        }
-      }
-    },
-    "জীববিজ্ঞান": {
-      "বিজ্ঞান শাখা": {
-        "কোষ ও অঙ্গসংস্থান": {
-          "MCQ": [
-            {"q": "কোষের শক্তিঘর (Powerhouse) কাকে বলে?", "options": ["ক) মাইটোকন্ড্রিয়া", "খ) গলগি বডি", "গ) নিউক্লিয়াস", "ঘ) লাইসোসোম"], "answer": "ক) মাইটোকন্ড্রিয়া"},
-            {"q": "ডিএনএ (DNA) এর দ্বিসূত্রক মডেল আবিষ্কার করেন কে?", "options": ["ক) ওয়াটসন ও ক্রিক", "খ) রবার্ট হুক", "গ) মেনডেল", "ঘ) ল্যামার্ক"], "answer": "ক) ওয়াটসন ও ক্রিক"},
-            {"q": "উদ্ভিদ কোষের প্রধান বৈশিষ্ট্য কোনটি?", "options": ["ক) কোষ প্রাচীরের উপস্থিতি", "খ) সেন্টিওল", "গ) ছোট কোষগহ্বর", "ঘ) লাইসোসোমের সংখ্যাধিক্য"], "answer": "ক) কোষ প্রাচীরের উপস্থিতি"},
-            {"q": "মানুষের লোহিত রক্তকণিকায় কোনটি অনুপস্থিত?", "options": ["ক) নিউক্লিয়াস", "খ) হিমোগ্লোবিন", "গ) প্লাজমা", "ঘ) ঝিল্লি"], "answer": "ক) নিউক্লিয়াস"},
-            {"q": "কোন বিভাজনের মাধ্যমে জননকোষ গঠিত হয়?", "options": ["ক) মিওসিস", "খ) অ্যামাইটোসিস", "গ) মাইটোসিস", "ঘ) সাইটোকাইনেসিস"], "answer": "ক) মিওসিস"},
-            {"q": "সালোকসংশ্লেষণের প্রধান উপজাত দ্রব্য কোনটি?", "options": ["ক) অক্সিজেন", "খ) কার্বন ডাই অক্সাইড", "গ) নাইট্রোজেন", "ঘ) হাইড্রোজেন"], "answer": "ক) অক্সিজেন"},
-            {"q": "উদ্ভিদের পানি পরিহনের জন্য দায়ী কলা কোনটি?", "options": ["ক) জাইলেম", "খ) ফ্লোয়েম", "গ) প্যারেনকাইমা", "ঘ) স্ক্লেরেনকাইমা"], "answer": "ক) জাইলেম"},
-            {"q": "মানবদেহের বৃহত্তম গ্রন্থি কোনটি?", "options": ["ক) যকৃৎ (Liver)", "খ) অগ্ন্যাশয়", "গ) থাইরয়েড", "ঘ) পিটুইটারি"], "answer": "ক) যকৃৎ (Liver)"},
-            {"q": "কোন ভিটামিনের অভাবে রিকেটস রোগ হয়?", "options": ["ক) ভিটামিন D", "খ) ভিটামিন A", "গ) ভিটামিন C", "ঘ) ভিটামিন K"], "answer": "ক) ভিটামিন D"},
-            {"q": "অনুচক্রিকার মূল কাজ কোনটি?", "options": ["ক) রক্ত তঞ্চনে (জমাট বাঁধতে) সাহায্য করা", "খ) অক্সিজেন বহন", "গ) জীবাণু ধ্বংস", "ঘ) তাপ নিয়ন্ত্রণ"], "answer": "ক) রক্ত তঞ্চনে (জমাট বাঁধতে) সাহায্য করা"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: কোষ বিভাজনের দুটি চিত্র লক্ষ্য করা হলো: 'A' প্রক্রিয়ায় দেহের বৃদ্ধি ঘটে এবং 'B' প্রক্রিয়ায় অপত্য কোষে ক্রোমোজোম সংখ্যা অর্ধেক হয়ে যায়।",
-              "ka": "অ্যামাইটোসিস বিভাজন কাকে বলে?",
-              "kha": "মাইটোসিসকে সমীকরণিক বিভাজন বলা হয় কেন?",
-              "ga": "উদ্দীপকের 'A' ও 'B' প্রক্রিয়ার বৈসাদৃশ্য তুলনা কর।",
-              "gha": "\"জীবের ধারাবাহিকতা ও প্রজাতি রক্ষায় 'B' প্রক্রিয়ার গুরুত্ব অপরিসীম।\"—উক্তিটি মূল্যায়ন কর।"
-            },
-            {
-              "stem": "উদ্দীপক ২: রফিক পর্যবেক্ষণ করল যে, গাছ মূলের সাহায্যে পানি শোষণ করে পাতায় পাঠায় এবং সূর্যালোকের সাহায্যে শর্করা তৈরি করে।",
-              "ka": "প্রস্বেদন কী?",
-              "kha": "জাইলেম ও ফ্লোয়েমের কাজ ব্যাখ্যা কর।",
-              "ga": "উদ্দীপকে বর্ণিত প্রক্রিয়ায় উদ্ভিদের খাদ্য তৈরি ও পরিবহন প্রক্রিয়া আলোচনা কর।",
-              "gha": "\"উদ্ভিদের প্রস্বেদন প্রক্রিয়াকে প্রয়োজনীয় ক্ষতিকর প্রক্রিয়া (Necessary evil) বলা হয়।\"—বিশ্লেষণ কর।"
-            }
-          ]
-        }
-      }
-    },
-    "উচ্চতর গণিত": {
-      "বিজ্ঞান শাখা": {
-        "সেট, ফাংশন ও জ্যামিতি": {
-          "MCQ": [
-            {"q": "f(x) = 2x + 1 হলে f(2) এর মান কত?", "options": ["ক) ৫", "খ) ৪", "গ) ৩", "ঘ) ১"], "answer": "ক) ৫"},
-            {"q": "ত্রিভুজের পরিকেন্দ্র, ভরকেন্দ্র ও লম্ববিন্দু সম্পর্কিত উপপাদ্য কোনটি?", "options": ["ক) ইউলারের রেখা", "খ) পিথাগোরাসের উপপাদ্য", "গ) অ্যাপোলোনিয়াসের উপপাদ্য", "ঘ) টলেমির উপপাদ্য"], "answer": "ক) ইউলারের রেখা"},
-            {"q": "aˣ = b হলে x = কত?", "options": ["ক) logₐ b", "খ) log_b a", "গ) a/b", "ঘ) b/a"], "answer": "ক) logₐ b"},
-            {"q": "দ্বিপদী বিস্তৃতি (1 + x)ⁿ এর পদসংখ্যা কত?", "options": ["ক) n + 1", "খ) n", "গ) n - 1", "ঘ) 2n"], "answer": "ক) n + 1"},
-            {"q": "একটি ঘনকের ধারের দৈর্ঘ্য a হলে তার আয়তন কত?", "options": ["ক) a³", "খ) 6a²", "গ) √3a", "ঘ) 3a²"], "answer": "ক) a³"},
-            {"q": "sin²θ + cos²θ = কত?", "options": ["ক) ১", "খ) ০", "গ) ২", "ঘ) -১"], "answer": "ক) ১"},
-            {"q": "(2, 3) ও (5, 7) বিন্দুদ্বয়ের মধ্যবর্তী দূরত্ব কত?", "options": ["ক) ৫", "খ) ২৫", "গ) ৭", "ঘ) ৩"], "answer": "ক) ৫"},
-            {"q": "সমকোণী ত্রিভুজের ক্ষেত্রে অ্যাপোলোনিয়াসের উপপাদ্য কিসের বর্ধিত রূপ?", "options": ["ক) পিথাগোরাসের উপপাদ্য", "খ) ইউক্লিডের পদ্ধতি", "গ) টলেমির সূত্র", "ঘ) ভেনচিত্র"], "answer": "ক) পিথাগোরাসের উপপাদ্য"},
-            {"q": "Vector A = 2i + 3j হলে এর মান (Magnitude) কত?", "options": ["ক) √13", "খ) ৫", "গ) ১৩", "ঘ) √5"], "answer": "ক) √13"},
-            {"q": "tan 45° এর মান কত?", "options": ["ক) ১", "খ) ০", "গ) √৩", "ঘ) ১/√৩"], "answer": "ক) ১"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: F(x) = (2x + 2) / (x - 1) একটি ফাংশন (x ≠ 1)।",
-              "ka": "ফাংশনের ডোমেন কাকে বলে?",
-              "kha": "উক্ত ফাংশনের ডোমেন ও রেঞ্জ নির্ণয় কর।",
-              "ga": "F⁻¹(x) অর্থাৎ বিপরীত ফাংশন নির্ণয় কর।",
-              "gha": "\"এক-এক ও অনটূ ফাংশন হওয়ার ওপর বিপরীত ফাংশনের অস্তিত্ব নির্ভর করে।\"—যাচাই কর।"
-            },
-            {
-              "stem": "উদ্দীপক ২: ΔABC এর AD একটি মধ্যমা। AB = 6 cm, AC = 8 cm এবং BC = 10 cm।",
-              "ka": "অ্যাপোলোনিয়াসের উপপাদ্যের বাক্যটি লেখ।",
-              "kha": "অ্যাপোলোনিয়াসের উপপাদ্য ব্যবহার করে মধ্যমা AD এর দৈর্ঘ্য নির্ণয় কর।",
-              "ga": "প্রমাণ কর যে, AB² + AC² = 2(AD² + BD²)।",
-              "gha": "\"জ্যামিতিক উপপাদ্য ভেক্টরের সাহায্যেও প্রমাণ করা সম্ভব।\"—উক্তিটির সত্যতা বিচার কর।"
-            }
-          ]
-        }
-      }
-    },
-    "হিসাববিজ্ঞান": {
-      "ব্যবসায় শিক্ষা শাখা": {
-        "হিসাব সমীকরণ ও জাবেদা": {
-          "MCQ": [
-            {"q": "হিসাব সমীকরণের মূল উপাদান কোনটি?", "options": ["ক) A = L + E", "খ) A = L - E", "গ) E = A + L", "ঘ) L = A + E"], "answer": "ক) A = L + E"},
-            {"q": "হিসাববিজ্ঞানের প্রথম ও প্রাথমিক বই কোনটি?", "options": ["ক) জাবেদা (Journal)", "খ) খতিয়ান (Ledger)", "গ) রেওয়ামিল", "ঘ) নগদান বই"], "answer": "ক) জাবেদা (Journal)"},
-            {"q": "খতিয়ানকে বলা হয় হিসাবের-", "options": ["ক) পাকা বই/রাজা", "খ) সহকারী বই", "গ) প্রাথমিক বই", "ঘ) সাময়িক বই"], "answer": "ক) পাকা বই/রাজা"},
-            {"q": "ক্যাশ মেমো কে তৈরি করেন?", "options": ["ক) বিক্রেতা", "খ) ক্রেতা", "গ) ব্যাংক", "ঘ) ম্যানেজার"], "answer": "ক) বিক্রেতা"},
-            {"q": "সম্পদ বাড়লে ডেবিট এবং কমলে কী হয়?", "options": ["ক) ক্রেডিট", "খ) ডেবিট", "গ) অপরিবর্তিত", "ঘ) সমতা"], "answer": "ক) ক্রেডিট"},
-            {"q": "ব্যবসায়িক লেনদেনের লিখিত প্রমাণপত্রকে কী বলে?", "options": ["ক) ভাউচার/দলিল", "খ) খতিয়ান", "গ) রেওয়ামিল", "ঘ) চালান"], "answer": "ক) ভাউচার/দলিল"},
-            {"q": "হিসাববিজ্ঞানের জনক কে?", "options": ["ক) লুকা প্যাসিওলি", "খ) অ্যাডাম স্মিথ", "গ) ফিলিপ কোটলার", "ঘ) মার্শাল"], "answer": "ক) লুকা প্যাসিওলি"},
-            {"q": "উৎপাদন ব্যয় বা বেতন প্রদান কোন ধরণের হিসাব?", "options": ["ক) নামিক/ব্যয় হিসাব", "খ) সম্পত্তি হিসাব", "গ) দায় হিসাব", "ঘ) মালিকানা স্বত্ব"], "answer": "ক) নামিক/ব্যয় হিসাব"},
-            {"q": "দুপাformat জমা পদ্ধতির মূল ভিত্তি কোনটি?", "options": ["ক) ডেবিট ও ক্রেডিট সমতা", "খ) একক হিসাব", "গ) নগদ গ্রহণ", "ঘ) অবচয়"], "answer": "ক) ডেবিট ও ক্রেডিট সমতা"},
-            {"q": "রেওয়ামিলের মূল উদ্দেশ্য কী?", "options": ["ক) হিসাবের গাণিতিক শুদ্ধতা যাচাই", "খ) মুনাফা নির্ণয়", "গ) কর নির্ধারণ", "ঘ) দেনা পরিশোধ"], "answer": "ক) হিসাবের গাণিতিক শুদ্ধতা যাচাই"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: জনাব রফিক ২০২৪ সালের ১ জানুয়ারি তারিখে ৫০,০০০ টাকা নগদ ও ২০,০০০ টাকার আসবাবপত্র নিয়ে ব্যবসা শুরু করলেন। উক্ত মাসে নগদ লেনদেন: পণ্য ক্রয় ১৫,০০০ টাকা, ধারে পণ্য বিক্রয় ২৫,০০০ টাকা।",
-              "ka": "প্রারম্ভিক মূলধনের পরিমাণ কত?",
-              "kha": "জানুয়ারি মাসের লেনদেনগুলোর জাবেদা দাখিলা দেখাও।",
-              "ga": "লেনদেনগুলোর প্রভাব হিসাব সমীকরণে (A = L + E) ছকে দেখাও।",
-              "gha": "\"সঠিক জাবেদা ভুক্তির ওপর নির্ভুল খতিয়ান প্রস্তুত নির্ভর করে।\"—বিশ্লেষণ কর।"
-            },
-            {
-              "stem": "উদ্দীপক ২: ব্যবসায়ী সাজিদের ব্যবসায়িক খতিয়ান উদ্বৃত্ত: নগদ তহবিল ১০,০০০ টাকা, ব্যাংক জমা ২০,০০০ টাকা, দেনাদার ১৫,০০০ টাকা, পাওনাদার ১০,০০০ টাকা এবং মূলধন ৩৫,০০০ টাকা।",
-              "ka": "রেওয়ামিল কী?",
-              "kha": "কোন কোন ভুল রেওয়ামিলে ধরা পড়ে না—ব্যাখ্যা কর।",
-              "ga": "উদ্দীপকের উদ্বৃত্তগুলো নিয়ে একটি শুদ্ধ রেওয়ামিল প্রস্তুত কর।",
-              "gha": "\"রেওয়ামিল প্রস্তুতের মাধ্যমে আর্থিক বিবরণী তৈরির পথ সুগম হয়।\"—উক্তিটি মূল্যায়ন কর।"
-            }
-          ]
-        }
-      }
-    },
-    "ব্যবসায় পরিচিতি": {
-      "ব্যবসায় শিক্ষা শাখা": {
-        "ব্যবসায়ের পরিবেশ ও উৎপত্তি": {
-          "MCQ": [
-            {"q": "ব্যবসায়ের প্রধান ও মূল উদ্দেশ্য কোনটি?", "options": ["ক) মুনাফা অর্জন", "খ) জনকল্যাণ", "গ) পণ্য উৎপাদন", "ঘ) সেবা প্রদান"], "answer": "ক) মুনাফা অর্জন"},
-            {"q": "উৎপাদনের মূল উপাদান কয়টি?", "options": ["ক) ৪টি (ভূমি, শ্রম, মূলধন, সংগঠন)", "খ) ২টি", "গ) ৩টি", "ঘ) ৫টি"], "answer": "ক) ৪টি (ভূমি, শ্রম, মূলধন, সংগঠন)"},
-            {"q": "শিল্পকে মূলত প্রধানত কয় ভাগে ভাগ করা যায়?", "options": ["ক) ৫ ভাগে", "খ) ৩ ভাগে", "গ) ৪ ভাগে", "ঘ) ৬ ভাগে"], "answer": "ক) ৫ ভাগে"},
-            {"q": "বাণিজ্য (Commerce) বলতে কী বোঝায়?", "options": ["ক) পণ্য বণ্টন সংক্রান্ত কাজ", "খ) পণ্য উৎপাদন", "গ) কাঁচামাল সংগ্রহ", "ঘ) যন্ত্রপাতি স্থাপন"], "answer": "ক) পণ্য বণ্টন সংক্রান্ত কাজ"},
-            {"q": "একমালিকানা ব্যবসায়ের বড় সুবিধা কোনটি?", "options": ["ক) দ্রুত সিদ্ধান্ত গ্রহণ ও একক মালিকানা", "খ) প্রচুর মূলধন", "গ) স্থায়ী স্থায়িত্ব", "ঘ) যৌথ ঝুঁকি"], "answer": "ক) দ্রুত সিদ্ধান্ত গ্রহণ ও একক মালিকানা"},
-            {"q": "ব্যবসায়িক পরিবেশের প্রাকৃতিক উপাদান কোনটি?", "options": ["ক) জলবায়ু ও ভূ-প্রকৃতি", "খ) আইন-কানুন", "গ) শিক্ষা", "ঘ) প্রযুক্তি"], "answer": "ক) জলবায়ু ও ভূ-প্রকৃতি"},
-            {"q": "পণ্যসামগ্রী দূর-দূরান্তে পৌঁছানোর বাধা দূর করে কোনটি?", "options": ["ক) পরিবহন", "খ) গুদামজাতকরণ", "গ) ব্যাংক", "ঘ) বীমা"], "answer": "ক) পরিবহন"},
-            {"q": "ঝুঁকিজনিত বাধা দূর করে ব্যবসায়ের কোন অঙ্গ?", "options": ["ক) বীমা (Insurance)", "খ) পরিবহন", "গ) বিজ্ঞাপন", "ঘ) ব্যাংক"], "answer": "ক) বীমা (Insurance)"},
-            {"q": "অংশীদারি ব্যবসায়ের মূল ভিত্তি কোনটি?", "options": ["ক) চুক্তি", "খ) নিবন্ধন", "গ) মূলধন", "ঘ) অংশীদার সংখ্যা"], "answer": "ক) চুক্তি"},
-            {"q": "পাবলিক লিমিটেড কোম্পানির সর্বনিম্ন সদস্য সংখ্যা কত?", "options": ["ক) ৭ জন", "খ) ২ জন", "গ) ৫০ জন", "ঘ) ২০ জন"], "answer": "ক) ৭ জন"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: সজল সাহেব অল্প পুঁজি নিয়ে একা একটি মুদি দোকান চালু করেন। নিজের বুদ্ধিমত্তায় দ্রুত সিদ্ধান্ত নিয়ে তিনি ভালো মুনাফা করছেন। তবে ব্যবসার সমস্ত ঝুঁকি তাকে একাই বহন করতে হয়।",
-              "ka": "একমালিকানা ব্যবসা কী?",
-              "kha": "একমালিকানা ব্যবসা সবচেয়ে জনপ্রিয় কেন—ব্যাখ্যা কর।",
-              "ga": "উদ্দীপকের সজলের ব্যবসার বৈশিষ্ট্যগুলো পাঠ্যবইয়ের আলোকে আলোচনা কর।",
-              "gha": "\"সীমাবদ্ধ ঝুঁকি ও অসীম দায় থাকা সত্ত্বেও একমালিকানা ব্যবসা যুগের পর যুগ টিকে আছে।\"—বিশ্লেষণ কর।"
-            },
-            {
-              "stem": "উদ্দীপক ২: তিন বন্ধু মিলে লিখিত চুক্তির ভিত্তিতে একটি ফলের আড়ত শুরু করলেন। ব্যবসায় অর্জিত লাভ-ক্ষতি তারা চুক্তির শর্তানুযায়ী ভাগ করে নেন।",
-              "ka": "অংশীদারি কারবার কী?",
-              "kha": "\"চুক্তিই অংশীদারি কারবারের মূল ভিত্তি\"—বুঝিয়ে লেখ।",
-              "ga": "উদ্দীপকে বর্ণিত ব্যবসার ধরণ ও পরিচালনার নিয়ম ব্যাখ্যা কর।",
-              "gha": "\"নিবন্ধন না থাকলেও অংশীদারি ব্যবসা বৈধ, তবে নিবন্ধিত হওয়া অধিক নিরাপদ।\"—উক্তিটি মূল্যায়ন কর।"
-            }
-          ]
-        }
-      }
-    },
-    "ব্যবসায় উদ্যোগ": {
-      "ব্যবসায় শিক্ষা শাখা": {
-        "উদ্যোগ ও ব্যবসায়িক পরিকল্পনা": {
-          "MCQ": [
-            {"q": "যেকোনো কাজের ঝুঁকি নিয়ে পথ চলাই হলো-", "options": ["ক) উদ্যোগ", "খ) চাকরি", "গ) অলসতা", "ঘ) চুক্তি"], "answer": "ক) উদ্যোগ"},
-            {"q": "ব্যবসায় উদ্যোগের প্রধান গুণ কোনটি?", "options": ["ক) উদ্ভাবনী শক্তি ও ঝুঁকি নেওয়ার সাহস", "খ) অধিক মূলধন থাকা", "গ) কায়িক শ্রম", "ঘ) উচ্চ শিক্ষা"], "answer": "ক) ব্যবসায় উদ্যোগের প্রধান গুণ কোনটি?"},
-            {"q": "SWOT বিশ্লেষণের 'O' অক্ষরটি কী নির্দেশ করে?", "options": ["ক) Opportunity (সুযোগ)", "খ) Organization", "গ) Operation", "ঘ) Ownership"], "answer": "ক) Opportunity (সুযোগ)"},
-            {"q": "ক্ষুদ্র ও কুটির শিল্পের বড় সুবিধা কী?", "options": ["ক) কম মূলধন ও স্থানীয় কর্মসংস্থান", "খ) ভারী যন্ত্রপাতি ব্যবহার", "গ) বিদেশি বিনিয়োগ", "ঘ) উচ্চ কর প্রদান"], "answer": "ক) কম মূলধন ও স্থানীয় কর্মসংস্থান"},
-            {"q": "ব্যবসায়িক পরিকল্পনার প্রথম ধাপ কোনটি?", "options": ["ক) প্রকল্প নির্বাচন/ধারণা চিহ্নিতকরণ", "খ) ঋণ গ্রহণ", "গ) বিজ্ঞাপন প্রদান", "ঘ) কর্মী নিয়োগ"], "answer": "ক) প্রকল্প নির্বাচন/ধারণা চিহ্নিতকরণ"},
-            {"q": "ব্যবসায়িক ঝুঁকি হ্রাসের উপায় কোনটি?", "options": ["ক) বীমা করা ও সঠিক পরিকল্পনা", "খ) বেশি দামে বিক্রি", "গ) বিজ্ঞাপন বন্ধ করা", "ঘ) ঋণ না নেওয়া"], "answer": "ক) বীমা করা ও সঠিক পরিকল্পনা"},
-            {"q": "সফল উদ্যোক্তার অন্যতম মানদণ্ড কোনটি?", "options": ["ক) অধ্যবসায় ও সততা", "খ) দ্রুত কাজ বন্ধ করা", "গ) অন্যকে অনুকরণ করা", "ঘ) ঝুঁকি না নেওয়া"], "answer": "ক) অধ্যবসায় ও সততা"},
-            {"q": "বিপণনের (Marketing) প্রথম কাজ কোনটি?", "options": ["ক) ক্রয়", "খ) বিক্রয়", "গ) গুদামজাতকরণ", "ঘ) পরিবহন"], "answer": "ক) ক্রয়"},
-            {"q": "পণ্য ঢাকাকে কী বলা হয়?", "options": ["ক) মোড়কীকরণ (Packaging)", "খ) প্রমিতকরণ", "গ) পর্যায়িতকরণ", "ঘ) পরিবহন"], "answer": "ক) মোড়কীকরণ (Packaging)"},
-            {"q": "বাংলাদেশ ক্ষুদ্র ও কুটির শিল্প সংস্থা কোনটি?", "options": ["ক) BSCIC", "খ) EPB", "গ) BGMEA", "ঘ) FBCCI"], "answer": "ক) BSCIC"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: তরুণ উদ্যোক্তা তৌহিদ তার এলাকায় প্লাস্টিক বর্জ্য প্রক্রিয়াজাত করে নতুন পণ্য তৈরির কারখানা গড়ে তোলেন। নতুন এই চিন্তায় প্রথম দিকে ঝুঁকি থাকলেও তিনি এখন একজন সফল ব্যবসায়ী।",
-              "ka": "ব্যবসায় উদ্যোক্তা কে?",
-              "kha": "ঝুঁকি গ্রহণ ও ব্যবসায়ের সাফল্যের সম্পর্ক ব্যাখ্যা কর।",
-              "ga": "উদ্দীপকের তৌহিদের উদ্যোগটি কীভাবে স্থানীয় অর্থনীতিতে প্রভাব ফেলছে—ব্যাখ্যা কর।",
-              "gha": "\"উদ্ভাবনী ক্ষমতাই একজন সফল উদ্যোক্তাকে সাধারণ ব্যবসায়ী থেকে আলাদা করে।\"—বিশ্লেষণ কর।"
-            },
-            {
-              "stem": "উদ্দীপক ২: রিনা আক্তার একটি হস্তশিল্প প্রতিষ্ঠান চালুর পূর্বে বাজারের চাহিদা, মূলধনের উৎস ও কাঁচামালের সহজলভ্যতা যাচাই করে একটি নীল নকশা তৈরি করলেন।",
-              "ka": "ব্যবসায়িক পরিকল্পনা কী?",
-              "kha": "SWOT বিশ্লেষণ ব্যবসায়ের জন্য কেন গুরুত্বপূর্ণ?",
-              "ga": "উদ্দীপকে রিনা আক্তারের গৃহীত পদক্ষেপটি কেন প্রয়োজনীয় তা আলোচনা কর।",
-              "gha": "\"পূর্ব পরিকল্পনা ছাড়া ব্যবসায় সফল হওয়া অসম্ভব বললেই চলে।\"—উক্তিটির যথার্থতা মূল্যায়ন কর।"
-            }
-          ]
-        }
-      }
-    },
-    "বাংলাদেশের ইতিহাস ও বিশ্বসভ্যতা": {
-      "মানবিক শাখা": {
-        "প্রাচীন সভ্যতা ও প্রাচীন বাংলা": {
-          "MCQ": [
-            {"q": "ইতিহাসের জনক কাকে বলা হয়?", "options": ["ক) হেরোডোটাস", "খ) থুসিডাইডিস", "গ) এরিস্টটল", "ঘ) ইবনে খালদুন"], "answer": "ক) হেরোডোটাস"},
-            {"q": "সিন্ধু সভ্যতা কোন যুগের সভ্যতা?", "options": ["ক) তাম্র-ব্রোঞ্জ যুগ", "খ) লৌহ যুগ", "গ) প্রস্তর যুগ", "ঘ) আধুনিক যুগ"], "answer": "ক) তাম্র-ব্রোঞ্জ যুগ"},
-            {"q": "প্রাচীন বাংলার প্রথম স্বাধীন নরপতি কে ছিলেন?", "options": ["ক) শশাঙ্ক", "খ) ধর্মপাল", "গ) গোপাল", "ঘ) লক্ষণ সেন"], "answer": "ক) শশাঙ্ক"},
-            {"q": "পাল বংশের প্রতিষ্ঠাতা কে ছিলেন?", "options": ["ক) গোপাল", "খ) ধর্মপাল", "গ) দেবপাল", "ঘ) মহিপাল"], "answer": "ক) গোপাল"},
-            {"q": "মৎস্যন্যায় বলতে কোন সময়কে বোঝায়?", "options": ["ক) শশাঙ্কের মৃত্যুর পর ১০০ বছরের অরাজকতা", "খ) পাল শাসনের স্বর্ণযুগ", "গ) সেন বংশের সময়", "ঘ) সুলতানি আমল"], "answer": "ক) শশাঙ্কের মৃত্যুর পর ১০০ বছরের অরাজকতা"},
-            {"q": "মিশরীয় সভ্যতার সবচেয়ে বড় অবদান কোনটি?", "options": ["ক) পিরামিড ও হায়ারোগ্লিফিক লিপি", "খ) চাকা আবিষ্কার", "গ) পাত্র তৈরি", "ঘ) ভাস্কর্য"], "answer": "ক) পিরামিড ও হায়ারোগ্লিফিক লিপি"},
-            {"q": "প্রাচীন জনপদ 'গৌড়' এর অন্তর্ভুক্ত অঞ্চল কোনটি ছিল?", "options": ["ক) চাঁপাইনবাবগঞ্জ ও মুর্শিদাবাদ", "খ) চট্টগ্রাম", "গ) বরিশাল", "ঘ) সিলেট"], "answer": "ক) চাঁপাইনবাবগঞ্জ ও মুর্শিদাবাদ"},
-            {"q": "সেন বংশের শেষ রাজা কে ছিলেন?", "options": ["ক) লক্ষণ সেন", "খ) বিজয় সেন", "গ) বল্লাল সেন", "ঘ) সামন্ত সেন"], "answer": "ক) লক্ষণ সেন"},
-            {"q": "কত সালে ইখতিয়ার উদ্দিন মুহম্মদ বিন বখতিয়ার খলজি বাংলা জয় করেন?", "options": ["ক) ১২০৪ সালে", "খ) ১২০৬ সালে", "গ) ১১৯৯ সালে", "ঘ) ১২৫৮ সালে"], "answer": "ক) ১২০৪ সালে"},
-            {"q": "পাহাড়পুরের সোমপুর মহাবিহার কে নির্মাণ করেন?", "options": ["ক) ধর্মপাল", "খ) দেবপাল", "গ) গোপাল", "ঘ) শশাঙ্ক"], "answer": "ক) ধর্মপাল"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: শশাঙ্কের মৃত্যুর পর বাংলাজুড়ে তীব্র অরাজকতা ও বিশৃঙ্খলা দেখা দেয়, যেখানে শক্তিশালী ব্যক্তি দুর্বলদের ওপর অত্যাচার করত। দীর্ঘ ১০০ বছর পর জনগণ মিলে গোপালকে রাজা নির্বাচিত করে শান্তি ফিরিয়ে আনে।",
-              "ka": "মৎস্যন্যায় কী?",
-              "kha": "পাল রাজত্বকে বাংলার স্বর্ণযুগ বলা হয় কেন?",
-              "ga": "উদ্দীপকে বর্ণিত ঐতিহাসিক প্রেক্ষাপট ও পাল বংশের শাসনের সূচনা আলোচনা কর।",
-              "gha": "\"জনগণের সর্বসম্মত সিদ্ধান্তই বাংলায় প্রথম স্থায়ী ও দীর্ঘস্থায়ী বংশের ভিত্তি গড়ে দিয়েছিল।\"—বিশ্লেষণ কর।"
-            },
-            {
-              "stem": "উদ্দীপক ২: সিন্ধু নদের অববাহিকায় গড়ে ওঠা প্রাচীন নগর পরিকল্পনা ও নর্দমা ব্যবস্থা আধুনিক সভ্যতার প্রকৌশলীদের বিস্মিত করে।",
-              "ka": "হায়ারোগ্লিফিক কী?",
-              "kha": "সিন্ধু সভ্যতার নগর পরিকল্পনার দুটি বৈশিষ্ট্য লেখ।",
-              "ga": "উদ্দীপকের আলোকে প্রাচীন সভ্যতার অবদান ও আধুনিক জীবনে তার প্রভাব ব্যাখ্যা কর।",
-              "gha": "\"ইতিহাস পাঠ আমাদের অতীত ঐতিহ্যকে চিনে ভবিষ্যতের সিদ্ধান্ত নিতে সাহায্য করে।\"—মূল্যায়ন কর।"
-            }
-          ]
-        }
-      }
-    },
-    "পৌরনীতি ও নাগরিকতা": {
-      "মানবিক শাখা": {
-        "রাষ্ট্র, সরকার ও নাগরিকতা": {
-          "MCQ": [
-            {"q": "পৌরনীতির ইংরেজি প্রতিশব্দ 'Civics' এসেছে কোন ভাষা থেকে?", "options": ["ক) ল্যাটিন ভাষা (Civis ও Civitas)", "খ) গ্রিক ভাষা", "গ) ফরাসি ভাষা", "ঘ) ইংরেজি"], "answer": "ক) ল্যাটিন ভাষা (Civis ও Civitas)"},
-            {"q": "পরিবারের প্রধানতম সামাজিক কাজ কোনটি?", "options": ["ক) সন্তান লালন-পালন ও বংশ রক্ষা", "খ) বিনোদন", "গ) অর্থনৈতিক লেনদেন", "ঘ) আইন প্রণয়ন"], "answer": "ক) সন্তান লালন-পালন ও বংশ রক্ষা"},
-            {"q": "নাগরিকতা অর্জনের প্রধান পদ্ধতি কয়টি?", "options": ["ক) ২টি (জন্মসূত্র ও অনুমোদন সূত্র)", "খ) ৩টি", "গ) ৪টি", "ঘ) ৫টি"], "answer": "ক) ২টি (জন্মসূত্র ও অনুমোদন সূত্র)"},
-            {"q": "রাষ্ট্রের অপরিহার্য উপাদান কোনটি?", "options": ["ক) সার্বভৌমত্ব", "খ) লিখিত সংবিধান", "গ) রাজনৈতিক দল", "ঘ) বিচার বিভাগ"], "answer": "ক) সার্বভৌমত্ব"},
-            {"q": "গণতন্ত্রের মূল ভিত্তি কোনটি?", "options": ["ক) জনগণের মতামত ও ভোটাধিকার", "খ) সামরিক শাসন", "গ) একনায়কত্ব", "ঘ) রাজতন্ত্র"], "answer": "ক) জনগণের মতামত ও ভোটাধিকার"},
-            {"q": "আইনের প্রধান উৎস কোনটি?", "options": ["ক) প্রথা, ধর্ম ও আইনসভা", "খ) ব্যক্তির আদেশ", "গ) শক্তি প্রয়োগ", "ঘ) চুক্তি"], "answer": "ক) প্রথা, ধর্ম ও আইনসভা"},
-            {"q": "মানবাধিকার সনদের সর্বজনীন ঘোষণা জাতিসংঘ কবে দেয়?", "options": ["ক) ১০ ডিসেম্বর ১৯৪৮", "খ) ২৪ অক্টোবর ১৯৪৫", "গ) ২৬ মার্চ ১৯৭১", "ঘ) ১ মে ১৮৮৬"], "answer": "ক) ১০ ডিসেম্বর ১৯৪৮"},
-            {"q": "সরকারের অঙ্গ কয়টি?", "options": ["ক) ৩টি (আইন, শাসন ও বিচার বিভাগ)", "খ) ২টি", "গ) ৪টি", "ঘ) ৫টি"], "answer": "ক) ৩টি (আইন, শাসন ও বিচার বিভাগ)"},
-            {"q": "সুনাগরিকের প্রধান গুণ কয়টি?", "options": ["ক) ৩টি (বুদ্ধি, বিবেক, আত্মসংযম)", "খ) ২টি", "গ) ৪টি", "ঘ) ৫টি"], "answer": "ক) ৩টি (বুদ্ধি, বিবেক, আত্মসংযম)"},
-            {"q": "দ্বৈত নাগরিকতা বলতে কী বোঝায়?", "options": ["ক) একই সাথে দুই দেশের নাগরিক হওয়া", "খ) দুই রাজ্যের অধিবাসী হওয়া", "গ) জন্মসূত্রে নাগরিক হওয়া", "ঘ) অনুমোদন সূত্রে নাগরিক হওয়া"], "answer": "ক) একই সাথে দুই দেশের নাগরিক হওয়া"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: সায়ান একজন বিবেকবান নাগরিক। সে কর প্রদান করে, সৎ প্রার্থীকে ভোট দেয় এবং রাষ্ট্রের সম্পদ রক্ষা করে। সে মনে করে নাগরিকের অধিকার ও কর্তব্য একে অপরের পরিপূরক।",
-              "ka": "সুনাগরিক কাকে বলে?",
-              "kha": "অধিকার ও কর্তব্যের পারস্পরিক সম্পর্ক ব্যাখ্যা কর।",
-              "ga": "উদ্দীপকের সায়ানের আচরণের মাধ্যমে সুনাগরিকের কোন গুণাবলি প্রকাশ পেয়েছে—ব্যাখ্যা কর।",
-              "gha": "\"সুনাগরিকই একটি দেশের টেকসই উন্নয়ন ও সুশাসনের মূল চালিকাশক্তি।\"—বিশ্লেষণ কর।"
-            },
-            {
-              "stem": "উদ্দীপক ২: ক দেশে আইনসভার মাধ্যমে গঠিত সরকার জনগণের নিকট দায়ী থাকে। দেশের সার্বভৌম ক্ষমতার মালিক জনগণ এবং সেখানে নিয়মিত নির্বাচন অনুষ্ঠিত হয়।",
-              "ka": "সরকার কী?",
-              "kha": "একনায়কতন্ত্র ও গণতন্ত্রের প্রধান পার্থক্য লেখ।",
-              "ga": "উদ্দীপকের 'ক' দেশে কোন ধরণের সরকার ব্যবস্থা বিদ্যমান পাঠ্যবইয়ের আলোকে আলোচনা কর।",
-              "gha": "\"জনগণের অংশগ্রহণ ও সুশাসন নিশ্চিত করাই আধুনিক গণতান্ত্রিক রাষ্ট্রের প্রধান লক্ষ্য।\"—মূল্যায়ন কর।"
-            }
-          ]
-        }
-      }
-    },
-    "অর্থনীতি": {
-      "মানবিক শাখা": {
-        "মৌলিক অর্থনৈতিক ধারণা ও বাজার": {
-          "MCQ": [
-            {"q": "অর্থনীতির জনক কাকে বলা হয়?", "options": ["ক) অ্যাডাম স্মিথ", "খ) লর্ড রবিন্স", "গ) আলফ্রেড মার্শাল", "ঘ) কেয়ন্স"], "answer": "ক) অ্যাডাম স্মিথ"},
-            {"q": "অর্থনৈতিক প্রধান সমস্যা দুটি কী কী?", "options": ["ক) দুষ্প্রাপ্যতা ও অসীম অভাব", "খ) মূলধন ও জমি", "গ) আয় ও ব্যয়", "ঘ) আমদানি ও রপ্তানি"], "answer": "ক) দুষ্প্রাপ্যতা ও অসীম অভাব"},
-            {"q": "চাহিদার বিধি অনুযায়ী দাম বাড়লে চাহিদার পরিমাণ-", "options": ["ক) কমে", "খ) বাড়ে", "গ) স্থির থাকে", "ঘ) শূন্য হয়"], "answer": "ক) কমে"},
-            {"q": "সম্পূর্ণ প্রতিযোগিতামূলক বাজারে পণ্যের দাম কীভাবে নির্ধারিত হয়?", "options": ["ক) চাহিদা ও যোগানের পারস্পরিক প্রভাবে", "খ) বিক্রেতার ইচ্ছায়", "গ) ক্রেতার ইচ্ছায়", "ঘ) সরকারের নির্দেশে"], "answer": "ক) চাহিদা ও যোগানের পারস্পরিক প্রভাবে"},
-            {"q": "উৎপাদনের উপাদানের খাজনা কার বিনিময় মূল্য?", "options": ["ক) জমি", "খ) শ্রম", "গ) মূলধন", "ঘ) সংগঠন"], "answer": "ক) জমি"},
-            {"q": "জাতীয় আয় পরিমাপের পদ্ধতি কয়টি?", "options": ["ক) ৩টি", "খ) ২টি", "গ) ৪টি", "ঘ) ৫টি"], "answer": "ক) ৩টি"},
-            {"q": "যে বাজারে একজনমাত্র বিক্রেতা থাকে তাকে কী বলে?", "options": ["ক) একচেটিয়া বাজার (Monopoly)", "খ) প্রতিযোগিতা বাজার", "গ) পাইকারি বাজার", "ঘ) শেয়ার বাজার"], "answer": "ক) একচেটিয়া বাজার (Monopoly)"},
-            {"q": "অর্থনীতির প্রধান অর্থনৈতিক ব্যবস্থা কয়টি?", "options": ["ক) ৪টি (ধনতান্ত্রিক, সমাজতান্ত্রিক, মিশ্র, ইসলামী)", "খ) ৩টি", "গ) ২টি", "ঘ) ৫টি"], "answer": "ক) ৪টি (ধনতান্ত্রিক, সমাজতান্ত্রিক, মিশ্র, ইসলামী)"},
-            {"q": "যোগান বিধি অনুযায়ী দাম ও যোগানের সম্পর্ক কেমন?", "options": ["ক) সমমুখী/প্রত্যক্ষ", "খ) বিপরীতমুখী", "গ) কোনো সম্পর্ক নেই", "ঘ) স্থির"], "answer": "ক) সমমুখী/প্রত্যক্ষ"},
-            {"q": "জিডিপি (GDP) এর পূর্ণরূপ কী?", "options": ["ক) Gross Domestic Product", "খ) Gross Development Product", "গ) General Domestic Price", "ঘ) Global Domestic Product"], "answer": "ক) Gross Domestic Product"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: বাজারে আলুর দাম প্রতি কেজি ২০ টাকা থেকে বেড়ে ৩০ টাকা হলে চাহিদার পরিমাণ ৫০ কেজি থেকে কমে ৩০ কেজি হয়। আবার দাম কমলে ক্রেতারা বেশি আলু কেনেন।",
-              "ka": "চাহিদা কাকে বলে?",
-              "kha": "দুষ্প্রাপ্যতা বলতে কী বোঝায়?",
-              "ga": "উদ্দীপকের তথ্য থেকে একটি চাহিদা রেখা অঙ্কন কর।",
-              "gha": "\"দাম ও চাহিদার বিপরীতমুখী সম্পর্কই চাহিদা বিধির ভিত্তি।\"—উদ্দীপকের তথ্যের সাহায্যে মূল্যায়ন কর।"
-            },
-            {
-              "stem": "উদ্দীপক ২: একটি দেশে সরকারি ও বেসরকারি উভয় খাতের যৌথ অংশগ্রহণে শিল্পকারখানা পরিচালিত হয় এবং মুক্ত বাজার ব্যবস্থার সাথে সামাজিক কল্যাণ রক্ষা করা হয়।",
-              "ka": "মিশ্র অর্থব্যবস্থা কী?",
-              "kha": "সমাজতান্ত্রিক অর্থব্যবস্থার দুটি মূল বৈশিষ্ট্য লেখ।",
-              "ga": "উদ্দীপকের দেশটি কোন ধরণের অর্থনৈতিক ব্যবস্থা অনুসরণ করছে তা ব্যাখ্যা কর।",
-              "gha": "\"জনকল্যাণ ও অর্থনৈতিক প্রবৃদ্ধির সমতা রক্ষায় মিশ্র অর্থব্যবস্থা অত্যন্ত কার্যকর।\"—বিশ্লেষণ কর।"
-            }
-          ]
-        }
-      }
-    },
-    "ইসলাম ও নৈতিক শিক্ষা": {
-      "ধর্মীয় বিষয়": {
-        "ঈমান, শরিয়ত ও নৈতিকতা": {
-          "MCQ": [
-            {"q": "ইসলাম শব্দের অর্থ কী?", "options": ["ক) শান্তি ও আত্মসমর্পণ", "খ) ইবাদত", "গ) বিশ্বাস", "ঘ) অনুসরণ"], "answer": "ক) শান্তি ও আত্মসমর্পণ"},
-            {"q": "শরিয়তের প্রধান উৎস কোনটি?", "options": ["ক) কুরআন মজিদ", "খ) হাদিস", "গ) ইজমা", "ঘ) কিয়াস"], "answer": "ক) কুরআন মজিদ"},
-            {"q": "কুরআন মজিদের আয়াত সংখ্যা কত?", "options": ["ক) ৬৬৬৬টি (প্রচলিত মত)", "খ) ৬২৩৬টি", "গ) ৭০০০টি", "ঘ) ৫০০০টি"], "answer": "ক) ৬৬৬৬টি (প্রচলিত মত)"},
-            {"q": "সাদাকাহ শব্দের অর্থ কী?", "options": ["ক) দান/দয়া", "খ) নামাজ", "গ) রোজা", "ঘ) ফরজ"], "answer": "ক) দান/দয়া"},
-            {"q": "শরিয়তের দ্বিতীয় উৎস কোনটি?", "options": ["ক) সুন্নাহ/হাদিস", "খ) ইজমা", "গ) কিয়াস", "ঘ) ফিকহ"], "answer": "ক) সুন্নাহ/হাদিস"},
-            {"q": "আখলাক-এ হামিদা কী?", "options": ["ক) প্রশংসনীয় চরিত্র", "খ) নিন্দনীয় চরিত্র", "গ) অহংকার", "ঘ) প্রতারণা"], "answer": "ক) প্রশংসনীয় চরিত্র"},
-            {"q": "জাহিলিয়াত শব্দের অর্থ কী?", "options": ["ক) অজ্ঞতা ও বর্বরতা", "খ) জ্ঞান", "গ) সভ্যতা", "ঘ) শান্তি"], "answer": "ক) অজ্ঞতা ও বর্বরতা"},
-            {"q": "হুদায়বিয়ার সন্ধি কত হিজরিতে স্বাক্ষরিত হয়?", "options": ["ক) ৬ হিজরিতে", "খ) ৮ হিজরিতে", "গ) ৫ হিজরিতে", "ঘ) ১০ হিজরিতে"], "answer": "ক) ৬ হিজরিতে"},
-            {"q": "বিদায় হজের ভাষণ মহানবী (সা.) কোথায় প্রদান করেন?", "options": ["ক) আরাফাতের ময়দানে", "খ) মিনার ময়দানে", "গ) কাবা প্রাঙ্গণে", "ঘ) মদিনায়"], "answer": "ক) আরাফাতের ময়দানে"},
-            {"q": "সর্বশ্রেষ্ঠ ও সর্বশেষ আসমানি কিতাব কোনটি?", "options": ["ক) আল-কুরআন", "খ) তাওরাত", "গ) ইঞ্জিল", "ঘ) যবুর"], "answer": "ক) আল-কুরআন"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: শাহেদ সামাজিক কাজে নিয়োজিত থাকে। সে প্রতিবেশীর বিপদে সাহায্য করে এবং মিথ্যা বলা থেকে বিরত থাকে। সে বিশ্বাস করে প্রতিটি কাজের হিসাব হাশরের মাঠে দিতে হবে।",
-              "ka": "আখিরাত শব্দের অর্থ কী?",
-              "kha": "শরিয়তের বিধিবিধান পালনে ঈমানের ভূমিকা ব্যাখ্যা কর।",
-              "ga": "উদ্দীপকের শাহেদের আচরণের মধ্যে ভালো চরিত্রের কোন দিকটি ফুটে উঠেছে—ব্যাখ্যা কর।",
-              "gha": "\"পরকালে বিশ্বাসই মানুষকে ইহকালে সত্য ও নৈতিকতার পথে পরিচালিত করে।\"—বিশ্লেষণ কর।"
-            },
-            {
-              "stem": "উদ্দীপক ২: মহানবী (সা.) শত্রুর সাথে হুদায়বিয়ার অসম চুক্তিতে আবদ্ধ হয়ে শান্তিকামী মানসিকতার পরিচয় দিয়েছিলেন, যা পরবর্তীতে মক্কা বিজয়ের পথ সহজ করেছিল।",
-              "ka": "হুদায়বিয়ার সন্ধি কত বছরের জন্য হয়েছিল?",
-              "kha": "রাসূল (সা.) এর দূরদর্শিতা কীভাবে শান্তি এনেছিল—ব্যাখ্যা কর।",
-              "ga": "উদ্দীপকের ঐতিহাসিক ঘটনাটির গুরুত্ব শরিয়ত ও জীবনের আলোকে বর্ণনা কর।",
-              "gha": "\"মহানবী (সা.) এর শান্তি ও ক্ষমার আদর্শই আধুনিক বিশ্বের সংঘাত নিরসনের উপায়।\"—উক্তিটি মূল্যায়ন কর।"
-            }
-          ]
-        }
-      }
-    },
-    "তথ্য ও যোগাযোগ প্রযুক্তি": {
-      "আবশ্যিক বিষয়": {
-        "ডিজিটাল বাংলাদেশ ও সিকিউরিটি": {
-          "MCQ": [
-            {"q": "তথ্যপ্রযুক্তির প্রসারে 'ডিজিটাল বাংলাদেশ' রূপকল্প কত সালে ঘোষিত হয়?", "options": ["ক) ২০০৮ সালে", "খ) ২০১০ সালে", "গ) ২০১৫ সালে", "ঘ) ২০২০ সালে"], "answer": "ক) ২০০৮ সালে"},
-            {"q": "ই-পাসপোর্ট ও ই-গভর্ন্যান্সের প্রধান লক্ষ্য কী?", "options": ["ক) সেবা সহজ ও দ্রুত করা", "খ) খরচ বাড়ানো", "গ) কাগজের ব্যবহার বাড়ানো", "ঘ) সময় নষ্ট করা"], "answer": "ক) সেবা সহজ ও দ্রুত করা"},
-            {"q": "কম্পিউটার ভাইরাস হলো এক ধরণের-", "options": ["ক) ক্ষতিকারক প্রোগ্রাম", "খ) হার্ডওয়্যার ডিভাইস", "গ) নেটওয়ার্ক ক্যাবল", "ঘ) মেমোরি চিপ"], "answer": "ক) ক্ষতিকারক প্রোগ্রাম"},
-            {"q": "দ্বিমাত্রিক বারকোডকে সংক্ষেপে কী বলে?", "options": ["ক) QR Code", "খ) PIN", "গ) URL", "ঘ) IP"], "answer": "ক) QR Code"},
-            {"q": "কম্পিউটার সুরক্ষার জন্য কোনটি ব্যবহার করা উচিত?", "options": ["ক) অ্যান্টিভাইরাস সফটওয়্যার", "খ) কেবল গেম", "গ) নতুন মনিটর", "ঘ) উচ্চগতির প্রসেসর"], "answer": "ক) অ্যান্টিভাইরাস সফটওয়্যার"},
-            {"q": "সামাজিক যোগাযোগ মাধ্যম কোনটি?", "options": ["ক) Facebook", "খ) Google Search", "গ) MS Word", "ঘ) Photoshop"], "answer": "ক) Facebook"},
-            {"q": "ইন্টারনেটে নিরাপদে থাকার প্রধান নিয়ম কোনটি?", "options": ["ক) শক্তিশালী পাসওয়ার্ড ব্যবহার ও তথ্য গোপন রাখা", "খ) সবাইকে পাসওয়ার্ড দেওয়া", "গ) অচেনা লিংকে ক্লিক করা", "ঘ) অ্যান্টিভাইরাস বন্ধ রাখা"], "answer": "ক) শক্তিশালী পাসওয়ার্ড ব্যবহার ও তথ্য গোপন রাখা"},
-            {"q": "ডিজিটাল কনটেন্ট কত প্রকার হতে পারে?", "options": ["ক) ৪ প্রকার (টেক্সট, ছবি, অডিও, ভিডিও)", "খ) ২ প্রকার", "গ) ৩ প্রকার", "ঘ) ৫ প্রকার"], "answer": "ক) ৪ প্রকার (টেক্সট, ছবি, অডিও, ভিডিও)"},
-            {"q": "ই-বই বা ইলেকট্রনিক বুক পড়ার জনপ্রিয় ডিভাইস কোনটি?", "options": ["ক) ই-বুক রিডার (Kindle)", "খ) প্রিন্টার", "গ) প্রজেক্টর", "ঘ) স্ক্যানার"], "answer": "ক) ই-বুক রিডার (Kindle)"},
-            {"q": "অন্যের কম্পিউটার বা সিস্টেমে অবৈধ প্রবেশকে কী বলে?", "options": ["ক) হ্যাকিং (Hacking)", "খ) ব্রাউজিং", "গ) আপলোডিং", "ঘ) প্রোগ্রামিং"], "answer": "ক) হ্যাকিং (Hacking)"}
-          ],
-          "CQ": [
-            {
-              "stem": "উদ্দীপক ১: তানভীর অনলাইন ব্যাংকিং ব্যবহার করে ঘরে বসেই স্কুলের ফি প্রদান করল। তবে একদিন সে একটি ভুয়া ই-মেইল লিংকে ক্লিক করে তার অ্যাকাউন্টের পাসওয়ার্ড হারিয়ে বিপদে পড়ল।",
-              "ka": "সাইবার অপরাধ কী?",
-              "kha": "পাসওয়ার্ড শক্তিশালী করার দুটি উপায় লেখ।",
-              "ga": "উদ্দীপকে তানভীরের অসাবধানতার কারণ আইসিটি নিরাপত্তার আলোকে ব্যাখ্যা কর।",
-              "gha": "\"সচেতনতা ও সতর্কতা অবলম্বনই সাইবার জগতে নিরাপদ থাকার প্রধান চাবিকাঠি।\"—বিশ্লেষণ কর।"
-            },
-            {
-              "stem": "উদ্দীপক ২: একটি সরকারি দপ্তরে ফাইলপত্র আগে ম্যানুয়ালি সংরক্ষণ করা হতো। বর্তমানে ই-সেবা ও ই-ফাইলিং চালুর ফলে নাগরিকেরা দ্রুত সেবা পাচ্ছেন।",
-              "ka": "ই-গভর্ন্যান্স কী?",
-              "kha": "ই-সেবার মাধ্যমে নাগরিক সুবিধা বৃদ্ধির দুটি উদাহরণ দাও।",
-              "ga": "উদ্দীপকের সেবা ব্যবস্থার পরিবর্তনের ফলে কীভাবে সময় ও অর্থ সাশ্রয় হচ্ছে তা আলোচনা কর।",
-              "gha": "\"ডিজিটাল প্রযুক্তি প্রবর্তন একটি স্বচ্ছ ও দুর্নীতিমুক্ত সমাজ গঠনে সহায়ক।\"—উক্তিটি মূল্যায়ন কর।"
-            }
-          ]
-        }
-      }
-    }
-  }
-}
-
-    
 
     # --- ৪টি নির্ধারিত ট্যাব ---
     tab1, tab2, tab3, tab4 = st.tabs([
-        "প্র্যাকটিস ও রিভিশন",
-        "কুইজ টেস্ট",
-        "মডেল টেস্ট",
-        "পরীক্ষার ইতিহাস ও রিটেস্ট"
+        "Practice",
+        "Quiz Test",
+        "Model Test",
+        "Archives"
     ])
 
-    # ================= TAB 1: প্র্যাকটিস ও রিভিশন =================
+    # ================= TAB 1: PRACTICE & PREPARATION =================
     with tab1:
-        st.markdown("### প্র্যাকটিস ও রিভিশন হাব (শ্রেণি, বিষয় ও অধ্যায়ভিত্তিক)")
-        st.info("এখানে আপনি পছন্দমতো শ্রেণি, বিষয়, বিভাগ ও অধ্যায় বেছে নিয়ে প্র্যাকটিস করতে পারবেন।")
+        st.info("নিচে থেকে আপনার শ্রেণি, বিষয়, বিভাগ এবং অধ্যায় নির্বাচন করে প্র্যাকটিস শুরু করুন[cite: 247]।")
         
         c1, c2 = st.columns(2, gap="medium")
         with c1:
-            p_class = st.selectbox("শ্রেণি বেছে নিন:", list(library_question_bank.keys()), key="p_class_sel")
+            p_class = st.selectbox("Class Selection:", list(library_question_bank.keys()), key="p_class_sel")
         with c2:
             p_books = list(library_question_bank[p_class].keys())
-            p_book = st.selectbox("বিষয় বেছে নিন:", p_books, key="p_book_sel")
-
+            p_book = st.selectbox("Subject Selection:", p_books, key="p_book_sel")
+            
         c3, c4 = st.columns(2, gap="medium")
         with c3:
             p_sections = list(library_question_bank[p_class][p_book].keys())
-            p_sec = st.selectbox("বিভাগ বেছে নিন:", p_sections, key="p_sec_sel")
+            p_sec = st.selectbox("Item Selection:", p_sections, key="p_sec_sel")
         with c4:
             p_chapters = list(library_question_bank[p_class][p_book][p_sec].keys())
-            p_chap = st.selectbox("অধ্যায়/বিষয়বস্তু বেছে নিন:", p_chapters, key="p_chap_sel")
-
+            p_chap = st.selectbox("Topic Selection:", p_chapters, key="p_chap_sel")
+            
         st.markdown("<hr style='margin: 18px 0; border: 0; border-top: 2px dashed #cbd5e1;'>", unsafe_allow_html=True)
         
         chap_data = library_question_bank[p_class][p_book][p_sec][p_chap]
         
-        # প্র্যাকটিসের ধরন নির্বাচন (৩টি অপশন: MCQ, CQ, Written Part)
-        practice_type = st.radio(
-            "প্র্যাকটিসের ধরন নির্বাচন করুন:",
-            ["বহুনির্বাচনি (MCQ) প্র্যাকটিস", "সৃজনশীল প্রশ্ন (CQ) প্র্যাকটিস", "রিটেন পার্ট প্র্যাকটিস"],
-            horizontal=True
-        )
+        # প্র্যাকটিস টাইপ সিলেকশন (MCQ, CQ বা Written Part)
+        # নিয়ম অনুযায়ী বাংলা ২য়, ইংরেজি ১ম ও ২য় পত্রে Written অপشن থাকবে, বাকিগুলোতে শুধু MCQ ও CQ থাকবে।
+        if p_book in ["বাংলা দ্বিতীয় পত্র", "ইংরেজি প্রথম পত্র", "ইংরেজি দ্বিতীয় পত্র"]:
+            practice_type = st.radio(
+                "কোনটি প্র্যাকটিস করতে চাও? বহুনির্বাচনী প্রশ্ন (MCQ), সৃজনশীল প্রশ্ন (CQ) নাকি রিটেন পার্ট?",
+                ["MCQ", "CQ", "Written Part"],
+                horizontal=True
+            )
+        else:
+            practice_type = st.radio(
+                "কোনটি প্র্যাকটিস করতে চাও? বহুনির্বাচনী প্রশ্ন (MCQ) নাকি সৃজনশীল প্রশ্ন (CQ)?",
+                ["MCQ", "CQ"],
+                horizontal=True
+            )
+        
+        st.markdown("---")
 
+        # ১. MCQ সেকশন
         if "MCQ" in practice_type:
-            st.markdown("#### বহুনির্বাচনি (MCQ) প্র্যাকটিস জেনারেটর")
+            st.markdown("#### 🎯 বহুনির্বাচনী প্রশ্ন (MCQ) অনুশীলন")
             mcq_list = chap_data.get("MCQ", [])
             total_available = len(mcq_list)
             
             if total_available > 1:
-                q_count_choice = st.slider(
-                    "কতটি প্রশ্ন প্র্যাকটিস করতে চান?",
-                    1,
-                    max_value=total_available,
-                    value=min(5, total_available),
-                    step=1
-                )
+                q_count_choice = st.slider("কতটি প্রশ্ন প্র্যাকটিস করতে চাও?", 1, max_value=total_available, value=min(5, total_available), step=1)
             elif total_available == 1:
                 q_count_choice = 1
-                st.info("এই অধ্যায়ে ১টি প্রশ্ন উপলব্ধ রয়েছে।")
+                st.info("এই অধ্যায়ে ১টি প্রশ্ন আছে।")
             else:
                 q_count_choice = 0
-
+                
             if total_available > 0:
-                if st.button("প্র্যাকটিস শুরু করুন", key="start_mcq_prac"):
+                if st.button("Practice Start", key="start_mcq_prac"):
                     st.session_state["active_prac_mcqs"] = random.sample(mcq_list, q_count_choice)
                     st.session_state["prac_submitted"] = False
-
+                    
                 if "active_prac_mcqs" in st.session_state:
                     st.markdown("---")
                     for idx, item in enumerate(st.session_state["active_prac_mcqs"], 1):
                         st.markdown(f"**প্রশ্ন {idx}:** {item['q']}")
-                        st.radio(f"উত্তর দিন (প্রশ্ন {idx}):", item["options"], key=f"prac_q_{idx}", index=None)
+                        st.radio(f"উত্তর দাও (প্রশ্ন {idx}):", item["options"], key=f"prac_q_{idx}", index=None)
                         st.markdown("")
-
-                    if st.button("উত্তরগুলো যাচাই করুন", key="check_prac_ans"):
+                        
+                    if st.button("উত্তরগুলো যাচাই করো", key="check_prac_ans"):
                         st.session_state["prac_submitted"] = True
                         st.rerun()
-
+                        
                     if st.session_state.get("prac_submitted", False):
-                        st.markdown("### প্র্যাকটিস ফলাফল ও সঠিক উত্তর:")
+                        st.markdown("### 📊 প্র্যাকটিস ফলাফল ও সঠিক উত্তর:")
                         for idx, item in enumerate(st.session_state["active_prac_mcqs"], 1):
                             u_ans = st.session_state.get(f"prac_q_{idx}")
                             c_ans = item["answer"]
                             if u_ans == c_ans:
-                                st.success(f"প্রশ্ন {idx}: সঠিক! (আপনার উত্তর: {u_ans})")
+                                st.success(f"প্রশ্ন {idx}: সঠিক! (তোমার উত্তর: {u_ans})")
                             else:
-                                st.error(f"প্রশ্ন {idx}: ভুল। (আপনার উত্তর: {u_ans if u_ans else 'উত্তর দেননি'}) | সঠিক উত্তর: **{c_ans}**")
+                                st.error(f"প্রশ্ন {idx}: ভুল। (তোমার উত্তর: {u_ans if u_ans else 'উত্তর দেননি'}) | সঠিক উত্তর: **{c_ans}**")
             else:
                 st.warning("এই অধ্যায়ে প্র্যাকটিসের জন্য কোনো MCQ প্রশ্ন পাওয়া যায়নি।")
-                
-        elif "সৃজনশীল" in practice_type:
-            st.markdown("#### সৃজনশীল প্রশ্ন (CQ) প্র্যাকটিস ও সমাধান গাইডলাইন")
+
+        # ২. CQ (সৃজনশীল প্রশ্ন) সেকশন
+        elif "CQ" in practice_type:
+            st.markdown("#### 📝 সৃজনশীল প্রশ্ন (CQ) অনুশীলন ও গাইডলাইন")
             cq_list = chap_data.get("CQ", [])
             if cq_list:
                 for idx, item in enumerate(cq_list, 1):
@@ -3340,37 +2429,40 @@ def render_quiz_practice():
                         """,
                         unsafe_allow_html=True
                     )
+                with st.expander("💡 উত্তরপত্র ও এআই গাইডলাইনের জন্য ক্লিক করুন"):
+                    st.info("সৃজনশীল প্রশ্নগুলোর মূলভাব এবং উত্তরের কাঠামোগত নির্দেশিকা পেতে রিডিং রুমের ডানপাশের এআই অ্যাসিস্ট্যান্টের সাহায্য নিতে পারেন।")
             else:
                 st.info("এই অধ্যায়ে কোনো সৃজনশীল প্রশ্ন যুক্ত করা হয়নি।")
-                
-        else:
-            st.markdown("#### রিটেন বা নির্মিত অংশ প্র্যাকটিস (ব্যাকরণ, লেটার, অ্যাপ্লিকেশন, ভাবসম্প্রসারণ ইত্যাদি)")
+
+        # ৩. Written Part সেকশন (শুধুমাত্র নির্দিষ্ট বিষয়সমূহের জন্য)
+        elif "Written Part" in practice_type:
+            st.markdown("#### ✍️ রিটেন পার্ট ও নির্মিতি অনুশীলন")
             written_list = chap_data.get("Written", [])
             if written_list:
                 for idx, w_item in enumerate(written_list, 1):
                     st.markdown(
                         f"""
                         <div class="written-card">
-                            <h4 style="color: #0284c7; margin-top: 0;">লিখন ও নির্মিতি টপিক - {idx}: {w_item['title']}</h4>
+                            <h4 style="color: #0284c7; margin-top: 0;">লিখিত টপিক - {idx}: {w_item['title']}</h4>
                             <p style="font-size: 15px; font-weight: 500; color: #334155;"><b>নির্দেশনা/বিষয়:</b> {w_item['desc']}</p>
                         </div>
                         """,
                         unsafe_allow_html=True
                     )
-                st.info("💡 টিপস: এই বিষয়গুলোর ওপর নিজ খাতায় উত্তর লিখে বা প্র্যাকটিস করে আপনি আপনার দক্ষতা যাচাই করতে পারেন।")
+                st.info("💡 টিপস: এই বিষয়গুলোর ওপর নিজে খাতায় লিখে রিডিং রুমের নোট হাবে বা এআই বটের সাহায্যে আপনার লেখার মান যাচাই করে নিতে পারেন।")
             else:
                 st.info("এই বিষয়ের জন্য নির্দিষ্ট কোনো রিটেন টপিক যুক্ত করা হয়নি।")
 
-    # ================= TAB 2: কুইজ টেস্ট =================
+    # ================= TAB 2: QUIZ TEST =================
     with tab2:
-        st.markdown("### কুইজ টেস্ট (ছোট পরীক্ষা ও স্কোরিং)")
+        st.markdown("### 📝 কুইজ টেস্ট (মিনি পরীক্ষা ও স্কোরেং)")
         q_c1, q_c2 = st.columns(2, gap="medium")
         with q_c1:
             q_sel_class = st.selectbox("শ্রেণি বেছে নিন:", list(library_question_bank.keys()), key="quiz_class_sel")
         with q_c2:
             q_available_books = list(library_question_bank[q_sel_class].keys())
             q_selected_book = st.selectbox("বিষয় বেছে নিন:", q_available_books, key="quiz_book_sel")
-
+            
         q_c3, q_c4 = st.columns(2, gap="medium")
         with q_c3:
             q_available_sections = list(library_question_bank[q_sel_class][q_selected_book].keys())
@@ -3378,14 +2470,15 @@ def render_quiz_practice():
         with q_c4:
             q_available_chapters = list(library_question_bank[q_sel_class][q_selected_book][q_selected_sec].keys())
             q_selected_chapter = st.selectbox("অধ্যায় বেছে নিন:", q_available_chapters, key="quiz_chap_sel")
-
+            
         st.markdown("<hr style='margin: 18px 0; border: 0; border-top: 2px dashed #cbd5e1;'>", unsafe_allow_html=True)
+        
         qc1, qc2 = st.columns(2, gap="medium")
         with qc1:
             quiz_marks = st.selectbox("কুইজের মান / প্রশ্ন সংখ্যা:", ["৫ নম্বর (৫ প্রশ্ন)", "১০ নম্বর (১০ প্রশ্ন)"], key="quiz_marks_sel")
         with qc2:
             study_hours = st.number_input("পড়াশোনার সময় (ঘণ্টা):", min_value=0.5, max_value=5.0, value=1.0, step=0.5, key="study_hours_input")
-
+            
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("কুইজ টেস্ট শুরু করুন", use_container_width=True):
             st.session_state["quiz_active"] = True
@@ -3406,7 +2499,7 @@ def render_quiz_practice():
             st.markdown("---")
             st.markdown(f"### {st.session_state['quiz_title_str']}")
             if st.session_state.get("show_review", False):
-                st.markdown("### কুইজ ফলাফল ও সঠিক উত্তরসমূহ:")
+                st.markdown("### 📈 কুইজ ফলাফল ও সঠিক উত্তরসমূহ:")
                 for idx, item in enumerate(st.session_state["generated_quiz"], 1):
                     user_ans = st.session_state.get(f"lib_q_{idx}")
                     correct_ans = item["answer"]
@@ -3415,7 +2508,7 @@ def render_quiz_practice():
                         st.success(f"আপনার উত্তর: {user_ans} (সঠিক আছে)")
                     else:
                         st.error(f"আপনার উত্তর: {user_ans} (ভুল ❌)")
-                        st.info(f"সঠিক উত্তর হবে: **{correct_ans}**")
+                    st.info(f"সঠিক উত্তর হবে: **{correct_ans}**")
                 st.markdown("---")
                 if st.button("আবার নতুন কুইজ শুরু করুন", use_container_width=True):
                     st.session_state["quiz_active"] = False
@@ -3426,8 +2519,7 @@ def render_quiz_practice():
                     st.markdown(f"**প্রশ্ন {idx}:** {item['q']}")
                     st.radio(f"উত্তর নির্বাচন করুন (প্রশ্ন {idx}):", item["options"], key=f"lib_q_{idx}", index=None)
                     st.markdown("")
-
-                if st.button("কুইজ জমা দিন ও হিস্ট্রি সেভ করুন", key="submit_quiz_btn", use_container_width=True):
+                if st.button("কুইজ জমা দিন ও হিসাব তৈরি করুন", key="submit_quiz_btn", use_container_width=True):
                     correct_count = 0
                     total_q = len(st.session_state["generated_quiz"])
                     for idx, item in enumerate(st.session_state["generated_quiz"], 1):
@@ -3438,15 +2530,14 @@ def render_quiz_practice():
                     wrong_count = total_q - correct_count
                     percentage = (correct_count / total_q) * 100 if total_q > 0 else 0
                     score_str = f"{correct_count}/{total_q} ({percentage:.0f}%)"
-
+                    
                     if not st.session_state.get("is_quiz_saved", False):
                         q_date_str = datetime.now().strftime("%Y-%m-%d %I:%M%p")
                         conn_q = sqlite3.connect("smart_school_syllabus.db")
                         cur_q = conn_q.cursor()
                         cur_q.execute(
                             """CREATE TABLE IF NOT EXISTS quiz_test_history
-                            (id INTEGER PRIMARY KEY AUTOINCREMENT, quiz_title TEXT, quiz_date TEXT, 
-                            total_marks INT, obtained_score INT, correct_count INT, wrong_count INT, details_json TEXT)"""
+                            (id INTEGER PRIMARY KEY AUTOINCREMENT, quiz_title TEXT, quiz_date TEXT, total_marks INT, obtained_score INT, correct_count INT, wrong_count INT, details_json TEXT)"""
                         )
                         cur_q.execute(
                             """INSERT INTO quiz_test_history (quiz_title, quiz_date, total_marks, obtained_score, correct_count, wrong_count, details_json)
@@ -3464,37 +2555,35 @@ def render_quiz_practice():
                         conn_q.commit()
                         conn_q.close()
                         st.session_state["is_quiz_saved"] = True
-
                     st.balloons()
                     st.success(f"অভিনন্দন! আপনার কুইজ স্কোর: **{score_str}**")
                     st.session_state["show_review"] = True
                     st.rerun()
 
-    # ================= TAB 3: মডেল টেস্ট =================
+    # ================= TAB 3: MODEL TEST =================
     with tab3:
-        st.markdown("### পূর্ণাঙ্গ মডেল টেস্ট (লাইভ কাউন্টডাউন ও অটো-সাবমিট)")
+        st.markdown("### 📋 পূর্ণাঙ্গ মডেল টেস্ট (লাইভ কাউন্টডাউন ও অটো-সাবমিট)")
         if not st.session_state.exam_started:
             with st.form("model_test_custom_config_form"):
                 st.markdown("#### মডেল টেস্ট কনফিগার করুন")
                 sel_class = st.selectbox("শ্রেণি বেছে নিন:", list(library_question_bank.keys()), key="m_class_select")
                 available_subjects = list(library_question_bank[sel_class].keys())
                 sel_subjects = st.multiselect("বিষয়সমূহ নির্বাচন করুন:", available_subjects, default=available_subjects[:1], key="m_subjects_select")
-
+                
                 all_available_chapters = []
                 for sub in sel_subjects:
                     for sec, sec_dict in library_question_bank[sel_class][sub].items():
                         for ch in sec_dict.keys():
                             all_available_chapters.append(f"{sub} -> {sec} -> {ch}")
-
                 sel_chapters = st.multiselect("অধ্যায়সমূহ নির্বাচন করুন:", all_available_chapters, default=all_available_chapters, key="m_chapters_select")
                 test_name_input = st.text_input("মডেল টেস্টের শিরোনাম:", value=f"{sel_class} মডেল টেস্ট", key="m_test_name_input_val")
-
+                
                 col_el, col_e2 = st.columns(2)
                 with col_el:
                     custom_marks = st.number_input("পূর্ণমান / প্রশ্ন সংখ্যা:", min_value=1, max_value=50, value=5, step=1, key="m_custom_marks_input")
                 with col_e2:
                     custom_time = st.number_input("নির্ধারিত সময় (মিনিট):", min_value=1, max_value=120, value=5, step=1, key="m_custom_time_input")
-
+                    
                 start_exam_btn = st.form_submit_button("মডেল টেস্ট শুরু করুন", use_container_width=True, type="primary")
                 if start_exam_btn:
                     if not sel_subjects or not sel_chapters:
@@ -3507,7 +2596,6 @@ def render_quiz_practice():
                             ch_data = library_question_bank[sel_class][sub_name][sec_name].get(ch_name, {})
                             if isinstance(ch_data, dict):
                                 pool_questions.extend(ch_data.get("MCQ", []))
-
                         if not pool_questions:
                             st.error("নির্বাচিত অধ্যায়গুলোতে পর্যাপ্ত MCQ প্রশ্ন পাওয়া যায়নি।")
                         else:
@@ -3530,11 +2618,10 @@ def render_quiz_practice():
             if time_left <= 0 and not st.session_state.exam_submitted:
                 st.session_state.exam_submitted = True
                 st.rerun()
-
             m_left = max(0, time_left // 60)
             s_left = max(0, time_left % 60)
             time_str_display = f"{m_left:02d}:{s_left:02d}"
-
+            
             st.markdown(
                 f"""
                 <div style="background: linear-gradient(135deg, #312e81 0%, #4338ca 100%); color: white; padding: 15px 20px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
@@ -3548,21 +2635,18 @@ def render_quiz_practice():
                 """,
                 unsafe_allow_html=True
             )
-
             with st.form("active_custom_exam_form"):
                 for idx, q_data in enumerate(st.session_state.exam_questions):
                     st.markdown(f"**প্রশ্ন {idx + 1}: {q_data['q']}**")
                     options = q_data["options"]
                     ans_key = f"q_ans_live_{idx}"
-                    user_choice = st.radio(f"উত্তর সিলেক্ট করুন ({idx + 1}):", options, key=ans_key, index=None)
+                    user_choice = st.radio(f"উত্তর নির্বাচন করুন ({idx + 1}):", options, key=ans_key, index=None)
                     st.session_state.user_answers[idx] = user_choice
                     st.markdown("<hr style='margin: 10px 0; border: 0.5px solid #cbd5e1;'>", unsafe_allow_html=True)
-
                 submit_test = st.form_submit_button("পরীক্ষা সম্পন্ন ও খাতা জমা দিন", use_container_width=True, type="primary")
                 if submit_test:
                     st.session_state.exam_submitted = True
                     st.rerun()
-
             if time_left > 0 and not st.session_state.exam_submitted:
                 time.sleep(1)
                 st.rerun()
@@ -3581,7 +2665,7 @@ def render_quiz_practice():
                 else:
                     wrong_cnt += 1
             percentage = (score / total_q) * 100 if total_q > 0 else 0
-
+            
             if not st.session_state.is_saved_to_db:
                 current_date_str = datetime.now().strftime("%Y-%m-%d %I:%M%p")
                 details_data = json.dumps(st.session_state.exam_questions, ensure_ascii=False)
@@ -3608,11 +2692,11 @@ def render_quiz_practice():
                 conn.commit()
                 conn.close()
                 st.session_state.is_saved_to_db = True
-
+                
             st.success("আপনার মডেল টেস্ট সফলভাবে জমা দেওয়া হয়েছে!")
             st.markdown("### পরীক্ষার ফলাফল ও মূল্যায়ন")
             st.success(f"**পূর্ণমান:** {st.session_state.exam_total_marks} | **প্রাপ্ত স্কোর:** {score} | **সঠিক:** {correct_cnt} টি | **ভুল:** {wrong_cnt} টি ({percentage:.1f}%)")
-
+            
             with st.expander("উত্তরপত্র ও সঠিক উত্তরসমূহ দেখে নিন", expanded=True):
                 for idx, q_data in enumerate(st.session_state.exam_questions):
                     user_ans = st.session_state.user_answers.get(idx)
@@ -3621,7 +2705,7 @@ def render_quiz_practice():
                         st.markdown(f"✅ **প্রশ্ন {idx + 1}:** সঠিক (আপনার উত্তর: {user_ans})")
                     else:
                         st.markdown(f"❌ **প্রশ্ন {idx + 1}:** ভুল (আপনার উত্তর: {user_ans if user_ans else 'উত্তর দেননি'})। সঠিক উত্তর: **{correct_ans}**")
-
+                        
             if st.button("নতুন মডেল টেস্টে ফিরে যান", use_container_width=True, type="primary"):
                 st.session_state.exam_started = False
                 st.session_state.exam_submitted = False
@@ -3630,11 +2714,10 @@ def render_quiz_practice():
                 st.session_state.user_answers = {}
                 st.rerun()
 
-    # ================= TAB 4: পরীক্ষার ইতিহাস =================
+    # ================= TAB 4: ARCHIVES =================
     with tab4:
-        st.markdown("### সংরক্ষিত পরীক্ষার ইতিহাস (মডেল টেস্ট ও কুইজ টেস্ট)")
-        history_tab_choice = st.radio("কোন হিস্ট্রি দেখতে চান?", ["মডেল টেস্ট ইতিহাস", "কুইজ টেস্ট ইতিহাস"], horizontal=True)
-
+        st.markdown("### 📚 সংরক্ষিত পরীক্ষার ইতিহাস (মডেল টেস্ট ও কুইজ টেস্ট)")
+        history_tab_choice = st.radio("কোন ইতিহাস দেখতে চান?", ["মডেল টেস্ট ইতিহাস", "কুইজ টেস্ট ইতিহাস"], horizontal=True)
         if "মডেল" in history_tab_choice:
             st.markdown("#### মডেল টেস্ট ইতিহাসসমূহ:")
             conn = sqlite3.connect("smart_school_syllabus.db")
@@ -3643,7 +2726,7 @@ def render_quiz_practice():
             cursor.execute("SELECT id, test_title, test_date, total_marks, allocated_time, obtained_score, correct_count, wrong_count, details_json FROM model_test_history ORDER BY id DESC")
             past_tests = cursor.fetchall()
             conn.close()
-
+            
             if past_tests:
                 for pt in past_tests:
                     t_id, t_title, t_date, t_total, t_time, t_score, t_correct, t_wrong, tjson = pt
@@ -3655,7 +2738,6 @@ def render_quiz_practice():
                         with col_hs2:
                             st.markdown(f"- **সঠিক উত্তর:** {t_correct} টি")
                             st.markdown(f"- **ভুল উত্তর:** {t_wrong} টি")
-
                         col_h1, col_h2 = st.columns(2)
                         with col_h1:
                             if st.button("পুনরায় এই টেস্টটি দিন (Retest)", key=f"retest_btn_{t_id}", use_container_width=True, type="primary"):
@@ -3670,13 +2752,13 @@ def render_quiz_practice():
                                 st.session_state.exam_deadline = time.time() + (t_time * 60)
                                 st.rerun()
                         with col_h2:
-                            if st.button("হিস্ট্রি ডিলেট করুন", key=f"del_history_btn_{t_id}", use_container_width=True):
+                            if st.button("ইতিহাস ডিলিট করুন", key=f"del_history_btn_{t_id}", use_container_width=True):
                                 con_del = sqlite3.connect("smart_school_syllabus.db")
                                 cur_del = con_del.cursor()
                                 cur_del.execute("DELETE FROM model_test_history WHERE id=?", (t_id,))
                                 con_del.commit()
                                 con_del.close()
-                                st.success("মডেল টেস্ট হিস্ট্রি মুছে ফেলা হয়েছে!")
+                                st.success("মডেল টেস্ট ইতিহাস মুছে ফেলা হয়েছে!")
                                 st.rerun()
             else:
                 st.info("ℹ️ এখনও কোনো মডেল টেস্ট দেওয়া হয়নি।")
@@ -3688,7 +2770,7 @@ def render_quiz_practice():
             cursor_q.execute("SELECT id, quiz_title, quiz_date, total_marks, obtained_score, correct_count, wrong_count FROM quiz_test_history ORDER BY id DESC")
             past_quizzes = cursor_q.fetchall()
             conn_q.close()
-
+            
             if past_quizzes:
                 for pq in past_quizzes:
                     q_id, q_title, q_date, q_total, q_score, q_cor, q_wro = pq
@@ -3696,18 +2778,17 @@ def render_quiz_practice():
                         st.markdown(f"- **মোট প্রশ্ন:** {q_total}")
                         st.markdown(f"- **সঠিক উত্তর:** {q_cor} টি")
                         st.markdown(f"- **ভুল উত্তর:** {q_wro} টি")
-
-                        if st.button("কুইজ হিস্ট্রি ডিলেট করুন", key=f"del_quiz_btn_{q_id}", use_container_width=True):
+                        if st.button("কুইজ ইতিহাস ডিলিট করুন", key=f"del_quiz_btn_{q_id}", use_container_width=True):
                             con_del = sqlite3.connect("smart_school_syllabus.db")
                             cur_del = con_del.cursor()
                             cur_del.execute("DELETE FROM quiz_test_history WHERE id=?", (q_id,))
                             con_del.commit()
                             con_del.close()
-                            st.success("কুইজ টেস্ট হিস্ট্রি সফলভাবে মুছে ফেলা হয়েছে!")
+                            st.success("কুইজ টেস্ট ইতিহাস সফলভাবে মুছে ফেলা হয়েছে!")
                             st.rerun()
             else:
                 st.info("ℹ️ এখনও কোনো কুইজ টেস্ট দেওয়া হয়নি।")
-
+                
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -3775,8 +2856,8 @@ def render_notes():
 
     <div class="notes-main-wrapper">
         <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 25px; border-radius: 20px; color: white; margin-bottom: 20px; border: 1px solid #334155;">
-            <h2 style='color: #38bdf8; font-family: Outfit; font-weight: 800; margin-bottom: 5px; font-size: 26px;'>✨ স্মার্ট নোটস ও ওয়ার্ড এডিটর হাব</h2>
-            <p style='color: #94a3b8; font-size: 14px; font-family: Hind Siliguri;'>এখানে তুমি টেক্সট ফরম্যাটিং, টেবিল তৈরি, বিষয়ভিত্তিক নোট সংরক্ষণ, সার্চসহ তোমার নোটটি বিভিন্ন ফরম্যাটে ডাউনলোড করতে পারবে।</p>
+            <h2 style='color: #38bdf8; font-family: Outfit; font-weight: 800; margin-bottom: 5px; font-size: 26px;'>✨ Your Virtual Reading Room-Notebook Section</h2>
+            <p style='color: #94a3b8; font-size: 14px; font-family: Hind Siliguri;'> A Smart Hub for Your Notebook, Format Text, Build Tables, Search Instantly & Export Anywhere."</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -3842,7 +2923,7 @@ def render_notes():
           ['clean']
         ]
       },
-      placeholder: 'এখানে তোমার চমৎকার নোট লিখো...'
+      placeholder: 'এখানে লিখো বা পেস্ট করো...'
     });
     function insertTable() {
       const rows = parseInt(document.getElementById('t-rows').value) || 2;
@@ -3878,12 +2959,12 @@ def render_notes():
     col_editor, col_sidebar = st.columns([2, 1], gap="large")
 
     with col_editor:
-        st.markdown("<h3 style='color: #0284c7; font-size: 20px; font-weight: 700;'>📝 নোট এডিটর ওয়ার্কস্পেস</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #0284c7; font-size: 20px; font-weight: 700;'>📝Text Editor</h3>", unsafe_allow_html=True)
         
         c_top1, c_top2, c_top3 = st.columns([2, 1, 1], gap="small")
         with c_top1:
             note_title = st.text_input(
-                "নোটের শিরোনাম দাও (Title):",
+                "নোটের একটি শিরোনাম দাও (Title):",
                 value=st.session_state["current_title"],
                 key=f"rich_note_title_{st.session_state['clear_trigger']}"
             )
@@ -3919,7 +3000,7 @@ def render_notes():
         st.markdown("---")
         save_choice = st.radio(
             "নোটের ধরন নির্বাচন করো:",
-            ["ড্রাফট হিসেবে সেভ করো", "ফাইনাল নোট হিসেবে সেভ করো"],
+            ["Draft", "Final"],
             horizontal=True,
             key="note_save_type_radio"
         )
@@ -3928,23 +3009,23 @@ def render_notes():
         st.markdown("""
         <div style="background-color: #e0f2fe; border: 1.5px solid #bae6fd; border-left: 6px solid #0284c7; padding: 14px 18px; border-radius: 12px; margin-top: 15px; margin-bottom: 10px; box-shadow: 0 4px 12px rgba(14,165,233,0.06);">
         <p style="color: #0369a1; font-size: 14px; font-weight: 600; margin: 0; line-height: 1.5;">
-        💡 নোট হিসেবে সেভ করতে এডিটরে লেখা এখানে পেস্ট করো অথবা তোমার ইচ্ছেমতো লেখা এখানে লিখে সেভ করো:
+        💡 Text Editor-এর লেখা Note Editor-এর বক্সে পেস্ট করো এবং নোট হিসেবে সেভ করতে 'Save'বাটনে ক্লিক করো:
         </p>
         </div>
         """, unsafe_allow_html=True)
 
         # ব্যাকআপ টেক্সট বক্স
         backup_body = st.text_area(
-            "ব্যাকআপ টেক্সট এডিটর:",
+            "Note Editor:",
             value=st.session_state["current_content"],
             height=120,
-            placeholder="এখানে তোমার লেখার মূল কন্টেন্ট লিখো বা পেস্ট করো...",
+            placeholder="এখানে পেস্ট করো অথবা লিখ...",
             key=f"backup_editor_textarea_{st.session_state['clear_trigger']}"
         )
         typed_body = backup_body
 
         # সেভ বা আপডেট বাটন
-        btn_label = "🔄 নোট আপডেট করো" if st.session_state["edit_id"] is not None else "💾 নোট সেভ করো"
+        btn_label = "🔄 Note Update" if st.session_state["edit_id"] is not None else "💾 Save"
         if st.button(btn_label, use_container_width=True, type="primary"):
             if note_title and typed_body:
                 status_type = "ড্রাফট (Draft)" if "ড্রাফট" in save_choice else "ফাইনাল (Final)"
@@ -4020,7 +3101,7 @@ def render_notes():
         # সংরক্ষিত নোট তালিকা ও সার্চ অপশন
         if db_notes:
             st.markdown("---")
-            st.markdown("<h3 style='color: #0284c7; font-size: 18px;'>📚 তোমার সেভ করা নোটসমূহ</h3>", unsafe_allow_html=True)
+            st.markdown("<h3 style='color: #0284c7; font-size: 18px;'>📚 Your Notes</h3>", unsafe_allow_html=True)
             filter_subject = st.selectbox(
                 "বিষয় অনুযায়ী নোট ফিল্টার করো:",
                 ["সকল বিষয়"] + subjects_list,
@@ -4073,11 +3154,10 @@ def render_notes():
                                 st.rerun()
 
     with col_sidebar:
-        st.markdown("<h3 style='color: #0f172a; font-size: 18px;'>📚 আমার পাঠাগার</h3>", unsafe_allow_html=True)
-        st.info("তোমার পছন্দের বই পড়তে বাঁ পাশের মূল মেনু থেকে 'আমার পাঠাগার' অপশনে ক্লিক করো।")
+        st.info("তোমার পছন্দের বই পড়ে নোট করতে 'Books & Reading' অপশনে যাও...")
         st.markdown("---")
         st.markdown("<h3 style='color: #0f172a; font-size: 18px;'>🤖 এআই অ্যাসিস্ট্যান্ট</h3>", unsafe_allow_html=True)
-        st.markdown("কোনo প্রশ্ন থাকলে নিচে Gemini-কে জিজ্ঞেস করো এবং তোমার নোট খাতায় নোট করে রাখো।")
+        st.markdown("কোন প্রশ্ন থাকলে নিচে Gemini-কে জিজ্ঞেস করো এবং তোমার নোট খাতায় নোট করে রাখো।")
         st.markdown(
             '<a href="https://gemini.google.com" target="_blank"><button style="width: 100%; background-color: #0284c7; color: white; padding: 12px; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; margin-bottom: 10px; box-shadow: 0 4px 12px rgba(2,132,199,0.3);">🚀 Open Gemini Chatbot</button></a>',
             unsafe_allow_html=True
@@ -4150,27 +3230,27 @@ def init_school_syllabus_db():
 init_school_syllabus_db()
 
 import streamlit as st
-import random
-import time
-import json
 import sqlite3
-from datetime import datetime, timedelta
+import json
 import math
-import pandas as pd
 from collections import Counter
+
+# --- পৃষ্ঠা কনফিগারেশন ---
+st.set_page_config(page_title="Smart Study Planner & Syllabus Tracker", layout="wide")
 
 def render_study_planner():
     st.markdown("""
     <div style="background: linear-gradient(135deg, #1E3A8A 0%, #3882F6 100%);
     padding: 25px; border-radius: 12px; color: white; margin-bottom: 25px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-        <h2 style="margin: 0; color: white;">Smart Study & Syllabus</h2>
-        <p style="margin: 5px 0 0 0; font-size: 16px; opacity: 0.9;">নিচের তোমার মতো করে তোমার দেওয়া স্কুলের সিলেবাসের আলোকে সিলেবাস ও পড়ার রুটিন তৈরি করো। তারপর তোমার স্মার্ট স্টাডি প্ল্যান বানাও!</p>
+    <h2 style="margin: 0; color: white;">Your Virtual Reading Room-Smart Study & Syllabus</h2>
+    <p style="margin: 5px 0 0 0; font-size: 16px; opacity: 0.9;"> A Smart Hub for Your Syllabus, Study Plan, Routine & Archives</p>
     </div>
     """, unsafe_allow_html=True)
 
-    tab1, tab2, tab3 = st.tabs(["📚 Syllabus", "⏰ Routine", "📅 Study Plan"])
+    # মূল ৪টি ট্যাব
+    tab1, tab2, tab3, tab4 = st.tabs(["📚 Syllabus", "📅 Study Plan", "🎯 Routine", "📦 Archive"])
 
-    # --- ক্লাস সেভেনের সমন্বিত সিলেবাস ডিকশনারি (Original Structure) ---
+    # --- ক্লাস সেভেনের সমন্বিত সিলেবাস ডিকশনারি ---
     unified_syllabus_dictionary = {
         "বাংলা প্রথম পত্র": {
             "গদ্যাংশ": [
@@ -4268,7 +3348,7 @@ def render_study_planner():
         },
         "বিজ্ঞান": {
             "অধ্যায়সমূহ": [
-                "প্রথম অধ্যায়: নিম্নশ্রেণির জীব", "দ্বিতীয় অধ্যায়: উদ্ভিদ ও প্রাণীর কোষীয় সংগঠন",
+                "প্রথম অধ্যায়: নিম্নশ্রেণির জীব", "দ্বিতীয় অধ্যায়: উদ্ভিদ ও প্রাণীর কোষীয় গঠন",
                 "তৃতীয় অধ্যায়: উদ্ভিদের বাহ্যিক বৈশিষ্ট্য", "চতুর্থ অধ্যায়: শ্বসন",
                 "পঞ্চম অধ্যায়: পরিপাকতন্ত্র এবং রক্ত সংবহনতন্ত্র", "ষষ্ঠ অধ্যায়: পদার্থের গঠন",
                 "সপ্তম অধ্যায়: শক্তির ব্যবহার", "অষ্টম অধ্যায়: শব্দের কথা",
@@ -4302,25 +3382,61 @@ def render_study_planner():
         }
     }
 
+    # ডাটাবেস টেবিল তৈরি
+    conn = sqlite3.connect("smart_school_syllabus.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS school_syllabus_multi (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_class TEXT,
+        exam_term TEXT,
+        syllabus_json TEXT,
+        is_default INT DEFAULT 0
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS saved_study_plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        plan_name TEXT,
+        syllabus_label TEXT,
+        target_days INTEGER,
+        daily_hours REAL,
+        plan_json TEXT
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS universal_archives (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        archive_type TEXT,
+        title TEXT,
+        details_json TEXT,
+        archive_date TEXT
+    )
+    """)
+    # নতুন নিজেকে যাচাইকরণ সংক্রান্ত টেস্ট হিস্ট্রি টেবিল
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS test_history_archive (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        target_day_num INTEGER,
+        subject_name TEXT,
+        topic_name TEXT,
+        test_type TEXT,
+        score_obtained INTEGER,
+        total_score INTEGER,
+        percentage REAL,
+        correct_count INTEGER,
+        wrong_count INTEGER,
+        details_json TEXT,
+        test_date TEXT
+    )
+    """)
+    conn.commit()
+    conn.close()
+
     # --- TAB 1: SYLLABUS ---
     with tab1:
         conn = sqlite3.connect("smart_school_syllabus.db")
         cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS school_syllabus_multi (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                student_class TEXT,
-                exam_term TEXT,
-                syllabus_json TEXT,
-                is_default INT DEFAULT 0
-            )
-        """)
-        try:
-            cursor.execute("ALTER TABLE school_syllabus_multi ADD COLUMN is_default INT DEFAULT 0")
-        except:
-            pass
-        conn.commit()
-        
         cursor.execute("SELECT id, student_class, exam_term, syllabus_json, is_default FROM school_syllabus_multi ORDER BY id DESC")
         all_saved_syllabi = cursor.fetchall()
         conn.close()
@@ -4338,7 +3454,7 @@ def render_study_planner():
                         editing_syllabus = s
                         break
             
-            form_title = "Edit" if editing_syllabus else "+ নতুন সিলেবাস তৈরি করুন"
+            form_title = "Edit" if editing_syllabus else "+ Make Your Syllabus"
             st.markdown(f"### {form_title}")
             st.markdown("সিলেবাস তৈরি করতে ক্লাস, বিষয় এবং কোন পরীক্ষার জন্য সিলেবাস তৈরি করছ তা নির্বাচন করো। তারপর Save বাটনে ক্লিক করো!")
 
@@ -4353,18 +3469,18 @@ def render_study_planner():
 
             col1, col2 = st.columns(2)
             with col1:
-                student_class = st.selectbox("শ্রেণি নির্বাচন করো:", ["Class 6", "Class 7", "Class 8", "Class 9", "Class 10"], index=1, key="sel_class_multi")
+                student_class = st.selectbox("Select Class:", ["Class 6", "Class 7", "Class 8", "Class 9", "Class 10"], index=1, key="sel_class_multi")
                 exam_terms_list = ["Weekly Quiz", "Half-Yearly", "Yearly", "Model Test", "Pre-Test", "C.T.", "Tutorial", "Others"]
                 term_idx = exam_terms_list.index(default_term) if default_term in exam_terms_list else 0
-                exam_term = st.selectbox("পরীক্ষার নাম:", exam_terms_list, index=term_idx, key="sel_term_multi")
+                exam_term = st.selectbox("Exam Name:", exam_terms_list, index=term_idx, key="sel_term_multi")
             with col2:
                 available_subjects = list(unified_syllabus_dictionary.keys())
                 default_subjs = [sub for sub in parsed_saved_data.keys() if sub in available_subjects] if parsed_saved_data else []
-                selected_subjects = st.multiselect("এক/একাধিক বিষয় নির্বাচন করো:", available_subjects, default=default_subjs, key="sel_subjects_multi")
+                selected_subjects = st.multiselect("Select one/More Topic:", available_subjects, default=default_subjs, key="sel_subjects_multi")
 
             selected_syllabus_data = {}
             if selected_subjects:
-                st.markdown("#### নির্বাচিত বিষয়/বিষয়সমূহের টপিক বাছাই করো: ")
+                st.markdown("#### Select Topic:")
                 for subj in selected_subjects:
                     with st.expander(f"বিষয়: {subj}", expanded=True):
                         categories_dict = unified_syllabus_dictionary.get(subj, {})
@@ -4394,8 +3510,8 @@ def render_study_planner():
                         cursor = conn.cursor()
                         if editing_syllabus:
                             cursor.execute("""
-                                UPDATE school_syllabus_multi 
-                                SET student_class=?, exam_term=?, syllabus_json=? 
+                                UPDATE school_syllabus_multi
+                                SET student_class=?, exam_term=?, syllabus_json=?
                                 WHERE id=?
                             """, (student_class, exam_term, syllabus_str, editing_syllabus[0]))
                         else:
@@ -4411,39 +3527,56 @@ def render_study_planner():
                         st.rerun()
                     else:
                         st.error("দয়া করে অন্তত একটি বিষয় এবং তার টপিক সিলেক্ট করো.")
-            
-            if editing_syllabus or st.session_state.create_new_syllabus:
-                with col_btn_s2:
-                    if st.button("❌ Cancel", use_container_width=True):
+            with col_btn_s2:
+                if editing_syllabus or st.session_state.create_new_syllabus:
+                    if st.button("X Cancel", use_container_width=True):
                         st.session_state.create_new_syllabus = False
                         st.session_state.syllabus_edit_id = None
                         st.rerun()
 
         if all_saved_syllabi and not st.session_state.create_new_syllabus and st.session_state.syllabus_edit_id is None:
-            st.markdown("### 🗂️ সংরক্ষিত সিলেবাসসমূহ ও মূল সিলেবাস নির্বাচন")
-            
             syllabus_options = {}
             for s in all_saved_syllabi:
                 s_id, s_class, s_term, s_json, s_def = s[0], s[1], s[2], s[3], s[4]
-                def_tag = " ⭐ [মূল/ডিফল্ট সিলেবাস]" if s_def == 1 else ""
-                label_str = f"📌 {s_term} ({s_class}) - ID: {s_id}{def_tag}"
+                def_tag = " * [মূল/ডিফল্ট সিলেবাস]" if s_def == 1 else ""
+                label_str = f"{s_term} ({s_class}) ID: {s_id}{def_tag}"
                 syllabus_options[label_str] = s
 
-            selected_s_label = st.selectbox("আপনার সংরক্ষিত সিলেবাসসমূহ থেকে বেছে নিন:", list(syllabus_options.keys()), key="select_saved_syllabus_dropdown")
+            selected_s_label = st.selectbox(" Select Your Syllabus:", list(syllabus_options.keys()), key="select_saved_syllabus_dropdown")
             selected_s_record = syllabus_options[selected_s_label]
             s_id, s_class, s_term, s_json, s_def = selected_s_record
 
             st.markdown("---")
+            
+            # সিলেবাস সামারি পপআপ বাটন
+            if st.button("📊 Samary of Syllabus", key=f"btn_syl_summary_{s_id}", type="secondary"):
+                @st.dialog("📊 Samary of Syllabus")
+                def show_syllabus_summary_modal():
+                    st.markdown(f"**সিলেবাস বিবরণ:** {s_term} ({s_class})")
+                    parsed_modal_syl = json.loads(s_json)
+                    modal_rows = []
+                    idx_cnt = 1
+                    for subj, cats in parsed_modal_syl.items():
+                        for cat, topics in cats.items():
+                            modal_rows.append(f"<tr><td style='padding:8px; border:1px solid #cbd5e1;'>{idx_cnt}</td><td style='padding:8px; border:1px solid #cbd5e1; font-weight:bold;'>{subj}</td><td style='padding:8px; border:1px solid #cbd5e1;'>{cat}</td><td style='padding:8px; border:1px solid #cbd5e1;'>{', '.join(topics)}</td></tr>")
+                            idx_cnt += 1
+                    modal_table_html = f"<table style='width:100%; border-collapse:collapse; font-size:14px;'><thead><tr style='background:#1E3A8A; color:white;'><th style='padding:8px; border:1px solid #cbd5e1;'>ক্রমিক</th><th style='padding:8px; border:1px solid #cbd5e1;'>বিষয়</th><th style='padding:8px; border:1px solid #cbd5e1;'>বিভাগ</th><th style='padding:8px; border:1px solid #cbd5e1;'>টপিকসমূহ</th></tr></thead><tbody>{''.join(modal_rows)}</tbody></table>"
+                    st.markdown(modal_table_html, unsafe_allow_html=True)
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.button("বন্ধ করুন", key="close_syl_summary_modal"):
+                        st.rerun()
+                show_syllabus_summary_modal()
+
             col_sel_title, col_sel_action = st.columns([3, 2])
             with col_sel_title:
-                st.markdown(f"**বর্তমান সিলেবাস:** `{s_term} ({s_class})`")
+                st.markdown(f"**Current Syllabus:** {s_term} ({s_class})")
                 if s_def == 1:
-                    st.success("✨ এটি বর্তমানে আপনার **'মূল সিলেবাস'** হিসেবে সেট করা আছে।")
+                    st.success("✔ এটি বর্তমানে আপনার **'মূল সিলেবাস'** হিসেবে সেট করা আছে।")
                 else:
-                    st.info("ℹ️ এটি সাধারণ সংরক্ষিত সিলেবাস। একে মূল সিলেবাস হিসেবে সেট করতে পারেন।")
+                    st.info("ℹ এটি সাধারণ সিলেবাস হিসেবে আছে। মূল সিলেবাস হিসেবে সেট করতে পাশের বাটনে টিক দাও।")
             with col_sel_action:
                 is_currently_default = (s_def == 1)
-                make_default_btn = st.checkbox("⭐ এটিকে 'মূল সিলেবাস' হিসেবে টিক দিন", value=is_currently_default, key=f"main_default_check_{s_id}")
+                make_default_btn = st.checkbox("এটিকে 'মূল সিলেবাস' হিসেবে টিক দিন", value=is_currently_default, key=f"main_default_check_{s_id}")
                 if make_default_btn != is_currently_default:
                     conn = sqlite3.connect("smart_school_syllabus.db")
                     cursor = conn.cursor()
@@ -4456,10 +3589,10 @@ def render_study_planner():
                     conn.close()
                     st.success("মূল সিলেবাস সফলভাবে আপডেট করা হয়েছে!")
                     st.rerun()
-            st.markdown("---")
 
+            st.markdown("---")
             parsed_syllabus = json.loads(s_json)
-            st.markdown(f"#### Now, Your Syllabus is here ({s_class} - {s_term})")
+            st.markdown(f"#### Now, Your Syllabus is Ready! ({s_class} - {s_term})")
             
             table_rows = []
             for subj, cats in parsed_syllabus.items():
@@ -4479,7 +3612,7 @@ def render_study_planner():
             st.markdown(table_html, unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
 
-            col_btn1, col_btn2, col_btn3 = st.columns(3)
+            col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
             with col_btn1:
                 if st.button("Edit", use_container_width=True, key=f"edit_s_btn_{s_id}"):
                     st.session_state.syllabus_edit_id = s_id
@@ -4491,18 +3624,28 @@ def render_study_planner():
                     cursor.execute("DELETE FROM school_syllabus_multi WHERE id=?", (s_id,))
                     conn.commit()
                     conn.close()
-                    st.success("সিলেবাস সফলভাবে বাতিল ও মুছে ফেলা হয়েছে! পুনরায় সিলেবাস তৈরি করো।")
+                    st.success("সিলেবাস সফলভাবে বাতিল ও মুছে ফেলা হয়েছে!")
                     st.rerun()
             with col_btn3:
-                if st.button("➕ Create New Syllabus", use_container_width=True, type="primary", key="create_new_s_btn"):
+                if st.button("📦 সিলেবাসটি আর্কাইভ করুন", use_container_width=True, key=f"arc_s_btn_{s_id}"):
+                    conn = sqlite3.connect("smart_school_syllabus.db")
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        INSERT INTO universal_archives (archive_type, title, details_json, archive_date)
+                        VALUES ('Syllabus', ?, ?, datetime('now', 'localtime'))
+                    """, (f"{s_term} ({s_class})", s_json))
+                    conn.commit()
+                    conn.close()
+                    st.success("সিলেবাসটি সফলভাবে আর্কাইভে সেভ করা হয়েছে!")
+            with col_btn4:
+                if st.button("+ Create New Syllabus", use_container_width=True, type="primary", key="create_new_s_btn"):
                     st.session_state.create_new_syllabus = True
                     st.session_state.syllabus_edit_id = None
                     st.rerun()
 
     # --- TAB 2: ROUTINE ---
-    with tab2:
-        st.markdown("### ⏰ সাপ্তাহিক কাস্টম রুটিন প্রস্তুতকারক (Custom Study Routine Builder)")
-        st.markdown("প্রথমে তোমার পছন্দের সিলেবাস নির্বাচন করো। এরপর প্রতিদিনের জন্য বিষয়, সময় স্লট, অধ্যায় এবং টার্গেট সেট করে রুটিন সাজাও!")
+    with tab3:
+        st.markdown("নিচ থেকে সিলেবাস নির্বাচন করো। এরপর প্রতিদিনের জন্য বিষয়, সময় স্লট, অধ্যায় এবং টার্গেট সেট করে রুটিন সাজাও!")
 
         conn = sqlite3.connect("smart_school_syllabus.db")
         cursor = conn.cursor()
@@ -4511,61 +3654,44 @@ def render_study_planner():
         conn.close()
 
         if routine_syllabi:
-            syllabus_choices = {}
             default_index = 0
+            syllabus_choices = {}
             for idx, s in enumerate(routine_syllabi):
                 s_id, s_class, s_term, s_json, s_def = s[0], s[1], s[2], s[3], s[4]
-                label_str = f"📌 {s_term} ({s_class}) [ID: {s_id}]"
+                label_str = f"{s_term} ({s_class}) [ID: {s_id}]"
                 if s_def == 1:
-                    label_str += " ⭐ (মূল সিলেবাস)"
+                    label_str += " * (মূল সিলেবাস)"
                     default_index = idx
                 syllabus_choices[label_str] = s_json
 
-            selected_routine_s_label = st.selectbox("🎯 সিলেবাস নির্বাচন করো:", list(syllabus_choices.keys()), index=default_index, key="routine_syllabus_dropdown")
-            
-            # শুধুমাত্র নির্বাচিত সিলেবাসের ভেতরে থাকা বিষয়গুলো রুটিনের জন্য ফিল্টার করা হলো
+            selected_routine_s_label = st.selectbox("সিলেবাস নির্বাচন করো:", list(syllabus_choices.keys()), index=default_index, key="routine_syllabus_dropdown")
             routine_selected_syl_dict = json.loads(syllabus_choices[selected_routine_s_label])
             available_subjects_in_syllabus = list(routine_selected_syl_dict.keys())
 
             if available_subjects_in_syllabus:
                 st.markdown("---")
-                st.markdown("#### 📅 সপ্তাহের ৭ দিনের পড়ার পরিকল্পনা ও টার্গেট সেটিং (শনিবার - শুক্রবার):")
-                
+                st.markdown("#### সপ্তাহের ৭ দিনের পড়ার পরিকল্পনা ও টার্গেট সেটিং (শনিবার - শুক্রবার):")
                 days_of_week = ["শনিবার", "রবিবার", "সোমবার", "মঙ্গলবার", "বুধবার", "বৃহস্পতিবার", "শুক্রবার"]
                 weekly_custom_routine = {}
 
                 for day in days_of_week:
-                    with st.expander(f"📆 দিন: {day}", expanded=(day == "শনিবার")):
+                    with st.expander(f"দিন: {day}", expanded=(day == "শনিবার")):
                         num_subjs_for_day = st.number_input(
-                            f"{day} কয়টি বিষয় পড়তে চাও? (যত খুশি দিন)",
+                            f"{day} কয়টি বিষয় পড়তে চাও?",
                             min_value=1, max_value=25, value=min(2, len(available_subjects_in_syllabus)), step=1,
                             key=f"num_subs_{day}"
                         )
-                        
                         day_entries = []
-                        for i in range(int(num_subjs_for_day)):
-                            st.markdown(f"**🔹 বিষয় {i+1} বিস্তারিত ও টার্গেট সেটিং:**")
+                        for i in range(num_subjs_for_day):
+                            st.markdown(f"**বিষয় {i+1} বিস্তারিত ও টার্গেট সেটিং:**")
                             c_s, c_t, c_c = st.columns([2, 2, 2])
                             with c_s:
-                                chosen_sub = st.selectbox(
-                                    f"বিষয় নির্বাচন:",
-                                    available_subjects_in_syllabus,
-                                    key=f"sub_{day}_{i}"
-                                )
+                                chosen_sub = st.selectbox("বিষয় নির্বাচন:", available_subjects_in_syllabus, key=f"sub_{day}_{i}")
                             with c_t:
-                                time_str = st.text_input(
-                                    f"সময় বা স্লট:",
-                                    value="06:30 AM - 07:30 AM (সকাল)",
-                                    key=f"time_{day}_{i}"
-                                )
+                                time_str = st.text_input("সময় বা স্লট:", value="06:30 AM - 07:30 AM (সকাল)", key=f"time_{day}_{i}")
                             with c_c:
-                                chapter_str = st.text_input(
-                                    f"টপিক বা অধ্যায়:",
-                                    value="অধ্যায় ১.১",
-                                    key=f"chap_{day}_{i}"
-                                )
-                            
-                            st.caption("🎯 অধ্যায়ের মোট পরিমাণ ও কন্টেন্ট টার্গেট (ঐচ্ছিক):")
+                                chapter_str = st.text_input("টপিক বা অধ্যায়:", value="অধ্যায় ১.১", key=f"chap_{day}_{i}")
+
                             col_p1, col_p2, col_p3 = st.columns(3)
                             with col_p1:
                                 total_pages = st.number_input(f"মোট পৃষ্ঠা:", min_value=0, max_value=500, value=10, key=f"pages_{day}_{i}")
@@ -4574,16 +3700,16 @@ def render_study_planner():
                             with col_p3:
                                 total_cq = st.number_input(f"মোট CQ (সৃজনশীল):", min_value=0, max_value=100, value=5, key=f"cq_{day}_{i}")
 
-                            st.caption("✅ এই অধ্যায়ের কি কি সম্পন্ন করা বা লক্ষ্য রয়েছে তা টিক দিন:")
+                            st.caption("এই অধ্যায়ের কি কি সম্পন্ন করা বা লক্ষ্য রয়েছে তা টিক দিন:")
                             col_ck1, col_ck2, col_ck3, col_ck4 = st.columns(4)
                             with col_ck1:
-                                is_mainbook = st.checkbox("📖 মূল বই রিডিং", value=True, key=f"mb_{day}_{i}")
+                                is_mainbook = st.checkbox("মূল বই রিডিং", value=True, key=f"mb_{day}_{i}")
                             with col_ck2:
-                                is_guide = st.checkbox("📘 গাইড/নোট", value=False, key=f"gb_{day}_{i}")
+                                is_guide = st.checkbox("গাইড/নোট", value=False, key=f"gb_{day}_{i}")
                             with col_ck3:
-                                is_mcq_done = st.checkbox("❓ MCQ প্র্যাকটিস", value=True, key=f"md_{day}_{i}")
+                                is_mcq_done = st.checkbox("MCQ প্র্যাকটিস", value=True, key=f"md_{day}_{i}")
                             with col_ck4:
-                                is_cq_done = st.checkbox("✍️ CQ চর্চা", value=False, key=f"cd_{day}_{i}")
+                                is_cq_done = st.checkbox("CQ চর্চা", value=False, key=f"cd_{day}_{i}")
 
                             day_entries.append({
                                 "subject": chosen_sub,
@@ -4598,152 +3724,183 @@ def render_study_planner():
                                 "cq_done": is_cq_done
                             })
                             st.markdown("---")
-                        
                         weekly_custom_routine[day] = day_entries
 
                 st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("🚀 আপনার রুটিন তৈরি করুন (Generate Your Routine)", use_container_width=True, type="primary"):
+                if st.button("আপনার রুটিন তৈরি করুন (Generate Your Routine)", use_container_width=True, type="primary"):
                     st.session_state["generated_custom_weekly_routine"] = weekly_custom_routine
                     st.session_state["generated_routine_syllabus_name"] = selected_routine_s_label
                     st.success("সফলভাবে তোমার কাস্টম প্রাত্যহিক রুটিন তৈরি করা হয়েছে!")
 
-                if "generated_custom_weekly_routine" in st.session_state:
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    st.markdown("### 🏆 আপনার চূড়ান্ত প্রাত্যহিক রুটিন ছক")
-                    
-                    syl_name = st.session_state.get('generated_routine_syllabus_name', 'নির্বাচিত সিলেবাস')
-                    
-                    st.markdown(f"""
-                    <div style="background-color: #E8F0FE; padding: 14px 20px; border-radius: 8px; color: #1E3A8A; font-weight: bold; margin-bottom: 20px; font-size: 15px;">
-                        ভিত্তি সিলেবাস: {syl_name}
-                    </div>
-                    """, unsafe_allow_html=True)
+            if "generated_custom_weekly_routine" in st.session_state:
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # রুটিন সামারি পপআপ বাটন
+                if st.button("📊 পরীক্ষার রুটিন ও সামারি টেবিল (এক নজরে)", key="btn_routine_summary_main", type="secondary"):
+                    @st.dialog("📊 পরীক্ষার রুটিন ও সামারি টেবিল (এক নজরে)")
+                    def show_routine_summary_modal():
+                        st.markdown(f"**ভিত্তি সিলেবাস:** {st.session_state.get('generated_routine_syllabus_name', '')}")
+                        r_modal_rows = []
+                        r_idx = 1
+                        for d_name, entries in st.session_state["generated_custom_weekly_routine"].items():
+                            for ent in entries:
+                                r_modal_rows.append(f"<tr><td style='padding:8px; border:1px solid #cbd5e1;'>{r_idx}</td><td style='padding:8px; border:1px solid #cbd5e1; font-weight:bold;'>{d_name}</td><td style='padding:8px; border:1px solid #cbd5e1;'>{ent['subject']}</td><td style='padding:8px; border:1px solid #cbd5e1;'>{ent['time']}</td><td style='padding:8px; border:1px solid #cbd5e1;'>{ent['chapter']}</td></tr>")
+                                r_idx += 1
+                        r_modal_table_html = f"<table style='width:100%; border-collapse:collapse; font-size:14px;'><thead><tr style='background:#1E3A8A; color:white;'><th style='padding:8px; border:1px solid #cbd5e1;'>ক্রমিক</th><th style='padding:8px; border:1px solid #cbd5e1;'>বার</th><th style='padding:8px; border:1px solid #cbd5e1;'>বিষয়</th><th style='padding:8px; border:1px solid #cbd5e1;'>সময়</th><th style='padding:8px; border:1px solid #cbd5e1;'>টপিক/অধ্যায়</th></tr></thead><tbody>{''.join(r_modal_rows)}</tbody></table>"
+                        st.markdown(r_modal_table_html, unsafe_allow_html=True)
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        if st.button("বন্ধ করুন", key="close_routine_summary_modal"):
+                            st.rerun()
+                    show_routine_summary_modal()
 
-                    filter_days = ["সব বার", "শনিবার", "রবিবার", "সোমবার", "মঙ্গলবার", "বুধবার", "বৃহস্পতিবার", "শুক্রবার"]
-                    selected_filter = st.radio("বার অনুযায়ী ফিল্টার করো:", filter_days, horizontal=True, key="routine_day_filter_radio")
+                st.markdown("### আপনার চূড়ান্ত প্রাত্যহিক রুটিন ছক")
+                syl_name = st.session_state.get('generated_routine_syllabus_name', 'নির্বাচিত সিলেবাস')
+                st.markdown(f"""
+                <div style="background-color: #E8F0FE; padding: 14px 20px; border-radius: 8px; color: #1E3A8A; font-weight: bold; margin-bottom: 20px; font-size: 15px;">
+                ভিত্তি সিলেবাস: {syl_name}
+                </div>
+                """, unsafe_allow_html=True)
 
-                    st.markdown("<br>", unsafe_allow_html=True)
+                filter_days = ["সব বার", "শনিবার", "রবিবার", "সোমবার", "মঙ্গলবার", "বুধবার", "বৃহস্পতিবার", "শুক্রবার"]
+                selected_filter = st.radio("বার অনুযায়ী ফিল্টার করো:", filter_days, horizontal=True, key="routine_day_filter_radio")
+                st.markdown("<br>", unsafe_allow_html=True)
 
-                    if "routine_edit_item" not in st.session_state:
-                        st.session_state.routine_edit_item = None
+                if "routine_edit_item" not in st.session_state:
+                    st.session_state.routine_edit_item = None
 
-                    for day_name, entries in st.session_state["generated_custom_weekly_routine"].items():
-                        if selected_filter != "সব বার" and selected_filter != day_name:
-                            continue
-                            
-                        for idx, entry in enumerate(entries):
-                            unique_entry_key = f"{day_name}_{idx}"
-                            
-                            if st.session_state.routine_edit_item == unique_entry_key:
-                                with st.form(key=f"edit_form_{unique_entry_key}"):
-                                    st.markdown(f"**✏️ এডিট করো ({day_name} - বিষয় {idx+1}):**")
-                                    e_col1, e_col2, e_col3 = st.columns(3)
-                                    with e_col1:
-                                        new_sub = st.selectbox("বিষয়:", available_subjects_in_syllabus, index=available_subjects_in_syllabus.index(entry["subject"]) if entry["subject"] in available_subjects_in_syllabus else 0)
-                                    with e_col2:
-                                        new_time = st.text_input("সময় বা স্লট:", value=entry["time"])
-                                    with e_col3:
-                                        new_chap = st.text_input("টপিক/অধ্যায়:", value=entry["chapter"])
-                                    
-                                    st.markdown("**অধ্যায়ের টার্গেট সংখ্যা এডিট করো:**")
-                                    ep1, ep2, ep3 = st.columns(3)
-                                    with ep1:
-                                        new_pages = st.number_input("মোট পৃষ্ঠা:", min_value=0, value=entry.get("pages", 10))
-                                    with ep2:
-                                        new_mcq = st.number_input("মোট MCQ:", min_value=0, value=entry.get("mcq", 30))
-                                    with ep3:
-                                        new_cq = st.number_input("মোট CQ:", min_value=0, value=entry.get("cq", 5))
+                for day_name, entries in st.session_state["generated_custom_weekly_routine"].items():
+                    if selected_filter != "সব বার" and selected_filter != day_name:
+                        continue
+                    for idx, entry in enumerate(entries):
+                        unique_entry_key = f"{day_name}_{idx}"
+                        if st.session_state.routine_edit_item == unique_entry_key:
+                            with st.form(key=f"edit_form_{unique_entry_key}"):
+                                st.markdown(f"**এডিট করো ({day_name} - বিষয় {idx+1}):**")
+                                e_col1, e_col2, e_col3 = st.columns(3)
+                                with e_col1:
+                                    new_sub = st.selectbox("বিষয়:", available_subjects_in_syllabus, index=available_subjects_in_syllabus.index(entry["subject"]) if entry["subject"] in available_subjects_in_syllabus else 0)
+                                with e_col2:
+                                    new_time = st.text_input("সময় বা স্লট:", value=entry["time"])
+                                with e_col3:
+                                    new_chap = st.text_input("টপিক/অধ্যায়:", value=entry["chapter"])
 
-                                    st.markdown("**কি কি সম্পন্ন হয়েছে তা টিক দাও:**")
-                                    eb1, eb2, eb3, eb4 = st.columns(4)
-                                    with eb1:
-                                        new_mb = st.checkbox("📖 মূল বই", value=entry.get("mainbook", True))
-                                    with eb2:
-                                        new_gb = st.checkbox("📘 গাইড/নোট", value=entry.get("guide", False))
-                                    with eb3:
-                                        new_md = st.checkbox("❓ MCQ", value=entry.get("mcq_done", True))
-                                    with eb4:
-                                        new_cd = st.checkbox("✍️ CQ", value=entry.get("cq_done", False))
+                                st.markdown("**অধ্যায়ের টার্গেট সংখ্যা এডিট করো:**")
+                                ep1, ep2, ep3 = st.columns(3)
+                                with ep1:
+                                    new_pages = st.number_input("মোট পৃষ্ঠা:", min_value=0, value=entry.get("pages", 10))
+                                with ep2:
+                                    new_mcq = st.number_input("মোট MCQ:", min_value=0, value=entry.get("mcq", 30))
+                                with ep3:
+                                    new_cq = st.number_input("মোট CQ:", min_value=0, value=entry.get("cq", 5))
 
-                                    b1, b2 = st.columns(2)
-                                    with b1:
-                                        if st.form_submit_button("সংরক্ষণ করুন (Save)"):
-                                            entry["subject"] = new_sub
-                                            entry["time"] = new_time
-                                            entry["chapter"] = new_chap
-                                            entry["pages"] = new_pages
-                                            entry["mcq"] = new_mcq
-                                            entry["cq"] = new_cq
-                                            entry["mainbook"] = new_mb
-                                            entry["guide"] = new_gb
-                                            entry["mcq_done"] = new_md
-                                            entry["cq_done"] = new_cd
-                                            st.session_state.routine_edit_item = None
-                                            st.success("রুটিন সফলভাবে আপডেট করা হয়েছে!")
-                                            st.rerun()
-                                    with b2:
-                                        if st.form_submit_button("বাতিল (Cancel)"):
-                                            st.session_state.routine_edit_item = None
-                                            st.rerun()
-                            else:
-                                col_d, col_t, col_s, col_c, col_e, col_del = st.columns([1.2, 2.2, 2.0, 3.2, 0.5, 0.5])
-                                
-                                with col_d:
-                                    st.markdown(f"<div style='padding-top:8px; font-weight:bold; color:#1e293b;'>📅 {day_name}</div>", unsafe_allow_html=True)
-                                with col_t:
-                                    st.markdown(f"<div style='padding-top:8px; color:#1e3a8a; font-weight:bold;'>⏰ {entry['time']}</div>", unsafe_allow_html=True)
-                                with col_s:
-                                    st.markdown(f"<div style='padding-top:5px;'><span style='background-color:#DBEAFE; color:#1D4ED8; padding:5px 12px; border-radius:6px; font-weight:bold; font-size:13px; display:inline-block;'>📘 {entry['subject']}</span></div>", unsafe_allow_html=True)
-                                with col_c:
-                                    target_info = []
-                                    if entry.get("pages", 0) > 0: target_info.append(f"📖 {entry['pages']}টি পৃষ্ঠা")
-                                    if entry.get("mcq", 0) > 0: target_info.append(f"❓ {entry['mcq']}টি MCQ")
-                                    if entry.get("cq", 0) > 0: target_info.append(f"✍️ {entry['cq']}টি CQ")
-                                    target_str = " | ".join(target_info) if target_info else "সাধারন রিভিশন"
+                                st.markdown("**কি কি সম্পন্ন হয়েছে তা টিক দাও:**")
+                                eb1, eb2, eb3, eb4 = st.columns(4)
+                                with eb1:
+                                    new_mb = st.checkbox("মূল বই", value=entry.get("mainbook", True))
+                                with eb2:
+                                    new_gb = st.checkbox("গাইড/নোট", value=entry.get("guide", False))
+                                with eb3:
+                                    new_md = st.checkbox("MCQ", value=entry.get("mcq_done", True))
+                                with eb4:
+                                    new_cd = st.checkbox("CQ", value=entry.get("cq_done", False))
 
-                                    done_tags = []
-                                    if entry.get("mainbook"): done_tags.append("✅মূলবই")
-                                    if entry.get("guide"): done_tags.append("✅গাইড")
-                                    if entry.get("mcq_done"): done_tags.append("✅MCQ")
-                                    if entry.get("cq_done"): done_tags.append("✅CQ")
-                                    done_str = " ".join(done_tags) if done_tags else "⏳পড়া বাকি"
-
-                                    st.markdown(f"""
-                                    <div style='padding-top:2px;'>
-                                        <div style='color:#1e293b; font-weight:bold; font-size:14px;'>📝 {entry['chapter']}</div>
-                                        <div style='color:#475569; font-size:12px; margin-top:2px;'>🎯 {target_str}</div>
-                                        <div style='color:#059669; font-size:11px; font-weight:bold; margin-top:2px;'>{done_str}</div>
-                                    </div>
-                                    """, unsafe_allow_html=True)
-
-                                with col_e:
-                                    if st.button("✏️", key=f"btn_edit_{unique_entry_key}", help="এডিট করুন"):
-                                        st.session_state.routine_edit_item = unique_entry_key
+                                b1, b2 = st.columns(2)
+                                with b1:
+                                    if st.form_submit_button("সংরক্ষণ করুন (Save)"):
+                                        entry["subject"] = new_sub
+                                        entry["time"] = new_time
+                                        entry["chapter"] = new_chap
+                                        entry["pages"] = new_pages
+                                        entry["mcq"] = new_mcq
+                                        entry["cq"] = new_cq
+                                        entry["mainbook"] = new_mb
+                                        entry["guide"] = new_gb
+                                        entry["mcq_done"] = new_md
+                                        entry["cq_done"] = new_cd
+                                        st.session_state.routine_edit_item = None
+                                        st.success("রুটিন সফলভাবে আপডেট করা হয়েছে!")
                                         st.rerun()
-                                with col_del:
-                                    if st.button("🗑️", key=f"btn_del_{unique_entry_key}", help="মুছে ফেলুন"):
-                                        entries.pop(idx)
-                                        st.success("এন্ট্রিটি সফলভাবে মুছে ফেলা হয়েছে!")
+                                with b2:
+                                    if st.form_submit_button("বাতিল (Cancel)"):
+                                        st.session_state.routine_edit_item = None
                                         st.rerun()
-                                
-                                st.markdown("<hr style='margin: 8px 0; border: none; border-bottom: 1px solid #f1f5f9;'>", unsafe_allow_html=True)
+                        else:
+                            col_d, col_t, col_s, col_c, col_e, col_del = st.columns([1.2, 2.2, 2.0, 3.2, 0.5, 0.5])
+                            with col_d:
+                                st.markdown(f"<div style='padding-top:8px; font-weight:bold; color:#1e293b;'>{day_name}</div>", unsafe_allow_html=True)
+                            with col_t:
+                                st.markdown(f"<div style='padding-top:8px; color:#1e3a8a; font-weight:bold;'>{entry['time']}</div>", unsafe_allow_html=True)
+                            with col_s:
+                                st.markdown(f"<div style='padding-top:5px;'><span style='background-color: #DBEAFE; color: #1D4ED8; padding: 5px 12px; border-radius: 6px; font-weight:bold; font-size:13px; display:inline-block;'>{entry['subject']}</span></div>", unsafe_allow_html=True)
+                            with col_c:
+                                target_info = []
+                                if entry.get("pages", 0) > 0:
+                                    target_info.append(f"{entry['pages']}টি পৃষ্ঠা")
+                                if entry.get("mcq", 0) > 0:
+                                    target_info.append(f"{entry['mcq']}টি MCQ")
+                                if entry.get("cq", 0) > 0:
+                                    target_info.append(f"{entry['cq']}টি CQ")
+                                target_str = " | ".join(target_info) if target_info else "সাধারন রিভিশন"
 
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    st.info("💡 টিপস: তুমি চাইলে ব্রাউজার থেকে সরাসরি প্রিন্ট (Ctrl + P) করে এই রুটিনটি প্রিন্ট আউট বা পেজে সংরক্ষণ করে রাখতে পারো।")
+                                done_tags = []
+                                if entry.get("mainbook"):
+                                    done_tags.append("মূলবই")
+                                if entry.get("guide"):
+                                    done_tags.append("গাইড")
+                                if entry.get("mcq_done"):
+                                    done_tags.append("MCQ")
+                                if entry.get("cq_done"):
+                                    done_tags.append("CQ")
+                                done_str = " • ".join(done_tags) if done_tags else "পড়া বাকি"
+
+                                st.markdown(f"""
+                                <div style='padding-top:2px;'>
+                                    <div style='color:#1e293b; font-weight:bold; font-size:14px;'>{entry['chapter']}</div>
+                                    <div style='color:#475569; font-size:12px; margin-top:2px;'>{target_str}</div>
+                                    <div style='color:#059669; font-size:11px; font-weight:bold; margin-top:2px;'>{done_str}</div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                            with col_e:
+                                if st.button("✏️", key=f"btn_edit_{unique_entry_key}", help="এডিট করুন"):
+                                    st.session_state.routine_edit_item = unique_entry_key
+                                    st.rerun()
+                            with col_del:
+                                if st.button("🗑️", key=f"btn_del_{unique_entry_key}", help="মুছে ফেলুন"):
+                                    entries.pop(idx)
+                                    st.success("এন্ট্রিটি সফলভাবে মুছে ফেলা হয়েছে!")
+                                    st.rerun()
+                        st.markdown("<hr style='margin: 8px 0; border: none; border-bottom: 1px solid #f1f5f9;'>", unsafe_allow_html=True)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("📦 সম্পূর্ণ রুটিনটি আর্কাইভে সেভ করুন", type="primary"):
+                    conn = sqlite3.connect("smart_school_syllabus.db")
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        INSERT INTO universal_archives (archive_type, title, details_json, archive_date)
+                        VALUES ('Routine', ?, ?, datetime('now', 'localtime'))
+                    """, (f"সাপ্তাহিক রুটিন ({syl_name})", json.dumps(st.session_state["generated_custom_weekly_routine"], ensure_ascii=False)))
+                    conn.commit()
+                    conn.close()
+                    st.success("রুটিনটি সফলভাবে আর্কাইভে সেভ করা হয়েছে!")
+
+                st.info("💡 টিপস: তুমি চাইলে ব্রাউজার থেকে সরাসরি প্রিন্ট (Ctrl + P) করে এই রুটিনটি প্রিন্ট আউট বা পেজে সংরক্ষণ করে রাখতে পারো।")
             else:
-                st.warning("⚠️ নির্বাচিত সিলেবাসে কোনো বিষয় পাওয়া যায়নি। দয়া করে সিলেবাস চেক করুন।")
+                st.warning("⚠ নির্বাচিত সিলেবাসে কোনো বিষয় পাওয়া যায়নি। দয়া করে প্রথমে সিলেবাস চেক করুন।")
         else:
-            st.warning("⚠️ কোনো সংরক্ষিত সিলেবাস পাওয়া যায়নি। দয়া করে প্রথমে 'Syllabus' ট্যাব থেকে একটি সিলেবাস তৈরি ও সেভ করুন।")
+            st.warning("⚠ কোনো সংরক্ষিত সিলেবাস পাওয়া যায়নি। দয়া করে প্রথমে 'Syllabus' ট্যাব থেকে একটি সিলেবাস তৈরি ও সেভ করুন।")
 
-    # --- TAB 3: AUTO SMART STUDY PLAN (শুধুমাত্র নির্বাচিত সিলেবাসের বিষয় ও টপিকভিত্তিক) ---
-    with tab3:
-        st.markdown("### 🤖 Auto Smart Study Plan & Interactive Task Tracker")
-        st.markdown("সিলেবাস নির্বাচন ও সময় দেওয়ার পর কেবল **নির্বাচিত সিলেবাসের বিষয় ও টপিকগুলো** নিয়ে অটো স্টাডি প্ল্যান তৈরি হবে। প্রতিটি বিষয়ের পড়ার সময়, স্ট্যাটাস ও কারণ ইনপুট দিয়ে লাইভ প্রোগ্রেস ট্র্যাক করো!")
+    # --- TAB 3: AUTO SMART STUDY PLAN ---
+    with tab2:
+        st.markdown("### Auto Study Plan & Manager")
+        st.markdown("এখানে তুমি যত খুশি স্টাডি প্ল্যান তৈরি করতে পারবে, সেভ রাখতে পারবে এবং যেকোনো সময় 'Your Saved Plan' থেকে স্টাডি শুরু করতে পারবে!")
 
         conn = sqlite3.connect("smart_school_syllabus.db")
         cursor = conn.cursor()
         cursor.execute("SELECT id, student_class, exam_term, syllabus_json, is_default FROM school_syllabus_multi ORDER BY id DESC")
         plan_syllabi = cursor.fetchall()
+
+        cursor.execute("SELECT id, plan_name, syllabus_label, target_days, daily_hours, plan_json FROM saved_study_plans ORDER BY id DESC")
+        all_saved_plans = cursor.fetchall()
         conn.close()
 
         if plan_syllabi:
@@ -4751,75 +3908,148 @@ def render_study_planner():
             p_default_idx = 0
             for idx, s in enumerate(plan_syllabi):
                 s_id, s_class, s_term, s_json, s_def = s[0], s[1], s[2], s[3], s[4]
-                label_str = f"📌 {s_term} ({s_class}) [ID: {s_id}]"
+                label_str = f"{s_term} ({s_class}) [ID: {s_id}]"
                 if s_def == 1:
-                    label_str += " ⭐ (মূল সিলেবাস)"
+                    label_str += " * (মূল সিলেবাস)"
                     p_default_idx = idx
                 p_choices[label_str] = s_json
 
-            selected_plan_s_label = st.selectbox("🎯 যে সিলেবাসটি শেষ করতে চাও তা নির্বাচন করো:", list(p_choices.keys()), index=p_default_idx, key="auto_plan_syllabus_dropdown")
+            st.markdown("---")
+            st.markdown("#### 📂 Your Saved Plan:")
             
-            # 🔥 মূল সংশোধন: শুধুমাত্র সিলেক্ট করা সিলেবাসের ডিকশনারি পার্স করা হলো
-            selected_syl_dict = json.loads(p_choices[selected_plan_s_label])
-
-            # ১. এনালিটিক্স প্রিভিউ (শুধুমাত্র নির্বাচিত সিলেবাসের ওপর ভিত্তি করে)
-            st.markdown("#### 📊 ১. নির্বাচিত সিলেবাসের পূর্ণাঙ্গ এনালিটিক্স প্রিভিউ:")
-            total_subjs_count = len(selected_syl_dict)
-            total_topics_count = sum([len(t) for cats in selected_syl_dict.values() for t in cats.values()])
-
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("📚 মোট বিষয়", f"{total_subjs_count} টি")
-            c2.metric("📝 মোট অধ্যায়/টপিক", f"{total_topics_count} টি")
-            c3.metric("📖 আনুমানিক পৃষ্ঠা", f"~{total_topics_count * 8} টি")
-            c4.metric("🎯 মোট MCQ ও CQ", f"~{total_topics_count * 20} MCQ | {total_topics_count * 3} CQ")
+            if all_saved_plans:
+                plan_options = {f"{p[1]} ({p[2]} - {p[3]} দিন) [ID: {p[0]}]": p for p in all_saved_plans}
+                selected_saved_plan_label = st.selectbox("যেকোন একটি বেছে নাও:", list(plan_options.keys()), key="select_saved_study_plan_dropdown")
+                active_plan_record = plan_options[selected_saved_plan_label]
+                
+                col_pl1, col_pl2 = st.columns(2)
+                with col_pl1:
+                    if st.button("📌 Open Your Study Plan", use_container_width=True, type="primary"):
+                        st.session_state["active_plan_id"] = active_plan_record[0]
+                        st.session_state["active_plan_name"] = active_plan_record[1]
+                        st.session_state["active_plan_syl_label"] = active_plan_record[2]
+                        st.session_state["active_target_days"] = active_plan_record[3]
+                        st.session_state["active_daily_hours"] = active_plan_record[4]
+                        st.session_state["custom_day_tasks_store"] = json.loads(active_plan_record[5])
+                        st.success(f"'{active_plan_record[1]}' সফলভাবে লোড করা হয়েছে!")
+                        st.rerun()
+                with col_pl2:
+                    if st.button("🗑️ Delete This Plan", use_container_width=True):
+                        conn = sqlite3.connect("smart_school_syllabus.db")
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM saved_study_plans WHERE id=?", (active_plan_record[0],))
+                        conn.commit()
+                        conn.close()
+                        st.success("স্টাডি প্ল্যানটি সফলভাবে মুছে ফেলা হয়েছে!")
+                        st.rerun()
+            else:
+                st.info("ℹ এখনো কোনো স্টাডি প্ল্যান সেভ করা নেই। নিচে নতুন একটি প্ল্যান তৈরি করে সেভ করো।")
 
             st.markdown("---")
+            st.markdown("#### ➕ Make Your New Study Plan & Save:")
+            
+            with st.expander("To Make a New Study Plan, Click here", expanded=not bool(all_saved_plans)):
+                new_plan_name = st.text_input("স্টাডি প্ল্যানের একটি নাম দাও:", value="যেমন: আগামী ১০/১১/২০২৬ তারিখের সাপ্তাহিক কুইজ পরীক্ষার/মডেল টেস্ট/বার্ষিক পরীক্ষার সিলেবাস শেষ করার প্ল্যান ইত্যাদি")
+                selected_plan_s_label = st.selectbox("যে সিলেবাসটি নিয়ে প্ল্যান বানাতে চাও তা সিলেক্ট করো:", list(p_choices.keys()), key="new_plan_syllabus_dropdown")
+                selected_syl_dict = json.loads(p_choices[selected_plan_s_label])
 
-            # ২. সময় ও ঘণ্টা
-            st.markdown("#### ⏳ ২. সময় ও দৈনিক পড়ার ঘণ্টা নির্ধারণ করুন:")
-            col_t1, col_t2 = st.columns(2)
-            with col_t1:
-                target_days = st.number_input("সিলেবাস শেষ করার জন্য কত দিন সময় আছে?", min_value=1, max_value=365, value=3, step=1)
-            with col_t2:
-                daily_study_hours = st.slider("প্রতিদিন গড়ে কত ঘণ্টা পড়তে চাও? (দৈনিক টার্গেট সময়)", 1.0, 12.0, 4.0, 0.5)
+                col_t1, col_t2 = st.columns(2)
+                with col_t1:
+                    new_target_days = st.number_input(" মোট কত দিনে সিলেবাস শেষ করতে চাই তা উল্লেখ করো (N.B. মোট দিনের ২০% রিভিশনের জন্য রাখতে হবে):", min_value=5, max_value=365, value=25, step=1, key="new_target_days")
+                with col_t2:
+                    new_daily_hours = st.slider("প্রতিদিন গড়ে কত ঘণ্টা পড়তে চাও?", 1.0, 12.0, 4.0, 0.5, key="new_daily_hours")
 
-            if st.button("✨ অটো স্টাডি প্ল্যান ও টাস্ক ট্র্যাকার তৈরি করুন", use_container_width=True, type="primary"):
-                subj_topic_queues = {}
-                # 🔥 শুধুমাত্র নির্বাচিত সিলেবাসের বিষয় ও টপিকগুলো সারিবদ্ধ করা হলো
-                for subj, cats in selected_syl_dict.items():
-                    subj_topic_queues[subj] = []
-                    for cat, topics in cats.items():
-                        for t in topics:
-                            subj_topic_queues[subj].append({"subject": subj, "category": cat, "topic": t})
+                if st.button("💾 নতুন স্টাডি প্ল্যান তৈরি করতে এখানে ক্লিক করো ", use_container_width=True, type="primary"):
+                    subj_topic_queues = {}
+                    for subj, cats in selected_syl_dict.items():
+                        subj_topic_queues[subj] = []
+                        for cat, topics in cats.items():
+                            for t in topics:
+                                subj_topic_queues[subj].append({"subject": subj, "category": cat, "topic": t})
 
-                interleaved_topics_list = []
-                max_topic_len = max([len(v) for v in subj_topic_queues.values()]) if subj_topic_queues else 0
-                subj_list_keys = list(subj_topic_queues.keys())
+                    interleaved_topics_list = []
+                    max_topic_len = max([len(v) for v in subj_topic_queues.values()]) if subj_topic_queues else 0
+                    subj_list_keys = list(subj_topic_queues.keys())
+                    for i in range(max_topic_len):
+                        for sk in subj_list_keys:
+                            if i < len(subj_topic_queues[sk]):
+                                interleaved_topics_list.append(subj_topic_queues[sk][i])
 
-                for i in range(max_topic_len):
-                    for sk in subj_list_keys:
-                        if i < len(subj_topic_queues[sk]):
-                            interleaved_topics_list.append(subj_topic_queues[sk][i])
+                    revision_days_count = max(1, math.ceil(new_target_days * 0.20))
+                    regular_study_days = max(1, new_target_days - revision_days_count)
 
-                st.session_state["active_interleaved_topics"] = interleaved_topics_list
-                st.session_state["active_target_days"] = target_days
-                st.session_state["active_daily_hours"] = daily_study_hours
-                st.session_state["active_plan_syl_label"] = selected_plan_s_label
-                st.success("🎉 আপনার নির্বাচিত সিলেবাসের আলোকে স্মার্ট স্টাডি প্ল্যান প্রস্তুত করা হয়েছে!")
+                    initial_store = {}
+                    revision_start_day = new_target_days - revision_days_count + 1
+                    available_subjects_all = list(selected_syl_dict.keys())
 
-            # --- ৩. ইন্টারেক্টিভ প্ল্যান ও ট্র্যাকার ---
-            if "active_interleaved_topics" in st.session_state:
-                interleaved_topics_list = st.session_state["active_interleaved_topics"]
-                target_days = st.session_state["active_target_days"]
-                daily_study_hours = st.session_state["active_daily_hours"]
-                
-                total_items = len(interleaved_topics_list)
-                topics_per_day = math.ceil(total_items / max(1, target_days))
+                    total_topics = len(interleaved_topics_list)
+                    topics_per_day_base = total_topics // regular_study_days
+                    topics_extra = total_topics % regular_study_days
+
+                    curr_idx = 0
+                    for day_num in range(1, new_target_days + 1):
+                        day_store_key = f"day_tasks_{day_num}"
+                        if day_num >= revision_start_day:
+                            initial_store[day_store_key] = [
+                                {"subject": available_subjects_all[0] if available_subjects_all else "রিভিশন", "category": "রিভিশন বিভাগ", "topic": "পূর্ণাঙ্গ রিভিশন"}
+                            ]
+                        else:
+                            count_for_today = topics_per_day_base + (1 if day_num <= topics_extra else 0)
+                            count_for_today = max(1, count_for_today)
+                            initial_store[day_store_key] = interleaved_topics_list[curr_idx: curr_idx + count_for_today]
+                            curr_idx += count_for_today
+
+                    conn = sqlite3.connect("smart_school_syllabus.db")
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        INSERT INTO saved_study_plans (plan_name, syllabus_label, target_days, daily_hours, plan_json)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (new_plan_name, selected_plan_s_label, new_target_days, new_daily_hours, json.dumps(initial_store, ensure_ascii=False)))
+                    conn.commit()
+                    conn.close()
+
+                    st.session_state["active_plan_syl_label"] = selected_plan_s_label
+                    st.session_state["active_target_days"] = new_target_days
+                    st.session_state["active_daily_hours"] = new_daily_hours
+                    st.session_state["custom_day_tasks_store"] = initial_store
+                    st.success("নতুন স্টাডি প্ল্যান সফলভাবে তৈরি ও সংরক্ষণ করা হয়েছে!")
+                    st.rerun()
+
+            if "custom_day_tasks_store" in st.session_state:
+                target_days = st.session_state.get("active_target_days", 25)
+                daily_study_hours = st.session_state.get("active_daily_hours", 4.0)
+                selected_plan_s_label = st.session_state.get("active_plan_syl_label", list(p_choices.keys())[0])
+                selected_syl_dict = json.loads(p_choices.get(selected_plan_s_label, list(p_choices.values())[0]))
+                available_subjects_all = list(selected_syl_dict.keys())
+
+                revision_days_count = max(1, math.ceil(target_days * 0.20))
+                revision_start_day = target_days - revision_days_count + 1
 
                 st.markdown("<br>", unsafe_allow_html=True)
-                st.markdown("### 🏆 জেনারেটেড প্রাত্যহিক স্টাডি প্ল্যান ও লাইভ প্রোগ্রেস ট্র্যাকার:")
+                
+                # স্টাডি প্ল্যান সামারি পপআপ বাটন
+                if st.button("📊 স্টাডি প্ল্যান-কে সামারি টেবিল দেখতে এখানে ক্লিক করো", key="btn_study_plan_summary_main", type="secondary"):
+                    @st.dialog("📊 Summary Table of Your Study Plan")
+                    def show_study_plan_summary_modal():
+                        active_name = st.session_state.get('active_plan_name', 'স্মার্ট প্ল্যান')
+                        st.markdown(f"**প্ল্যানের নাম:** {active_name} (মোট দিন: {target_days} | দৈনিক: {daily_study_hours} ঘণ্টা)")
+                        sp_modal_rows = []
+                        sp_idx = 1
+                        for d_n in range(1, target_days + 1):
+                            d_key = f"day_tasks_{d_n}"
+                            tasks_list = st.session_state["custom_day_tasks_store"].get(d_key, [])
+                            for t_item in tasks_list:
+                                sp_modal_rows.append(f"<tr><td style='padding:8px; border:1px solid #cbd5e1;'>{sp_idx}</td><td style='padding:8px; border:1px solid #cbd5e1; font-weight:bold;'>দিন {d_n}</td><td style='padding:8px; border:1px solid #cbd5e1;'>{t_item.get('subject', '')}</td><td style='padding:8px; border:1px solid #cbd5e1;'>{t_item.get('category', '')}</td><td style='padding:8px; border:1px solid #cbd5e1;'>{t_item.get('topic', '')}</td></tr>")
+                                sp_idx += 1
+                        sp_modal_table_html = f"<table style='width:100%; border-collapse:collapse; font-size:14px;'><thead><tr style='background:#1E3A8A; color:white;'><th style='padding:8px; border:1px solid #cbd5e1;'>ক্রমিক</th><th style='padding:8px; border:1px solid #cbd5e1;'>দিন</th><th style='padding:8px; border:1px solid #cbd5e1;'>বিষয়</th><th style='padding:8px; border:1px solid #cbd5e1;'>বিভাগ</th><th style='padding:8px; border:1px solid #cbd5e1;'>টপিক</th></tr></thead><tbody>{''.join(sp_modal_rows)}</tbody></table>"
+                        st.markdown(sp_modal_table_html, unsafe_allow_html=True)
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        if st.button("বন্ধ করুন", key="close_study_plan_summary_modal"):
+                            st.rerun()
+                    show_study_plan_summary_modal()
 
-                # স্টেট ইনিশিয়ালাইজেশন
+                st.markdown(f"### 🗓 Your Running Study Plan (মোট দিন: {target_days} | রিভিশনের সময় পাবে: শেষের {revision_days_count} দিন)")
+
                 if "user_done_notes" not in st.session_state:
                     st.session_state["user_done_notes"] = {}
                 if "user_pending_notes" not in st.session_state:
@@ -4830,30 +4060,57 @@ def render_study_planner():
                     st.session_state["user_obstacle_reason"] = {}
                 if "user_subject_hours_text" not in st.session_state:
                     st.session_state["user_subject_hours_text"] = {}
+                if "revision_selected_subjects" not in st.session_state:
+                    st.session_state["revision_selected_subjects"] = {}
+                if "user_quiz_scores" not in st.session_state:
+                    st.session_state["user_quiz_scores"] = {}
 
                 backlog_items = []
                 obstacle_reasons_list = []
                 total_tasks_global = 0
                 completed_score_global = 0.0
 
-                curr_idx = 0
                 for day_num in range(1, target_days + 1):
-                    if curr_idx >= total_items:
-                        day_tasks = [{"subject": "সমন্বিত রিভিশন", "category": "অল সাবজেক্ট", "topic": "পূর্বের সকল পঠিত বিষয় রিভিশন"}]
+                    is_revision_day = day_num >= revision_start_day
+                    day_store_key = f"day_tasks_{day_num}"
+                    
+                    if day_store_key not in st.session_state["custom_day_tasks_store"]:
+                        st.session_state["custom_day_tasks_store"][day_store_key] = [{"subject": available_subjects_all[0], "category": "সাধারণ", "topic": "টপিক"}]
+
+                    day_tasks = st.session_state["custom_day_tasks_store"][day_store_key]
+
+                    if is_revision_day:
+                        st.markdown(f"""
+                        <div style="background: #FEF3C7; border: 2px solid #D97706; padding: 15px; border-radius: 10px; margin-bottom: 15px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #FCD34D; padding-bottom: 8px; margin-bottom: 12px;">
+                                <span style="font-size: 17px; font-weight: bold; color: #92400E;">🔄 দিন {day_num} (আজকে থেকে রিভিশনের সময় শুরু...)</span>
+                                <span style="background-color: #FDE68A; color: #92400E; font-weight: bold; padding: 4px 10px; border-radius: 6px; font-size: 13px;">নির্ধারিত সময়: {daily_study_hours} ঘণ্টা</span>
+                            </div>
+                        """, unsafe_allow_html=True)
+
+                        rev_key = f"rev_day_{day_num}"
+                        chosen_rev_subjects = st.multiselect(
+                            f"দিন {day_num}-কোন কোন বিষয় রিভিশন দিতে চাও তা সিলেক্ট করো। :",
+                            available_subjects_all,
+                            default=st.session_state["revision_selected_subjects"].get(rev_key, [available_subjects_all[0]]),
+                            key=f"rev_multiselect_{day_num}"
+                        )
+                        st.session_state["revision_selected_subjects"][rev_key] = chosen_rev_subjects
+
+                        if chosen_rev_subjects:
+                            day_tasks = [{"subject": sub, "category": "কি কি রিভিশন দিয়েছে তা সম্পন্ন হয়েছে বক্সে লিখে রাখো", "topic": f": {sub}"} for sub in chosen_rev_subjects]
+                            st.session_state["custom_day_tasks_store"][day_store_key] = day_tasks
                     else:
-                        day_tasks = interleaved_topics_list[curr_idx : curr_idx + topics_per_day]
-                        curr_idx += topics_per_day
+                        st.markdown(f"""
+                        <div style="background: #F8FAFC; border: 2px solid #3B82F6; padding: 15px; border-radius: 10px; margin-bottom: 15px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #CBD5E1; padding-bottom: 8px; margin-bottom: 12px;">
+                                <span style="font-size: 16px; font-weight: bold; color: #1E3A8A;">📖 দিন {day_num} (টার্গেট ডে)</span>
+                                <span style="background-color: #DBEAFE; color: #1E4ED8; font-weight: bold; padding: 4px 10px; border-radius: 6px; font-size: 13px;">নির্ধারিত সময়: {daily_study_hours} ঘণ্টা</span>
+                            </div>
+                        """, unsafe_allow_html=True)
 
                     day_score = 0.0
                     day_task_count = len(day_tasks)
-
-                    st.markdown(f"""
-                    <div style="background: #F8FAFC; border: 2px solid #3B82F6; border-radius: 10px; padding: 15px; margin-bottom: 15px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #CBD5E1; padding-bottom: 8px; margin-bottom: 12px;">
-                            <span style="font-size: 16px; font-weight: bold; color: #1E3A8A;">📅 দিন {day_num} (টার্গেট ডে)</span>
-                            <span style="background-color: #DBEAFE; color: #1E4ED8; font-weight: bold; padding: 4px 10px; border-radius: 6px; font-size: 13px;">⏱️ নির্ধারিত টার্গেট সময়: {daily_study_hours} ঘণ্টা</span>
-                        </div>
-                    """, unsafe_allow_html=True)
 
                     for t_idx, task in enumerate(day_tasks):
                         s_name = task["subject"]
@@ -4861,70 +4118,187 @@ def render_study_planner():
                         top_name = task["topic"]
                         task_key = f"day_{day_num}_task_{t_idx}_{s_name}"
 
-                        st.markdown(f"**📘 {s_name}** - *[{cat_name}] {top_name}*")
-                        
+                        # বিষয় ও টপিকের পাশে "নিজেকে যাচাই করো" মডেল টেস্ট বাটন
+                        col_t_title, col_t_test = st.columns([3, 1])
+                        with col_t_title:
+                            st.markdown(f"**📌 {s_name}** - *[{cat_name}] {top_name}*")
+                        with col_t_test:
+                            if st.button("🧪 নিজেকে যাচাই করো", key=f"btn_test_{task_key}", type="secondary"):
+                                @st.dialog(f"🧪 নিজেকে যাচাই করো: {s_name} ({top_name})")
+                                def show_quiz_dialog():
+                                    st.markdown(f"**বিষয়:** {s_name} | **অধ্যায়:** {top_name}")
+                                    test_type = st.selectbox(
+                                        "কোন ধরনের প্রশ্নের মাধ্যমে নিজেকে যাচাই করতে চাও?",
+                                        ["বহুনির্বাচনী প্রশ্ন (MCQ)", "সৃজনশীল প্রশ্ন (Creative / CQ)", "সংক্ষিপ্ত প্রশ্ন (Short Questions)", "মডেল কোশ্চেন টেস্ট (Model Test)"],
+                                        key=f"test_type_select_{task_key}"
+                                    )
+                                    st.markdown("---")
+                                    
+                                    # ডাটাবেসে টেস্ট হিস্ট্রি সেভ করার ফাংশন
+                                    def save_test_result_to_db(t_type, score, total, p_cnt, w_cnt, details_dict):
+                                        conn = sqlite3.connect("smart_school_syllabus.db")
+                                        cursor = conn.cursor()
+                                        cursor.execute("""
+                                            INSERT INTO test_history_archive 
+                                            (target_day_num, subject_name, topic_name, test_type, score_obtained, total_score, percentage, correct_count, wrong_count, details_json, test_date)
+                                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+                                        """, (day_num, s_name, top_name, t_type, score, total, (score/total)*100, p_cnt, w_cnt, json.dumps(details_dict, ensure_ascii=False)))
+                                        conn.commit()
+                                        conn.close()
+
+                                    if test_type == "বহুনির্বাচনী প্রশ্ন (MCQ)":
+                                        st.markdown("##### 📝 MCQ কুইজ পরীক্ষা:")
+                                        q1 = st.radio("১. প্রদত্ত অধ্যায়ের মূল ভিত্তি বা ধারণা কোনটি?", ["কমিউনিকেশন ও লজিক", "গাণিতিক সূত্রাবলি", "মৌলিক ধারণা ও অনুচ্ছেদ", "ব্যবহারিক প্রয়োগ"], key=f"q1_{task_key}")
+                                        q2 = st.radio("২. নিয়মিত চর্চার মাধ্যমে কোনটি অর্জিত হয়?", ["সময় অপচয়", "দক্ষতা ও সঠিকতা", "ভীতি বৃদ্ধি", "কোনোটিই নয়"], key=f"q2_{task_key}")
+                                        q3 = st.radio("৩. প্রশ্নের সঠিক উত্তর প্রদানের মূল চাবিকাঠি কী?", ["হুবহু মুখস্থ করা", "মূল বইয়ের ধারণা স্পষ্ট থাকা", "শুধু গাইড পড়া", "বড় করে লেখা"], key=f"q3_{task_key}")
+                                        
+                                        if st.button("উত্তর জমা দিন (Submit MCQ)", key=f"sub_mcq_{task_key}", type="primary"):
+                                            score = 0
+                                            q_details = []
+                                            
+                                            # Q1 Check
+                                            ans1_correct = (q1 == "মৌলিক ধারণা ও অনুচ্ছেদ")
+                                            if ans1_correct: score += 1
+                                            q_details.append({"q": "১. প্রদত্ত অধ্যায়ের মূল ভিত্তি বা ধারণা কোনটি?", "user_ans": q1, "correct_ans": "মৌলিক ধারণা ও অনুচ্ছেদ", "is_correct": ans1_correct})
+                                            
+                                            # Q2 Check
+                                            ans2_correct = (q2 == "দক্ষতা ও সঠিকতা")
+                                            if ans2_correct: score += 1
+                                            q_details.append({"q": "২. নিয়মিত চর্চার মাধ্যমে কোনটি অর্জিত হয়?", "user_ans": q2, "correct_ans": "দক্ষতা ও সঠিকতা", "is_correct": ans2_correct})
+                                            
+                                            # Q3 Check
+                                            ans3_correct = (q3 == "মূল বইয়ের ধারণা স্পষ্ট থাকা")
+                                            if ans3_correct: score += 1
+                                            q_details.append({"q": "৩. প্রশ্নের সঠিক উত্তর প্রদানের মূল চাবিকাঠি কী?", "user_ans": q3, "correct_ans": "মূল বইয়ের ধারণা স্পষ্ট থাকা", "is_correct": ans3_correct})
+
+                                            percent = int((score / 3) * 100)
+                                            st.session_state["user_quiz_scores"][task_key] = f"MCQ: {percent}%"
+                                            
+                                            # সেভ টু আর্কাইভ
+                                            save_test_result_to_db("বহুনির্বাচনী প্রশ্ন (MCQ)", score, 3, score, 3 - score, {"questions": q_details})
+
+                                            if percent == 100:
+                                                st.balloons()
+                                                st.success(f"🎉 অসাধারণ! আপনি ১০০% মার্কস পেয়েছেন! টেস্ট রেজাল্ট স্বয়ংক্রিয়ভাবে আর্কাইভে সেভ করা হয়েছে।")
+                                            else:
+                                                st.info(f"👍 আপনার অর্জিত স্কোর: {percent}% (সঠিক: {score}, ভুল: {3-score})। টেস্টের তথ্য আর্কাইভে সংরক্ষিত হয়েছে।")
+                                            st.rerun()
+
+                                    elif test_type == "সৃজনশীল প্রশ্ন (Creative / CQ)":
+                                        st.markdown("##### 🎨 সৃজনশীল উদ্দীপক ও প্রশ্ন:")
+                                        st.info("💡 উদ্দীপক: রাফি প্রতিদিন তার রুটিন মেনে পড়ার চেষ্টা করে। এতে সে পরীক্ষার পূর্বে প্রতিটি অধ্যায়ের ওপর পূর্ণ আস্থা অর্জন করতে সক্ষম হয়।")
+                                        st.markdown("**ক. জ্ঞানমূলক (১ নম্বর):** মূল বিষয়বস্তুর সংজ্ঞা দাও।")
+                                        st.markdown("**খ. অনুধাবনমূলক (২ নম্বর):** নিয়মিত অনুশীলনের গুরুত্ব ব্যাখ্যা করো।")
+                                        st.markdown("**গ. প্রয়োগমূলক (৩ নম্বর):** উদ্দীপকে রাফির অধ্যবসায় উক্ত অধ্যায়ের কোন দিকটির সাথে মিল রয়েছে? ব্যাখ্যা করো।")
+                                        
+                                        user_answer = st.text_area("তোমার খসড়া উত্তর বা মূল পয়েন্টগুলো লেখো:", placeholder="এখানে তোমার উত্তর লেখো...", key=f"cq_ans_{task_key}")
+                                        if st.button("উত্তর মিলিয়ে যাচাই করো", key=f"sub_cq_{task_key}", type="primary"):
+                                            st.success("✔ উত্তর সফলভাবে মূল্যায়নের জন্য সংরক্ষিত হয়েছে! স্ব-মূল্যায়ন স্কোর: ১০/১০")
+                                            st.session_state["user_quiz_scores"][task_key] = "CQ: ১০০% (সম্পন্ন)"
+                                            
+                                            # সেভ টু আর্কাইভ
+                                            cq_data = {
+                                                "questions": ["ক. জ্ঞানমূলক", "খ. অনুধাবনমূলক", "গ. প্রয়োগমূলক"],
+                                                "user_written_answer": user_answer if user_answer else "উত্তর প্রদান করা হয়েছে।"
+                                            }
+                                            save_test_result_to_db("সৃজনশীল প্রশ্ন (CQ)", 10, 10, 3, 0, cq_data)
+                                            
+                                            st.balloons()
+                                            st.rerun()
+
+                                    elif test_type == "সংক্ষিপ্ত প্রশ্ন (Short Questions)":
+                                        st.markdown("##### ⚡ ৩টি সংক্ষিপ্ত প্রশ্ন উত্তরসহ যাচাই:")
+                                        st.markdown("১. **প্রশ্ন:** অধ্যায়টির মূল উদ্দেশ্য কী?  \n*উত্তর:* মূল তত্ত্ব ও সূত্রের স্পষ্ট ধারণা নেওয়া।")
+                                        st.markdown("২. **প্রশ্ন:** গাণিতিক বা ব্যাকরণিক সমস্যা কীভাবে সমাধান করতে হয়?  \n*উত্তর:* পর্যায়ক্রমিক নিয়ম অনুসরণ করে।")
+                                        st.markdown("৩. **প্রশ্ন:** কীভাবে দ্রুত রিভিশন দেওয়া যায়?  \n*উত্তর:* সংক্ষিপ্ত নোটস বা সামারি শীট দেখে।")
+                                        
+                                        chk_short = st.checkbox("আমি ৩টি সংক্ষিপ্ত প্রশ্নের উত্তর ভালোভাবে বুঝতে পেরেছি", key=f"chk_short_{task_key}")
+                                        if st.button("যাচাই সম্পন্ন করুন", key=f"sub_short_{task_key}", type="primary"):
+                                            if chk_short:
+                                                st.session_state["user_quiz_scores"][task_key] = "সংক্ষিপ্ত: ১০০%"
+                                                save_test_result_to_db("সংক্ষিপ্ত প্রশ্ন", 3, 3, 3, 0, {"status": "সকল প্রশ্নের উত্তর সঠিকভাবে যাচাই করা হয়েছে"})
+                                                st.balloons()
+                                                st.success("🎉 চমৎকার! সংক্ষিপ্ত প্রশ্ন যাচাই সম্পন্ন ও আর্কাইভে সেভ হয়েছে।")
+                                                st.rerun()
+                                            else:
+                                                st.warning("দয়া করে প্রশ্নগুলো পড়ে টিক চিহ্ন দাও।")
+
+                                    elif test_type == "মডেল কোশ্চেন টেস্ট (Model Test)":
+                                        st.markdown("##### 🏆 সংক্ষিপ্ত মডেল টেস্ট (১০ নম্বর):")
+                                        mt_q1 = st.radio("১. সঠিক উত্তর বেছে নাও:", ["বিকল্প A", "বিকল্প B (সঠিক)", "বিকল্প C"], key=f"mt1_{task_key}")
+                                        mt_q2 = st.text_input("২. এক কথায় উত্তর দাও (অধ্যায়ের মূল প্রবক্তা কে?):", key=f"mt2_{task_key}")
+                                        
+                                        if st.button("মডেল টেস্ট জমা দিন", key=f"sub_mt_{task_key}", type="primary"):
+                                            mt_score = 10 if mt_q1 == "বিকল্প B (সঠিক)" else 5
+                                            st.session_state["user_quiz_scores"][task_key] = f"মডেল টেস্ট: {(mt_score/10)*100}%"
+                                            save_test_result_to_db("মডেল কোশ্চেন টেস্ট", mt_score, 10, 1 if mt_score==10 else 0, 0 if mt_score==10 else 1, {"q1": mt_q1, "q2": mt_q2})
+                                            st.balloons()
+                                            st.success("🎉 সাবাশ! মডেল টেস্ট সফলভাবে সম্পন্ন ও আর্কাইভে সংরক্ষণ করা হয়েছে!")
+                                            st.rerun()
+
+                                show_quiz_dialog()
+
+                        # টেস্ট স্কোরের আপডেট প্রদর্শন
+                        if task_key in st.session_state["user_quiz_scores"]:
+                            q_score = st.session_state["user_quiz_scores"][task_key]
+                            st.caption(f"🏆 সর্বশেষ যাচাই রেজাল্ট: **{q_score}**")
+
                         col_st, col_hr, col_dn, col_pn = st.columns([1.5, 1.2, 2.3, 2.3])
-                        
+
                         with col_st:
                             current_status = st.selectbox(
                                 "পড়ার অবস্থা:",
-                                ["✅ সম্পূর্ণ সম্পন্ন", "⏳ আংশিক সম্পন্ন", "❌ একদম পড়তে পারিনি"],
-                                index=["✅ সম্পূর্ণ সম্পন্ন", "⏳ আংশিক সম্পন্ন", "❌ একদম পড়তে পারিনি"].index(st.session_state["user_subject_status"].get(task_key, "✅ সম্পূর্ণ সম্পন্ন")),
+                                ["✔ সম্পন্ন সম্পন্ন", "⚡ আংশিক সম্পন্ন", "❌ শেষ হয় নাই"],
+                                index=["✔ সম্পন্ন সম্পন্ন", "⚡ আংশিক সম্পন্ন", "❌ শেষ হয় নাই"].index(st.session_state["user_subject_status"].get(task_key, "✔ সম্পন্ন সম্পন্ন")),
                                 key=f"status_sel_{task_key}"
                             )
                             st.session_state["user_subject_status"][task_key] = current_status
 
                         with col_hr:
                             subject_hours_txt = st.text_input(
-                                "পড়ার সময় (যেমন: ১ ঘণ্টা ১০ মি):",
-                                value=str(st.session_state["user_subject_hours_text"].get(task_key, "১.০ ঘণ্টা")),
+                                "পড়ার সময়:",
+                                value=st.session_state["user_subject_hours_text"].get(task_key, "১.০ ঘণ্টা"),
                                 key=f"hrs_txt_{task_key}"
                             )
                             st.session_state["user_subject_hours_text"][task_key] = subject_hours_txt
 
                         with col_dn:
                             done_text = st.text_input(
-                                "আজ কতটুকু পড়েছ লেখো:",
+                                "সম্পন্ন হয়েছে:",
                                 value=st.session_state["user_done_notes"].get(task_key, ""),
-                                placeholder="যেমন: ১-৫ পৃষ্ঠা পড়েছি...",
+                                placeholder="যেমন: পড়া শেষ...",
                                 key=f"done_in_{task_key}"
                             )
                             st.session_state["user_done_notes"][task_key] = done_text
 
                         with col_pn:
                             pending_text = st.text_input(
-                                "কতটুকু বাকি আছে লেখো:",
+                                "বাকি আছে বা কারণ:",
                                 value=st.session_state["user_pending_notes"].get(task_key, ""),
-                                placeholder="যেমন: শব্দার্থ পড়া হয়নি...",
+                                placeholder="যেমন: কারণ বা অসম্পূর্ণ অংশ...",
                                 key=f"pending_in_{task_key}"
                             )
                             st.session_state["user_pending_notes"][task_key] = pending_text
 
                         obstacle_val = "কোনো সমস্যা নেই"
-                        if current_status != "✅ সম্পূর্ণ সম্পন্ন":
+                        if current_status != "✔ সম্পন্ন সম্পন্ন":
                             obstacle_val = st.selectbox(
                                 "⚠️ পড়া শেষ না হওয়ার মূল কারণ কী ছিল?",
-                                [
-                                    "⏳ সময়ের অভাব / ব্যস্ততা",
-                                    "🧠 টপিক কঠিন বা বুঝতে সমস্যা হয়েছে",
-                                    "🤒 শারীরিক অসুস্থতা / ক্লান্তি",
-                                    "📱 অন্যমনস্কতা বা মনোযোগের অভাব",
-                                    "🏠 পারিবারিক বা অন্যান্য কাজ"
-                                ],
+                                ["সময়ের অভাব / ব্যস্ততা", "টপিক কঠিন বা বুঝতে সমস্যা হয়েছে", "শারীরিক অসুস্থতা / ক্লান্তি", "অন্যমনস্কতা বা মনোযোগের অভাব", "পারিবারিক বা অন্যান্য কাজ"],
                                 index=0,
                                 key=f"obstacle_{task_key}"
                             )
                             st.session_state["user_obstacle_reason"][task_key] = obstacle_val
                             obstacle_reasons_list.append(obstacle_val)
 
-                        if current_status == "✅ সম্পূর্ণ সম্পন্ন":
-                            day_score += 1.0
-                        elif current_status == "⏳ আংশিক সম্পন্ন":
-                            day_score += 0.5
-                        else:
-                            day_score += 0.0
+                        # স্কোর গণনায় কুইজ রেজাল্টের বোনাস প্রভাব
+                        base_val = 1.0 if current_status == "✔ সম্পন্ন সম্পন্ন" else (0.5 if current_status == "⚡ আংশিক সম্পন্ন" else 0.0)
+                        if task_key in st.session_state["user_quiz_scores"]:
+                            base_val = min(1.0, base_val + 0.2)
 
-                        if current_status != "✅ সম্পূর্ণ সম্পন্ন" or pending_text.strip() != "":
+                        day_score += base_val
+
+                        if current_status != "✔ সম্পন্ন সম্পন্ন" or pending_text.strip() != "":
                             backlog_items.append({
                                 "day": day_num,
                                 "subject": s_name,
@@ -4941,58 +4315,419 @@ def render_study_planner():
                     completed_score_global += day_score
                     day_prog_percentage = int((day_score / max(1, day_task_count)) * 100)
 
-                    st.markdown(f"**📊 দিন দিন {day_num} এর স্টাডি প্রোগ্রেস: `{day_prog_percentage}%` (টার্গেট সময়: {daily_study_hours} ঘণ্টা)**")
-                    st.progress(day_prog_percentage / 100)
-
-                    if day_prog_percentage == 100:
-                        st.success(f"🎉 অসাধারণ! তুমি নির্দিষ্ট টার্গেটের চেয়ে কম সময়েই সমস্ত পড়া সম্পূর্ণ করে ফেলেছ! অল্প সময়ে সিলেবাস শেষ করতে পারার এই দক্ষতা ও ক্রেডিট সত্যিই প্রশংসনীয়!")
-                    elif day_prog_percentage >= 50:
-                        st.info(f"👍 দারুন চেষ্টা! তুমি আংশিক পড়া শেষ করেছ। সিলেবাস পুরোপুরি শেষ করতে চাইলে সময় একটু বাড়িয়ে নিতে পারো।")
-                    else:
-                        st.warning(f"⚠️ আজ পড়ার গতি একটু কম। সিলেবাস নিয়মিত শেষ করতে চাইলে সময় বাড়িয়ে মনোযোগ দিয়ে পড়ার চেষ্টা করো!")
-
+                    st.markdown(f"**📈 দিন {day_num} এর প্রোগ্রেস: {day_prog_percentage}% (টার্গেট সময়: {daily_study_hours} ঘণ্টা)**")
+                    st.progress(min(1.0, day_prog_percentage / 100))
                     st.markdown("</div>", unsafe_allow_html=True)
 
-                # --- ৪. সার্বিক স্টাডি প্রোগ্রেস, বকেয়া রিমাইন্ডার ও এআই রুট কজ ইনসাইটস ---
                 global_percentage = int((completed_score_global / max(1, total_tasks_global)) * 100)
                 st.markdown("---")
-                st.markdown("### 📈 আপনার সার্বিক প্রোগ্রেস রিপোর্ট ও এআই ইনসাইটস (Analytics & Insights)")
+                st.markdown("### 📊 আপনার সার্বিক প্রোগ্রেস রিপোর্ট ও এআই ইনসাইটস")
                 
                 col_p_left, col_p_right = st.columns([1, 2])
                 with col_p_left:
-                    st.metric("🔥 সামগ্রিক সিলেবাস প্রোগ্রেস", f"{global_percentage}%")
-                    st.progress(global_percentage / 100)
-                    if global_percentage == 100:
+                    st.metric("সামগ্রিক সিলেবাস প্রোগ্রেস", f"{global_percentage}%")
+                    st.progress(min(1.0, global_percentage / 100))
+                    if global_percentage >= 100:
                         st.balloons()
-                        st.success("🎉 অভিনন্দন! তুমি তোমার নির্বাচিত সিলেবাসের ১০০% টার্গেট পূরণ করেছ!")
-                
+                        st.success("🎉 অসাধারণ! ১০০% টার্গেট ও মডেল টেস্ট সফলভাবে পূরণ হয়েছে!")
                 with col_p_right:
                     if obstacle_reasons_list:
                         reason_counts = Counter(obstacle_reasons_list)
                         most_common_reason, count = reason_counts.most_common(1)[0]
-                        
+                        st.info(f"💡 **AI Insights:** পিছিয়ে পড়ার প্রধান কারণ: **{most_common_reason}** ({count} বার)।")
+                    if backlog_items:
+                        st.warning(f"📌 **বকেয়া রিমাইন্ডার:** মোট {len(backlog_items)}টি অপূর্ণ টপিক রয়েছে।")
+                    else:
+                        st.success("🎉 দারুণ! কোনো বকেয়া পড়া নেই।")
+
+                # স্টাডি প্ল্যান সমাপ্তি ও সম্পূর্ণ প্ল্যান হুবহু আর্কাইভে সেভ
+                st.markdown("---")
+                st.markdown("### 🏁 স্টাডি প্ল্যান সমাপ্তি ও আর্কাইভ অপশন")
+                st.info("আপনার স্টাডি প্ল্যানের সমস্ত দিন শেষ হলে নিচের অপশনগুলো ব্যবহার করুন:")
+
+                col_end1, col_end2 = st.columns(2)
+                with col_end1:
+                    if st.button("📦 এই সম্পূর্ণ স্টাডি প্ল্যানটি হুবহু আর্কাইভে সেভ করুন", use_container_width=True, type="primary"):
+                        archive_payload = {
+                            "target_days": target_days,
+                            "daily_hours": daily_study_hours,
+                            "tasks_store": st.session_state["custom_day_tasks_store"]
+                        }
+                        conn = sqlite3.connect("smart_school_syllabus.db")
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            INSERT INTO universal_archives (archive_type, title, details_json, archive_date)
+                            VALUES ('StudyPlan', ?, ?, datetime('now', 'localtime'))
+                        """, (st.session_state.get("active_plan_name", "সম্পন্ন স্টাডি প্ল্যান"), json.dumps(archive_payload, ensure_ascii=False)))
+                        conn.commit()
+                        conn.close()
+                        st.success("অভিনন্দন! আপনার সম্পূর্ণ স্টাডি প্ল্যানটি হুবহু ছক অনুযায়ী 'Archive' ট্যাবে সংরক্ষণ করা হয়েছে।")
+                
+                with col_end2:
+                    if backlog_items:
+                        if st.button("🔄 বকেয়া পড়াগুলোর জন্য নতুন প্ল্যান তৈরি করুন", use_container_width=True):
+                            st.session_state["create_backlog_plan"] = True
+                            st.success("বকেয়া টপিকগুলো নিয়ে নতুন প্ল্যান তৈরির জন্য নিচের ফরমটি পূরণ করুন!")
+                    else:
+                        st.success("আপনার কোনো বকেয়া পড়া নেই! সমস্ত পড়া সম্পূর্ণ হয়েছে।")
+
+                if st.session_state.get("create_backlog_plan", False):
+                    st.markdown("---")
+                    st.markdown("#### 🛠️ বকেয়া পড়াগুলোর জন্য নতুন স্টাডি প্ল্যান সেটআপ:")
+                    backlog_days = st.number_input("বকেয়া পড়া শেষ করার জন্য কত দিন সময় লাগবে?", min_value=1, max_value=60, value=5, step=1, key="backlog_days_input")
+                    backlog_hours = st.slider("প্রতিদিন কত ঘণ্টা করে পড়তে চান?", 1.0, 10.0, 3.0, 0.5, key="backlog_hours_input")
+
+                    if st.button("🚀 বকেয়া প্ল্যান জেনারেট করুন", type="primary"):
+                        backlog_store = {}
+                        topics_per_day_b = math.ceil(len(backlog_items) / backlog_days)
+                        b_idx = 0
+                        for d in range(1, backlog_days + 1):
+                            b_key = f"day_tasks_{d}"
+                            chunk = backlog_items[b_idx: b_idx + topics_per_day_b]
+                            backlog_store[b_key] = [{"subject": item["subject"], "category": "বকেয়া রিকভারি", "topic": item["topic"]} for item in chunk]
+                            b_idx += topics_per_day_b
+
+                        st.session_state["active_target_days"] = backlog_days
+                        st.session_state["active_daily_hours"] = backlog_hours
+                        st.session_state["custom_day_tasks_store"] = backlog_store
+                        st.session_state["create_backlog_plan"] = False
+                        st.success("বকেয়া পড়াগুলো নিয়ে নতুন স্টাডি প্ল্যান সফলভাবে তৈরি করা হয়েছে! উপরে প্ল্যান ট্র্যাকার চেক করুন।")
+                        st.rerun()
+        else:
+            st.warning("⚠ কোনো সংরক্ষিত সিলেবাস পাওয়া যায়নি। দয়া করে প্রথমে 'Syllabus' ট্যাব থেকে একটি সিলেবাস তৈরি ও সেভ করুন।")
+
+    # --- TAB 4: ARCHIVE (সার্বজনীন আর্কাইভ সেন্টার - ৪টি সাব-ট্যাবসহ) ---
+    with tab4:
+        st.markdown("এখানে তোমার সেভ করা সমস্ত সিলেবাস, স্টাডি প্ল্যান, রুটিন এবং নিজেকে যাচাই করো সংক্রান্ত যাবতীয় টেস্ট হিস্ট্রি সংরক্ষিত রয়েছে। তুমি চাইলে এখান থেকে সব কিছু আবার রিস্টোর করতে পারবে। ")
+
+        conn = sqlite3.connect("smart_school_syllabus.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, archive_type, title, details_json, archive_date FROM universal_archives ORDER BY id DESC")
+        archived_records = cursor.fetchall()
+        
+        # টেস্ট হিস্ট্রি লোড করা
+        cursor.execute("SELECT id, target_day_num, subject_name, topic_name, test_type, score_obtained, total_score, percentage, correct_count, wrong_count, details_json, test_date FROM test_history_archive ORDER BY id DESC")
+        test_history_records = cursor.fetchall()
+        conn.close()
+
+        arc_tab1, arc_tab2, arc_tab3, arc_tab4 = st.tabs(["📚 Archived Syllabus", "🎯 Archived Study Plan","📅 Archived Routine",  "🧪 নিজেকে যাচাই করো আর্কাইভ"])
+
+        # ১. আর্কাইভড সিলেবাস
+        with arc_tab1:
+            syllabus_archives = [r for r in archived_records if r[1] == 'Syllabus']
+            if syllabus_archives:
+                for arc in syllabus_archives:
+                    arc_id, arc_type, title, details_str, arc_date = arc
+                    with st.expander(f"📖 {title} — (আর্কাইভ তারিখ: {arc_date})"):
+                        if st.button("📊 আর্কাইভ সিলেবাস সামারি (এক নজরে)", key=f"btn_arc_syl_sum_{arc_id}", type="secondary"):
+                            @st.dialog("📊 আর্কাইভ সিলেবাস সামারি টেবিল")
+                            def show_arc_syl_sum():
+                                st.markdown(f"**সিলেবাস:** {title}")
+                                p_syl = json.loads(details_str)
+                                s_rows = []
+                                s_cnt = 1
+                                for sb, cats in p_syl.items():
+                                    for ct, tps in cats.items():
+                                        s_rows.append(f"<tr><td style='padding:8px; border:1px solid #cbd5e1;'>{s_cnt}</td><td style='padding:8px; border:1px solid #cbd5e1; font-weight:bold;'>{sb}</td><td style='padding:8px; border:1px solid #cbd5e1;'>{ct}</td><td style='padding:8px; border:1px solid #cbd5e1;'>{', '.join(tps)}</td></tr>")
+                                        s_cnt += 1
+                                st.markdown(f"<table style='width:100%; border-collapse:collapse; font-size:14px;'><thead><tr style='background:#1E3A8A; color:white;'><th style='padding:8px; border:1px solid #cbd5e1;'>ক্রমিক</th><th style='padding:8px; border:1px solid #cbd5e1;'>বিষয়</th><th style='padding:8px; border:1px solid #cbd5e1;'>বিভাগ</th><th style='padding:8px; border:1px solid #cbd5e1;'>টপিক</th></tr></thead><tbody>{''.join(s_rows)}</tbody></table>", unsafe_allow_html=True)
+                                st.markdown("<br>", unsafe_allow_html=True)
+                                if st.button("বন্ধ করুন", key=f"cls_arc_syl_{arc_id}"):
+                                    st.rerun()
+                            show_arc_syl_sum()
+
+                        parsed_arc_syl = json.loads(details_str)
+                        table_rows = []
+                        for subj, cats in parsed_arc_syl.items():
+                            first_row = True
+                            cat_count = len(cats)
+                            for cat, topics in cats.items():
+                                topics_str = ", ".join(topics)
+                                if first_row:
+                                    row_html = f'<tr><td rowspan="{cat_count}" style="padding: 10px; border: 1px solid #cbd5e1; font-weight: bold; vertical-align: top;">{subj}</td><td style="padding: 10px; border: 1px solid #cbd5e1; font-weight: 500;">{cat}</td><td style="padding: 10px; border: 1px solid #cbd5e1;">{topics_str}</td></tr>'
+                                    first_row = False
+                                else:
+                                    row_html = f'<tr><td style="padding: 10px; border: 1px solid #cbd5e1; font-weight: 500;">{cat}</td><td style="padding: 10px; border: 1px solid #cbd5e1;">{topics_str}</td></tr>'
+                                table_rows.append(row_html)
+                        all_rows = "".join(table_rows)
+                        table_html = f'<table style="width: 100%; border-collapse: collapse; margin-top: 10px; font-family: sans-serif;"><thead><tr style="background-color: #1E3A8A; color: white; text-align: left;"><th style="padding: 12px; border: 1px solid #cbd5e1;">বিষয় (Subject)</th><th style="padding: 12px; border: 1px solid #cbd5e1;">বিভাগ (Category)</th><th style="padding: 12px; border: 1px solid #cbd5e1;">নির্বাচিত অধ্যায়সমূহ (Selected Topics)</th></tr></thead><tbody>{all_rows}</tbody></table>'
+                        st.markdown(table_html, unsafe_allow_html=True)
+                        st.markdown("<br>", unsafe_allow_html=True)
+
+                        col_ar1, col_ar2 = st.columns(2)
+                        with col_ar1:
+                            if st.button("🔄 মূল সিলেবাস ট্যাবে রিস্টোর করুন", key=f"restore_syl_{arc_id}", use_container_width=True, type="primary"):
+                                conn = sqlite3.connect("smart_school_syllabus.db")
+                                cursor = conn.cursor()
+                                cursor.execute("""
+                                    INSERT INTO school_syllabus_multi (student_class, exam_term, syllabus_json, is_default)
+                                    VALUES (?, ?, ?, 0)
+                                """, ("Class 7", title, details_str))
+                                conn.commit()
+                                conn.close()
+                                st.success("সিলেবাসটি সফলভাবে মূল 'Syllabus' ট্যাবে রিস্টোর করা হয়েছে!")
+                                st.rerun()
+                        with col_ar2:
+                            if st.button("🗑️ আর্কাইভ থেকে মুছে ফেলুন", key=f"del_arc_syl_{arc_id}", use_container_width=True):
+                                conn = sqlite3.connect("smart_school_syllabus.db")
+                                cursor = conn.cursor()
+                                cursor.execute("DELETE FROM universal_archives WHERE id=?", (arc_id,))
+                                conn.commit()
+                                conn.close()
+                                st.success("আর্কাইভ থেকে সিলেবাসটি মুছে ফেলা হয়েছে!")
+                                st.rerun()
+            else:
+                st.info("ℹ এখনো কোনো সিলেবাস আর্কাইভে সেভ করা হয়নি।")
+
+        # ২. আর্কাইভড রুটিন
+        with arc_tab2:
+            routine_archives = [r for r in archived_records if r[1] == 'Routine']
+            if routine_archives:
+                for arc in routine_archives:
+                    arc_id, arc_type, title, details_str, arc_date = arc
+                    with st.expander(f"📅 {title} — (আর্কাইভ তারিখ: {arc_date})"):
+                        if st.button("📊 আর্কাইভ রুটিন সামারি (এক নজরে)", key=f"btn_arc_rout_sum_{arc_id}", type="secondary"):
+                            @st.dialog("📊 আর্কাইভ রুটিন সামারি টেবিল")
+                            def show_arc_rout_sum():
+                                st.markdown(f"**রুটিন:** {title}")
+                                p_rout = json.loads(details_str)
+                                r_rows = []
+                                r_cnt = 1
+                                for dn, ents in p_rout.items():
+                                    for et in ents:
+                                        r_rows.append(f"<tr><td style='padding:8px; border:1px solid #cbd5e1;'>{r_cnt}</td><td style='padding:8px; border:1px solid #cbd5e1; font-weight:bold;'>{dn}</td><td style='padding:8px; border:1px solid #cbd5e1;'>{et['subject']}</td><td style='padding:8px; border:1px solid #cbd5e1;'>{et['time']}</td><td style='padding:8px; border:1px solid #cbd5e1;'>{et['chapter']}</td></tr>")
+                                        r_cnt += 1
+                                st.markdown(f"<table style='width:100%; border-collapse:collapse; font-size:14px;'><thead><tr style='background:#1E3A8A; color:white;'><th style='padding:8px; border:1px solid #cbd5e1;'>ক্রমিক</th><th style='padding:8px; border:1px solid #cbd5e1;'>বার</th><th style='padding:8px; border:1px solid #cbd5e1;'>বিষয়</th><th style='padding:8px; border:1px solid #cbd5e1;'>সময়</th><th style='padding:8px; border:1px solid #cbd5e1;'>টপিক</th></tr></thead><tbody>{''.join(r_rows)}</tbody></table>", unsafe_allow_html=True)
+                                st.markdown("<br>", unsafe_allow_html=True)
+                                if st.button("বন্ধ করুন", key=f"cls_arc_rout_{arc_id}"):
+                                    st.rerun()
+                            show_arc_rout_sum()
+
+                        parsed_arc_routine = json.loads(details_str)
+                        for day_name, entries in parsed_arc_routine.items():
+                            st.markdown(f"**বার: {day_name}**")
+                            for entry in entries:
+                                target_info = f"{entry.get('pages', 0)}টি পৃষ্ঠা | {entry.get('mcq', 0)}টি MCQ | {entry.get('cq', 0)}টি CQ"
+                                st.markdown(f"""
+                                <div style="background: #F8FAFC; border-left: 4px solid #3B82F6; padding: 10px; margin-bottom: 8px; border-radius: 4px;">
+                                    <b>বিষয়:</b> {entry['subject']} | <b>সময়:</b> {entry['time']}<br>
+                                    <b>টপিক/অধ্যায়:</b> {entry['chapter']} ({target_info})
+                                </div>
+                                """, unsafe_allow_html=True)
+                            st.markdown("---")
+
+                        col_ar1, col_ar2 = st.columns(2)
+                        with col_ar1:
+                            if st.button("🔄 মূল রুটিন ট্যাবে রিস্টোর করুন", key=f"restore_rout_{arc_id}", use_container_width=True, type="primary"):
+                                st.session_state["generated_custom_weekly_routine"] = parsed_arc_routine
+                                st.session_state["generated_routine_syllabus_name"] = title
+                                st.success("রুটিনটি সফলভাবে মূল 'Routine' ট্যাবে রিস্টোর করা হয়েছে!")
+                        with col_ar2:
+                            if st.button("🗑️ আর্কাইভ থেকে মুছে ফেলুন", key=f"del_arc_rout_{arc_id}", use_container_width=True):
+                                conn = sqlite3.connect("smart_school_syllabus.db")
+                                cursor = conn.cursor()
+                                cursor.execute("DELETE FROM universal_archives WHERE id=?", (arc_id,))
+                                conn.commit()
+                                conn.close()
+                                st.success("আর্কাইভ থেকে রুটিনটি মুছে ফেলা হয়েছে!")
+                                st.rerun()
+            else:
+                st.info("ℹ এখনো কোনো রুটিন আর্কাইভে সেভ করা হয়নি।")
+
+        # ৩. আর্কাইভড স্টাডি প্ল্যান
+        with arc_tab3:
+            plan_archives = [r for r in archived_records if r[1] == 'StudyPlan']
+            if plan_archives:
+                for arc in plan_archives:
+                    arc_id, arc_type, title, details_str, arc_date = arc
+                    with st.expander(f"🎯 {title} — (আর্কাইভ তারিখ: {arc_date})"):
+                        if st.button("📊 আর্কাইভ স্টাডি প্ল্যান সামারি (এক নজরে)", key=f"btn_arc_plan_sum_{arc_id}", type="secondary"):
+                            @st.dialog("📊 আর্কাইভ স্টাডি প্ল্যান সামারি টেবিল")
+                            def show_arc_plan_sum():
+                                st.markdown(f"**প্ল্যান:** {title}")
+                                p_plan_data = json.loads(details_str)
+                                tp_days = p_plan_data.get("target_days", 25)
+                                tp_store = p_plan_data.get("tasks_store", {})
+                                p_rows = []
+                                p_cnt = 1
+                                for dn_i in range(1, tp_days + 1):
+                                    dk_i = f"day_tasks_{dn_i}"
+                                    t_list_i = tp_store.get(dk_i, [])
+                                    for t_item_i in t_list_i:
+                                        p_rows.append(f"<tr><td style='padding:8px; border:1px solid #cbd5e1;'>{p_cnt}</td><td style='padding:8px; border:1px solid #cbd5e1; font-weight:bold;'>দিন {dn_i}</td><td style='padding:8px; border:1px solid #cbd5e1;'>{t_item_i.get('subject', '')}</td><td style='padding:8px; border:1px solid #cbd5e1;'>{t_item_i.get('category', '')}</td><td style='padding:8px; border:1px solid #cbd5e1;'>{t_item_i.get('topic', '')}</td></tr>")
+                                        p_cnt += 1
+                                st.markdown(f"<table style='width:100%; border-collapse:collapse; font-size:14px;'><thead><tr style='background:#1E3A8A; color:white;'><th style='padding:8px; border:1px solid #cbd5e1;'>ক্রমিক</th><th style='padding:8px; border:1px solid #cbd5e1;'>দিন</th><th style='padding:8px; border:1px solid #cbd5e1;'>বিষয়</th><th style='padding:8px; border:1px solid #cbd5e1;'>বিভাগ</th><th style='padding:8px; border:1px solid #cbd5e1;'>টপিক</th></tr></thead><tbody>{''.join(p_rows)}</tbody></table>", unsafe_allow_html=True)
+                                st.markdown("<br>", unsafe_allow_html=True)
+                                if st.button("বন্ধ করুন", key=f"cls_arc_plan_{arc_id}"):
+                                    st.rerun()
+                            show_arc_plan_sum()
+
+                        parsed_arc_plan = json.loads(details_str)
+                        t_days = parsed_arc_plan.get("target_days", 25)
+                        d_hours = parsed_arc_plan.get("daily_hours", 4.0)
+                        tasks_store = parsed_arc_plan.get("tasks_store", {})
+
                         st.markdown(f"""
-                        <div style="background-color: #FEF3C7; border-left: 5px solid #D97706; padding: 12px 15px; border-radius: 6px; margin-bottom: 12px;">
-                            <h4 style="margin: 0 0 5px 0; color: #92400E;">🤖 AI Learning Behavior Insights</h4>
-                            <p style="margin: 0; font-size: 13px; color: #78350F;">
-                                আপনার পড়াশোনায় পিছিয়ে পড়ার প্রধান কারণ হলো: <b>{most_common_reason}</b> ({count} বার চিহ্নিত হয়েছে)। এই সমস্যা উত্তরণে সময় ব্যবস্থাপনা বা কনসেপ্ট ক্লিয়ার করার জন্য শিক্ষকের সহায়তা নিতে পারেন।
-                            </p>
+                        <div style="background-color: #E8F0FE; padding: 12px 18px; border-radius: 8px; color: #1E3A8A; font-weight: bold; margin-bottom: 20px;">
+                        📌 আর্কাইভকৃত স্টাডি প্ল্যান বিবরণ: মোট দিন: {t_days} | প্রতিদিন নির্ধারিত সময়: {d_hours} ঘণ্টা
                         </div>
                         """, unsafe_allow_html=True)
 
-                    if backlog_items:
-                        st.warning(f"⚠️ **বকেয়া রিমাইন্ডার (Pending Backlogs):** আপনার মোট {len(backlog_items)}টি বিষয়ে অপূর্ণ পড়া রয়েছে!")
-                        with st.expander("🔔 কোন দিন কোন বিষয়ে কি পড়া বাকি আছে ও কারণ দেখে নিন", expanded=True):
-                            for b in backlog_items:
-                                r_disp = f" | 📌 *কারণ:* {b['reason']}" if b['reason'] != "কোনো সমস্যা নেই" else ""
-                                st.markdown(f"• **দিন {b['day']} [{b['subject']}]:** {b['topic']}<br>&nbsp;&nbsp;&nbsp;&nbsp;🔹 *পড়েছ:* {b['done']} | 🔴 *বাকি:* `{b['pending']}` ({b['status']}){r_disp}", unsafe_allow_html=True)
-                            st.info("💡 পরামর্শ: আগামী রিভিশন সেশন বা সাপ্তাহিক ছুটির দিনে এই বকেয়া পড়াগুলো অবশ্যই রিকভার করে নিন!")
-                    else:
-                        st.success("✨ দারুন! আপনার কোনো বকেয়া বা অপূর্ণ পড়া নেই। আপনি একদম পারফেক্ট ট্র্যাকে আছেন!")
+                        for day_num in range(1, t_days + 1):
+                            day_key = f"day_tasks_{day_num}"
+                            day_tasks = tasks_store.get(day_key, [])
+                            
+                            is_rev = day_num > (t_days - max(1, math.ceil(t_days * 0.20)))
+                            bg_color = "#FEF3C7" if is_rev else "#F8FAFC"
+                            border_color = "#D97706" if is_rev else "#3B82F6"
+                            day_title_prefix = "🔄 বিশেষ রিভিশন দিন" if is_rev else "📖 টার্গেট ডে"
 
-        else:
-            st.warning("⚠️ কোনো সংরক্ষিত সিলেবাস পাওয়া যায়নি। দয়া করে প্রথমে 'Syllabus' ট্যাব থেকে একটি সিলেবাস তৈরি ও সেভ করুন।")
+                            st.markdown(f"""
+                            <div style="background: {bg_color}; border: 2px solid {border_color}; padding: 15px; border-radius: 10px; margin-bottom: 15px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #CBD5E1; padding-bottom: 8px; margin-bottom: 12px;">
+                                    <span style="font-size: 16px; font-weight: bold; color: #1E3A8A;">📅 দিন {day_num} ({day_title_prefix})</span>
+                                    <span style="background-color: #DBEAFE; color: #1E4ED8; font-weight: bold; padding: 4px 10px; border-radius: 6px; font-size: 13px;">নির্ধারিত সময়: {d_hours} ঘণ্টা</span>
+                                </div>
+                            """, unsafe_allow_html=True)
 
+                            if day_tasks:
+                                for t in day_tasks:
+                                    st.markdown(f"""
+                                    <div style="background: #FFFFFF; border: 1px solid #E2E8F0; padding: 10px 14px; border-radius: 6px; margin-bottom: 8px;">
+                                        <b>📌 বিষয়:</b> {t.get('subject', '')} <br>
+                                        <b>বিভাগ/ক্যাটাগরি:</b> [{t.get('category', 'সাধারণ')}] <br>
+                                        <b>টপিক বা অধ্যায়:</b> {t.get('topic', '')}
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                            else:
+                                st.markdown("<i>কোনো টাস্ক নেই</i>", unsafe_allow_html=True)
+
+                            st.markdown("</div>", unsafe_allow_html=True)
+
+                        col_ar1, col_ar2 = st.columns(2)
+                        with col_ar1:
+                            if st.button("🔄 মূল স্টাডি প্ল্যান ট্যাবে রিস্টোর করুন", key=f"restore_plan_{arc_id}", use_container_width=True, type="primary"):
+                                conn = sqlite3.connect("smart_school_syllabus.db")
+                                cursor = conn.cursor()
+                                cursor.execute("""
+                                    INSERT INTO saved_study_plans (plan_name, syllabus_label, target_days, daily_hours, plan_json)
+                                    VALUES (?, ?, ?, ?, ?)
+                                """, (title, "মূল সিলেবাস", t_days, d_hours, json.dumps(tasks_store, ensure_ascii=False)))
+                                conn.commit()
+                                conn.close()
+                                
+                                st.session_state["active_plan_name"] = title
+                                st.session_state["active_target_days"] = t_days
+                                st.session_state["active_daily_hours"] = d_hours
+                                st.session_state["custom_day_tasks_store"] = tasks_store
+                                st.success("স্টাডি প্ল্যানটি সফলভাবে মূল 'Study Plan' ট্যাবে রিস্টোর করা হয়েছে!")
+                        with col_ar2:
+                            if st.button("🗑️ আর্কাইভ থেকে মুছে ফেলুন", key=f"del_arc_plan_{arc_id}", use_container_width=True):
+                                conn = sqlite3.connect("smart_school_syllabus.db")
+                                cursor = conn.cursor()
+                                cursor.execute("DELETE FROM universal_archives WHERE id=?", (arc_id,))
+                                conn.commit()
+                                conn.close()
+                                st.success("আর্কাইভ থেকে স্টাডি প্ল্যানটি মুছে ফেলা হয়েছে!")
+                                st.rerun()
+            else:
+                st.info("ℹ এখনো কোনো স্টাডি প্ল্যান আর্কাইভে সেভ করা হয়নি।")
+
+        # ৪. নিজেকে যাচাইকরণ সংক্রান্ত টেস্ট হিস্ট্রি আর্কাইভ (NEW FEATURE)
+        with arc_tab4:
+            st.markdown("#### 🧪 নিজেকে যাচাইকরণ সংক্রান্ত সার্বিক টেস্ট আর্কাইভ ফাইল")
+            st.markdown("এখানে আপনার দেওয়া প্রতিটি মডেল টেস্ট, কুইজ, সৃজনশীল ও সংক্ষিপ্ত পরীক্ষার সম্পূর্ণ রেকর্ড রয়েছে।")
+
+            if test_history_records:
+                total_tests_given = len(test_history_records)
+                avg_percentage = round(sum([r[7] for r in test_history_records]) / total_tests_given, 1)
+                total_wrong_answers = sum([r[9] for r in test_history_records])
+
+                col_m1, col_m2, col_m3 = st.columns(3)
+                with col_m1:
+                    st.metric("মোট সম্পন্ন পরীক্ষা", f"{total_tests_given} টি")
+                with col_m2:
+                    st.metric("গড় প্রাপ্ত নম্বর (শতাংশ)", f"{avg_percentage}%")
+                with col_m3:
+                    st.metric("মোট ভুল উত্তর (রিভিউ প্রয়োজন)", f"{total_wrong_answers} টি")
+
+                st.markdown("---")
+                st.markdown("##### 📜 পরীক্ষার তালিকা ও বিস্তারিত ফলাফল:")
+
+                for record in test_history_records:
+                    rec_id, day_num, sub_name, topic_name, t_type, score, t_score, percent, c_cnt, w_cnt, details_str, t_date = record
+                    
+                    badge_color = "#059669" if percent >= 80 else ("#D97706" if percent >= 50 else "#DC2626")
+                    
+                    st.markdown(f"""
+                    <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-left: 5px solid {badge_color}; padding: 15px; border-radius: 8px; margin-bottom: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <span style="font-size: 16px; font-weight: bold; color: #1E3A8A;">📅 দিন {day_num} — {sub_name}</span>
+                                <span style="background-color: #DBEAFE; color: #1D4ED8; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 8px;">{t_type}</span>
+                                <div style="color: #475569; font-size: 13px; margin-top: 4px;"><b>অধ্যায়:</b> {topic_name}</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 18px; font-weight: bold; color: {badge_color};">{percent}%</div>
+                                <div style="font-size: 12px; color: #64748B;">প্রাপ্ত নম্বর: {score}/{t_score} (তারিখ: {t_date})</div>
+                            </div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    col_hb1, col_hb2 = st.columns([4, 1])
+                    with col_hb1:
+                        if st.button("📊 সম্পূর্ণ বিবরণ ও উত্তরপত্র দেখুন", key=f"btn_view_test_{rec_id}", type="secondary"):
+                            @st.dialog(f"📊 টেস্ট রিপোর্ট: {sub_name} (দিন {day_num})")
+                            def show_test_detail_modal():
+                                st.markdown(f"**বিষয়:** {sub_name} | **অধ্যায়:** {topic_name}")
+                                st.markdown(f"**পরীক্ষার ধরন:** {t_type} | **তারিখ:** {t_date}")
+                                st.markdown(f"**প্রাপ্ত স্কোর:** {score}/{t_score} ({percent}%) | **সঠিক:** {c_cnt} | **ভুল:** {w_cnt}")
+                                st.markdown("---")
+                                
+                                try:
+                                    parsed_details = json.loads(details_str)
+                                    if "questions" in parsed_details:
+                                        st.markdown("##### 📝 প্রশ্ন ও উত্তর বিশ্লেষণ:")
+                                        for q_idx, q_item in enumerate(parsed_details["questions"]):
+                                            if isinstance(q_item, dict):
+                                                q_txt = q_item.get("q", "")
+                                                u_ans = q_item.get("user_ans", "")
+                                                c_ans = q_item.get("correct_ans", "")
+                                                is_c = q_item.get("is_correct", False)
+                                                
+                                                status_icon = "✔ সঠিক" if is_c else "❌ ভুল"
+                                                icon_color = "green" if is_c else "red"
+                                                
+                                                st.markdown(f"**প্রশ্ন {q_idx+1}:** {q_txt}")
+                                                st.markdown(f"- আপনার উত্তর: **{u_ans}** ({status_icon})")
+                                                if not is_c:
+                                                    st.markdown(f"- সঠিক উত্তর: **{c_ans}**")
+                                                st.markdown("---")
+                                    elif "user_written_answer" in parsed_details:
+                                        st.markdown("##### 🎨 প্রদত্ত উত্তরপত্র:")
+                                        st.write(parsed_details["user_written_answer"])
+                                    else:
+                                        st.json(parsed_details)
+                                except Exception as e:
+                                    st.write("বিস্তারিত বিবরণ পাওয়া যায়নি।")
+
+                                if st.button("বন্ধ করুন", key=f"cls_test_m_{rec_id}"):
+                                    st.rerun()
+
+                            show_test_detail_modal()
+
+                    with col_hb2:
+                        if st.button("🗑️ মুছুন", key=f"btn_del_test_{rec_id}"):
+                            conn = sqlite3.connect("smart_school_syllabus.db")
+                            cursor = conn.cursor()
+                            cursor.execute("DELETE FROM test_history_archive WHERE id=?", (rec_id,))
+                            conn.commit()
+                            conn.close()
+                            st.success("টেস্ট রেকর্ডটি মুছে ফেলা হয়েছে!")
+                            st.rerun()
+            else:
+                st.info("ℹ এখনো নিজেকে যাচাইকরণ সংক্রান্ত কোনো পরীক্ষা দেওয়া হয়নি। 'Study Plan' ট্যাবে গিয়ে প্রতিটি বিষয়ের পাশে '🧪 নিজেকে যাচাই করো' বাটনে ক্লিক করে পরীক্ষা দিন।")
    
 import sqlite3
 import streamlit as st
@@ -5153,8 +4888,8 @@ def show_exam_summary_dialog(exams_data):
 # --- এক্সাম শিডিউল ম্যানেজমেন্ট পেজ রেন্ডার ফাংশন ---
 def render_exams():
     st.markdown("""
-        <h2 style='color: #1E3A8A; font-weight: 700; margin-bottom: 5px;'>📋 এক্সাম ও অ্যাসাইনমেন্ট শিডিউল ম্যানেজমেন্ট</h2>
-        <p style='color: #475569; font-size: 15px;'>তোমার আসন্ন পরীক্ষা, কুইজ এবং অ্যাসাইনমেন্টের সময়সূচী এখানে সাজিয়ে রাখো এবং এক নজরে সামারি টেবিল দেখে নাও।</p>
+        <h2 style='color: #1E3A8A; font-weight: 700; margin-bottom: 5px;'>📋 Your Virtual Reading Room-Exam & Assignment Section</h2>
+        <p style='color: #475569; font-size: 15px;'> এখানে তোমার আসন্ন পরীক্ষা, কুইজ এবং অ্যাসাইনমেন্টের সময়সূচী সাজিয়ে রাখতে পারবে এবং সামারি আকারে দেখতে পারবে।</p>
     """, unsafe_allow_html=True)
 
     if "edit_exam_id" not in st.session_state:
@@ -5217,7 +4952,7 @@ def render_exams():
             st.markdown("---")
 
     with st.form("exam_input_form", clear_on_submit=True):
-        st.markdown("### ➕ নতুন পরীক্ষা বা অ্যাসাইনমেন্ট যুক্ত করো")
+        st.markdown("### ➕ Add Your Exam & Assignment")
         col1, col2 = st.columns(2)
 
         with col1:
@@ -5228,7 +4963,7 @@ def render_exams():
             exam_date = st.date_input("পরীক্ষার তারিখ:", date.today())
             description = st.text_input("সিলেবাস বা বিশেষ নোট (ঐচ্ছিক):", placeholder="যেমন: অধ্যায় ১ থেকে ৩ পর্যন্ত")
 
-        submitted = st.form_submit_button("রুটিনে সেভ করো", use_container_width=True, type="primary")
+        submitted = st.form_submit_button("Save", use_container_width=True, type="primary")
 
         if submitted:
             if exam_name:
@@ -5256,12 +4991,12 @@ def render_exams():
     if exams_list:
         col_head1, col_head2 = st.columns([2, 1])
         with col_head1:
-            st.markdown("### 🗓️ তোমার সংরক্ষিত রুটিন ও সময়সূচী")
+            st.markdown("### 🗓️ Your Exam Routine & Time")
         with col_head2:
-            if st.button("📊 সামারি টেবিল দেখাও (Popup)", use_container_width=True, type="primary"):
+            if st.button("📊 সামারি টেবিল দেখাও..", use_container_width=True, type="primary"):
                 show_exam_summary_dialog(exams_list)
 
-        filter_type = st.selectbox("ধরন অনুযায়ী ফিল্টার করো:", ["সকল", "বার্ষিক পরীক্ষা", "অর্ধ-বার্ষিক পরীক্ষা", "সাপ্তাহিক কুইজ", "মাসিক পরীক্ষা", "অ্যাসাইনমেন্ট"])
+        filter_type = st.selectbox("Find Your Exam Routine from below:", ["সকল", "বার্ষিক পরীক্ষা", "অর্ধ-বার্ষিক পরীক্ষা", "সাপ্তাহিক কুইজ", "মাসিক পরীক্ষা", "অ্যাসাইনমেন্ট"])
 
         for row in exams_list:
             e_id, e_name, e_type, e_date, e_desc = row
@@ -5437,8 +5172,8 @@ else:
             ("📊 Dashboard", "Dashboard"),
             ("📚 Books & Reading", "My Books"),
             ("🎯 Practice & Preparation", "Quiz & Practice"),
-            ("📝 Note Book", "Notes"),
-            ("📅 Study Plan", "Study Planner"),
+            ("📝 NoteBook", "Notes"),
+            ("📅 Smart Study & Syllabus", "Study Planner"),
             ("📋 Exams & Assignment", "Exam & Assignment"),
             ("🔔 Reminder", "Notifications"),
             ("⚙️ Profile & Settings", "Profile / Settings")
