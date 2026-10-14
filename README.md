@@ -115,13 +115,13 @@ st.markdown("""
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 if "student_name" not in st.session_state:
-    st.session_state.student_name = "Lalon"
+    st.session_state.student_name = "লাবিব বিন লালন"
 if "school_name" not in st.session_state:
-    st.session_state.school_name = "Ideal School & College"
+    st.session_state.school_name = "শামসুল হক খান স্কুল অ্যান্ড কলেজ, ডেমরা, ঢাকা। "
 if "class_name" not in st.session_state:
     st.session_state.class_name = "Class 7"
 if "roll_number" not in st.session_state:
-    st.session_state.roll_number = "1042"
+    st.session_state.roll_number = "১২০"
 if "current_page" not in st.session_state:
     st.session_state.current_page = "Dashboard"
 if "chat_messages" not in st.session_state:
@@ -240,71 +240,160 @@ def render_login_page():
                     st.error("⚠️ Please enter your name to proceed.")
 
       
+import streamlit as st
+import os
+import base64
+from datetime import datetime
+import sqlite3
+
+# ডেটাবেজ ইনিশিয়ালাইজেশন এবং স্বয়ংক্রিয়ভাবে missing column যোগ করার লজিক
+def init_db():
+    conn = sqlite3.connect("subject_notes.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            content TEXT,
+            subject TEXT,
+            note_type TEXT
+        )
+    """)
+    try:
+        cursor.execute("SELECT created_at FROM notes LIMIT 1")
+    except sqlite3.OperationalError:
+        cursor.execute("ALTER TABLE notes ADD COLUMN created_at TEXT")
+    conn.commit()
+    conn.close()
+
+init_db()
+
+# পিডিএফ ফাইল মেমোরিতে ফাস্ট লোড করার জন্য ক্যাশিং ফাংশন
+@st.cache_data
+def load_pdf_as_base64(file_path):
+    with open(file_path, "rb") as f:
+        return base64.b64encode(f.read()).decode('utf-8')
+
 def render_dashboard():
-    # কাস্টম ড্যাশবোর্ড CSS এবং স্টাইল ডিজাইন
+    # কাস্টম ড্যাশবোর্ড CSS এবং প্রিমিয়াম কন্ট্রাস্ট ডিজাইন
     st.markdown("""
-        <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
-
-        .dash-container {
-            font-family: 'Poppins', sans-serif;
-        }
-
-        /* প্রিমিয়াম কার্ড ডিজাইন */
-        .dashboard-card {
-            background: #ffffff;
-            padding: 22px;
-            border-radius: 20px;
-            border: 1px solid rgba(226, 232, 240, 0.8);
-            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
-            margin-bottom: 20px;
-            transition: all 0.3s ease;
-        }
-        
-        .dashboard-card:hover {
-            box-shadow: 0 15px 35px rgba(37, 99, 235, 0.1);
-            transform: translateY(-2px);
-        }
-
-        /* কুইক অ্যাকশন বাটনগুলোর প্রিমিয়াম স্টাইল */
-        .stButton button {
-            font-family: 'Poppins', sans-serif;
-            border-radius: 14px !important;
-            font-weight: 600 !important;
-            border: 1px solid #e2e8f0 !important;
-            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
-            color: #1e293b !important;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03) !important;
-            transition: all 0.3s ease !important;
-        }
-
-        .stButton button:hover {
-            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-            color: white !important;
-            border-color: #2563eb !important;
-            box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3) !important;
-            transform: translateY(-2px);
-        }
-        </style>
+    <style>
+    @import url('https://fonts.googleapis.com/css?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+    .dash-container {
+        font-family: 'Poppins', sans-serif;
+    }
+    /* পুরো ড্যাশবোর্ডের মূল ব্যাকগ্রাউন্ড এবং সেকশনগুলোর স্পষ্ট কন্ট্রাস্ট */
+    .stApp {
+        background: #0f172a !important;
+    }
+    /* প্রিমিয়াম ব্যানার ডিজাইন - অত্যন্ত স্পষ্ট ও আকর্ষণীয় */
+    .metaverse-banner-updated {
+        background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e293b 100%);
+        padding: 32px;
+        border-radius: 24px;
+        border: 2px solid #8b5cf6;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(139, 92, 246, 0.2);
+        margin-bottom: 24px;
+        color: #ffffff;
+    }
+    /* টাইটেলকে অত্যন্ত উজ্জ্বল এবং স্পষ্ট করা হয়েছে */
+    .banner-title-updated {
+        background: linear-gradient(90deg, #38bdf8, #c084fc, #f472b6);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 800 !important;
+        font-size: 28px !important;
+        margin: 0 0 12px 0 !important;
+        text-shadow: 0 0 20px rgba(192, 132, 252, 0.4);
+    }
+    /* আলাদা কার্ড ডিজাইন যাতে প্রতিটি সেকশন স্পষ্ট বোঝা যায় */
+    .dashboard-card {
+        background: #1e293b;
+        padding: 24px;
+        border-radius: 20px;
+        border: 1px solid #334155;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        margin-bottom: 20px;
+        color: #f8fafc;
+        transition: all 0.3s ease;
+    }
+    .dashboard-card:hover {
+        border-color: #3b82f6;
+        box-shadow: 0 15px 35px rgba(59, 130, 246, 0.2);
+        transform: translateY(-2px);
+    }
+    /* সাধারণ টেক্সট ও হেডিং কালার স্পষ্ট করার জন্য */
+    h1, h2, h3, h4, h5, h6 {
+        color: #f8fafc !important;
+    }
+    p, span, div {
+        color: #cbd5e1;
+    }
+    /* পপওভার বক্সের ভেতর ডার্ক থিম নিশ্চিত করা */
+    div[data-testid="stPopoverBody"] {
+        background-color: #1e293b !important;
+        color: #f8fafc !important;
+        border: 1px solid #334155 !important;
+        border-radius: 16px !important;
+    }
+    /* সাইডবার টাইটেল ও সাবটাইটেলের প্রিমিয়াম লুক */
+    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
+        font-family: 'Poppins', sans-serif !important;
+        background: linear-gradient(135deg, #60a5fa 0%, #38bdf8 50%, #f472b6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 800 !important;
+        font-size: 22px !important;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px !important;
+    }
+    /* সাইডবার বা মেনু বাটনগুলোর চমৎকার স্টাইল ও স্পষ্ট লেখা */
+    [data-testid="stSidebar"] .stButton button {
+        font-family: 'Poppins', sans-serif;
+        border-radius: 12px !important;
+        font-weight: 600 !important;
+        font-size: 14px !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        background: rgba(255, 255, 255, 0.07) !important;
+        color: #ffffff !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+        transition: all 0.3s ease !important;
+        text-align: left !important;
+        padding: 10px 16px !important;
+        width: 100% !important;
+    }
+    [data-testid="stSidebar"] .stButton button:hover {
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+        color: white !important;
+        border-color: #3b82f6 !important;
+        box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4) !important;
+        transform: translateY(-2px);
+    }
+    .stButton button {
+        font-family: 'Poppins', sans-serif;
+        border-radius: 12px !important;
+        font-weight: 600 !important;
+        font-size: 13px !important;
+    }
+    </style>
     """, unsafe_allow_html=True)
 
-    from datetime import datetime
-    import os
-
-    # Top Header Bar (Modern Gradient & Clean UI)
-    head_col1, head_col2, head_col3 = st.columns([2.2, 3.2, 1.6])
+    # Top Header Bar (অনুপাত পরিবর্তন করা হয়েছে যাতে পুরো স্কুলের নাম সুন্দরভাবে ফায়ার করে)
+    head_col1, head_col2, head_col3 = st.columns([1.8, 2.0, 3.2])
     
     with head_col1:
-        st.markdown(f"""
-            <div style="display: flex; align-items: center; gap: 14px; padding-top: 5px;">
-                <div style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: white; padding: 12px; border-radius: 16px; font-size: 22px; box-shadow: 0 8px 20px rgba(37,99,235,0.3);">📚</div>
-                <div>
-                    <h2 style="margin: 0; font-size: 20px; color: #0f172a; font-family: 'Poppins', sans-serif; font-weight: 800;">Virtual Reading Room</h2>
-                    <p style="margin: 0; font-size: 11px; color: #64748b; font-family: 'Poppins', sans-serif;">Smart Study with AI Assistant</p>
-                </div>
+        st.markdown("""
+        <div style="display: flex; align-items: center; gap: 14px; padding-top: 5px;">
+            <div style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: white;
+            padding: 12px; border-radius: 16px; font-size: 22px; box-shadow: 0 8px 20px
+            rgba(37,99,235,0.3);">📚</div>
+            <div>
+                <h2 style="margin: 0; font-size: 20px; color: #f8fafc; font-family: 'Poppins', sans-serif; font-weight: 800;">Virtual Reading Room</h2>
+                <p style="margin: 0; font-size: 11px; color: #94a3b8; font-family: 'Poppins', sans-serif;">Smart Study with AI Assistant</p>
             </div>
+        </div>
         """, unsafe_allow_html=True)
-
+        
     with head_col2:
         search_query = st.text_input("Search", placeholder="🔍 Search books, notes, exams, routines...", label_visibility="collapsed")
         if search_query:
@@ -319,7 +408,6 @@ def render_dashboard():
                 {"title": "Study Progress: Bangla & Math", "type": "Progress", "desc": "Overall academic performance and mastery."}
             ]
             matched_items = [item for item in app_database if q in item["title"].lower() or q in item["desc"].lower() or q in item["type"].lower()]
-            
             assets_dir = "assets"
             pdf_files = []
             if os.path.exists(assets_dir):
@@ -328,55 +416,99 @@ def render_dashboard():
                 except:
                     pdf_files = []
             matched_pdfs = [f for f in pdf_files if q in f.lower()]
-
             total_found = len(matched_items) + len(matched_pdfs)
             if total_found > 0:
-                st.markdown(f"<div style='background: #1e293b; color: white; padding: 8px 12px; border-radius: 10px; font-size: 12px; margin-top: 5px; font-family: Poppins;'><b>✨ Search Results ({total_found} found):</b></div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='background: #1e293b; color: white; padding: 8px 12px; border-radius: 10px; font-size: 12px; margin-top: 5px; font-family: Poppins;'><b>🔍 Search Results ({total_found} found):</b></div>", unsafe_allow_html=True)
                 for idx, file_name in enumerate(matched_pdfs):
                     file_path = os.path.join(assets_dir, file_name)
                     clean_title = file_name.replace('.pdf', '').replace('.PDF', '').replace('_', ' ')
                     st.markdown(f"""
-                        <div style='background: #f1f5f9; padding: 10px; border-radius: 8px; margin-top: 6px; font-size: 12px; color: #0f172a; border-left: 4px solid #2563EB;'>
+                    <div style='background: #1e293b; padding: 10px; border-radius: 8px; margin-top: 6px; font-size: 12px; color: #f8fafc; border-left: 4px solid #3b82f6;'>
                         <b>[PDF Library] {clean_title}</b>
-                        </div>
+                    </div>
                     """, unsafe_allow_html=True)
                     try:
                         with open(file_path, "rb") as pdf_file:
-                            st.download_button(label=f"📥 Download / Read: {clean_title}", data=pdf_file, file_name=file_name, mime="application/pdf", key=f"global_dl_{idx}")
-                    except Exception as err:
+                            st.download_button(label=f"Download / Read: {clean_title}", data=pdf_file, file_name=file_name, mime="application/pdf", key=f"global_dl_{idx}")
+                    except Exception:
                         st.error(f"ফাইল ওপেন করতে সমস্যা হয়েছে")
-
                 for idx, item in enumerate(matched_items):
                     st.markdown(f"""
-                        <div style='background: #f8fafc; padding: 10px; border-radius: 8px; margin-top: 6px; font-size: 12px; color: #0f172a; border-left: 4px solid #10b981;'>
-                        <b>{item['title']}</b> <span style='color: #10b981; font-weight: bold;'>[{item['type']}]</span><br>
-                        <span style='color: #64748b;'>{item['desc']}</span>
-                        </div>
+                    <div style='background: #1e293b; padding: 10px; border-radius: 8px; margin-top: 6px; font-size: 12px; color: #f8fafc; border-left: 4px solid #10b981;'>
+                        <b>{item['title']}</b> <span style='color: #34d399; font-weight: bold;'>[{item['type']}]</span><br>
+                        <span style='color: #94a3b8;'>{item['desc']}</span>
+                    </div>
                     """, unsafe_allow_html=True)
             else:
                 st.warning(f"No results found for '{search_query}'. Try searching 'bangla', 'exam', or 'routine'.")
-        else:
-            pass
 
     with head_col3:
-        student_initial = st.session_state.student_name[0] if "student_name" in st.session_state and st.session_state.student_name else "S"
-        student_name = st.session_state.get("student_name", "Student")
-        student_class = st.session_state.get("class_name", "Class 7")
-        
-        st.markdown(f"""
-            <div style="display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding-top: 4px;">
-                <div style="background: #eff6ff; padding: 10px; border-radius: 50%; font-size: 15px; position: relative; cursor: pointer; border: 1px solid #dbeafe;" title="Notifications">
-                    🔔<span style="position: absolute; top: 0px; right: 0px; background: #ef4444; color: white; font-size: 9px; width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">3</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 8px; background: #ffffff; padding: 6px 12px; border-radius: 24px; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
-                    <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); height: 32px; width: 32px; border-radius: 50%; display: flex; color: white; align-items: center; justify-content: center; font-weight: bold; font-size: 13px;">{student_initial}</div>
-                    <div style="text-align: left;">
-                        <div style="font-size: 12px; font-weight: 700; color: #1e293b; line-height: 1.2;">{student_name}</div>
-                        <div style="font-size: 10px; color: #64748b; font-weight: 500;">{student_class}</div>
-                    </div>
-                </div>
+        # স্টুডেন্ট নাম, শ্রেণি, স্কুল এবং মোবাইল সেশন স্টেট ইনিশিয়ালাইজেশন
+        if "student_name" not in st.session_state:
+            st.session_state.student_name = "লাবিব বিন লালন"
+        if "class_name" not in st.session_state:
+            st.session_state.class_name = "সপ্তম শ্রেণি"
+        if "school_name" not in st.session_state:
+            st.session_state.school_name = "শামসুল হক খান স্কুল অ্যান্ড কলেজ, ডেমরা, ঢাকা"
+        if "mobile_number" not in st.session_state:
+            st.session_state.mobile_number = "01700000000"
+        if "profile_img_b64" not in st.session_state:
+            st.session_state.profile_img_b64 = None
+
+        # প্রফেশনাল হেডার লেআউট: নোটিফিকেশন এবং প্রিমিয়াম প্রোফাইল কার্ড
+        ncol1, ncol2 = st.columns([0.6, 5.4], gap="small")
+        with ncol1:
+            with st.popover("🔔", help="Notifications"):
+                st.markdown("<h4 style='font-size: 14px; margin-bottom: 10px; color:#f8fafc;'>Notifications</h4>", unsafe_allow_html=True)
+                st.markdown("<p style='font-size:11px; border-bottom:1px solid #334155; padding-bottom:5px; color:#cbd5e1;'>Tomorrow is your Mathematics exam.</p>", unsafe_allow_html=True)
+                st.markdown("<p style='font-size:11px; border-bottom:1px solid #334155; padding-bottom:5px; color:#cbd5e1;'>You have 2 unfinished chapters.</p>", unsafe_allow_html=True)
+                st.markdown("<p style='font-size:11px; color:#cbd5e1;'>Weekly study goal almost complete!</p>", unsafe_allow_html=True)
+                
+        with ncol2:
+            # প্রফেশনাল অ্যাপ স্টাইল প্রোফাইল মেনু ও কাস্টম তথ্য ইনপুট ফিল্ডস (ছবি স্থায়ীভাবে সংরক্ষণের লজিক সহ)
+            with st.popover("⚙️ প্রোফাইল সেটিংস", help="Manage Profile"):
+                st.markdown("<h4 style='font-size:15px; font-weight:700; color:#f8fafc; margin-bottom:12px; border-bottom:1px solid #334155; padding-bottom:8px;'>প্রফেশনাল প্রোফাইল ম্যানেজমেন্ট</h4>", unsafe_allow_html=True)
+                
+                tab1, tab2 = st.tabs(["🖼️ ছবি পরিবর্তন", "✏️ তথ্য ও নাম"])
+                with tab1:
+                    uploaded_file = st.file_uploader("নতুন প্রোফাইল ছবি আপলোড করুন", type=["png", "jpg", "jpeg"], key="profile_pic_edit_tab")
+                    if uploaded_file is not None:
+                        bytes_data = uploaded_file.getvalue()
+                        # Base64 এনকোড করে সেশন স্টেটে স্থায়ীভাবে সংরক্ষণ করা হচ্ছে
+                        st.session_state.profile_img_b64 = base64.b64encode(bytes_data).decode('utf-8')
+                        st.success("প্রোফাইল ছবি সফলভাবে আপডেট হয়েছে!")
+                        st.rerun()
+                        
+                with tab2:
+                    new_name = st.text_input("আপনার নাম পরিবর্তন করুন", value=st.session_state.student_name)
+                    new_class = st.text_input("শ্রেণি পরিবর্তন করুন", value=st.session_state.class_name)
+                    new_school = st.text_input("স্কুলের নাম/শাখা যুক্ত করুন", value=st.session_state.school_name)
+                    new_mobile = st.text_input("মোবাইল নম্বর যুক্ত করুন", value=st.session_state.mobile_number)
+                    if st.button("তথ্য সংরক্ষণ করুন", use_container_width=True):
+                        st.session_state.student_name = new_name
+                        st.session_state.class_name = new_class
+                        st.session_state.school_name = new_school
+                        st.session_state.mobile_number = new_mobile
+                        st.success("প্রোফাইল তথ্য সফলভাবে আপডেট করা হয়েছে!")
+                        st.rerun()
+
+        # স্কুলের পুরো নাম এবং স্থায়ী প্রোফাইল পিকচার রেন্ডারিং কার্ড
+        profile_img_html = f"""
+        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 12px; background: #1e293b; padding: 8px 16px; border-radius: 20px; border: 1px solid #334155; box-shadow: 0 4px 12px rgba(0,0,0,0.2); width: 100%;">
+            <div style="text-align: right; line-height: 1.3; flex-grow: 1;">
+                <div style="font-size: 15px; font-weight: 800; color: #f8fafc;">{st.session_state.student_name}</div>
+                <div style="font-size: 11px; color: #38bdf8; font-weight: 600; margin-top: 1px;">{st.session_state.class_name}</div>
+                <div style="font-size: 10px; color: #94a3b8; word-wrap: break-word; white-space: normal; line-height: 1.2; margin-top: 2px;">🏫 {st.session_state.school_name}</div>
             </div>
-        """, unsafe_allow_html=True)
+            <div style="width: 44px; height: 44px; border-radius: 50%; overflow: hidden; border: 2px solid #38bdf8; display: flex; align-items: center; justify-content: center; background: #2563eb; flex-shrink: 0;">
+        """
+        if st.session_state.profile_img_b64:
+            profile_img_html += f'<img src="data:image/png;base64,{st.session_state.profile_img_b64}" style="width: 100%; height: 100%; object-fit: cover;" />'
+        else:
+            profile_img_html += '<span style="color: white; font-weight: bold; font-size: 18px;">ল</span>'
+        profile_img_html += '</div></div>'
+        
+        st.markdown(profile_img_html, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -384,6 +516,49 @@ def render_dashboard():
     col_main, col_ai = st.columns([2.3, 1.2], gap="large")
 
     with col_main:
+        st.markdown("""
+        <div class="metaverse-banner-updated">
+            <div style="display: flex; gap: 16px; align-items: center;">
+        """, unsafe_allow_html=True)
+        
+        banner_c1, banner_c2 = st.columns([1.1, 2.3], gap="medium")
+        with banner_c1:
+            st.image("https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=600&auto=format&fit=crop", use_container_width=True)
+        with banner_c2:
+            st.markdown(f"""
+            <div>
+                <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(56, 189, 248, 0.2); border: 1px solid rgba(56, 189, 248, 0.5); padding: 4px 12px; border-radius: 99px; font-size: 11px; color: #38bdf8; font-weight: 700; margin-bottom: 8px;">
+                    ✨ IMMERSIVE METAVERSE STUDY CHAMBER
+                </div>
+                <h2 class="banner-title-updated">Virtual Study & Research Chamber</h2>
+                <p style="color: #f1f5f9; font-family: 'Poppins', sans-serif; font-size: 13px; margin: 0; line-height: 1.6; font-weight: 400; text-shadow: 0 1px 2px rgba(0,0,0,0.5);">
+                    Quiet night, glowing table lamp, and deep focus. Welcome to your digital sanctuary, <b>{st.session_state.student_name}</b>! Dive into immersive reading and AI research.
+                </p>
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <div style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); padding: 8px 14px; border-radius: 12px; text-align: center;">
+                        <div style="font-size: 15px;">💻</div>
+                        <div style="font-size: 9px; color: #e2e8f0; font-weight: 600;">Coding Lab</div>
+                        <div style="font-size: 10px; color: #38bdf8; font-weight: 700;">Active</div>
+                    </div>
+                    <div style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); padding: 8px 14px; border-radius: 12px; text-align: center;">
+                        <div style="font-size: 15px;">🤖</div>
+                        <div style="font-size: 9px; color: #e2e8f0; font-weight: 600;">AI Research</div>
+                        <div style="font-size: 10px; color: #f59e0b; font-weight: 700;">Online</div>
+                    </div>
+                    <div style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); padding: 8px 14px; border-radius: 12px; text-align: center;">
+                        <div style="font-size: 15px;">📖</div>
+                        <div style="font-size: 9px; color: #e2e8f0; font-weight: 600;">Smart Library</div>
+                        <div style="font-size: 10px; color: #34d399; font-weight: 700;">Synced</div>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        st.markdown("""
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
         current_hour = datetime.now().hour
         if 5 <= current_hour < 12:
             greeting = "Good Morning"
@@ -394,84 +569,51 @@ def render_dashboard():
         else:
             greeting = "Good Night"
 
-        # Hero Greeting Banner (Vibrant Gradient & Glassmorphism Feel)
+        # Hero Greeting Banner
         st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #eef2ff 0%, #f3e8ff 100%); padding: 30px; border-radius: 24px; border: 1px solid #e0e7ff; position: relative; margin-bottom: 24px; box-shadow: 0 10px 30px rgba(37,99,235,0.06);">
-                <div style="max-width: 100%;">
-                    <h2 style="color: #0f172a; font-family: 'Poppins', sans-serif; font-weight: 800; margin-bottom: 6px; font-size: 26px;">{greeting}, {student_name}! 👋</h2>
-                    <p style="color: #475569; font-family: 'Poppins', sans-serif; font-size: 13px; margin-bottom: 20px; font-weight: 500;">Keep going! You are doing phenomenal in your studies today.</p>
-                    <div style="display: flex; gap: 14px; flex-wrap: wrap;">
-                        <div style="background: white; padding: 14px 18px; border-radius: 16px; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
-                            <span style="font-size: 22px;">🎯</span>
-                            <div>
-                                <div style="font-size: 11px; color: #64748b; font-weight: 600;">Today's Goal</div>
-                                <div style="font-size: 15px; font-weight: 800; color: #0f172a;">2.5 hours</div>
-                            </div>
+        <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding: 26px 30px; border-radius: 24px; border: 1px solid #334155; position: relative; margin-bottom: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+            <div style="max-width: 100%;">
+                <h2 style="color: #f8fafc; font-family: 'Poppins', sans-serif; font-weight: 800; margin-bottom: 6px; font-size: 24px;">{greeting}, {st.session_state.student_name}!</h2>
+                <p style="color: #94a3b8; font-family: 'Poppins', sans-serif; font-size: 13px; margin-bottom: 20px; font-weight: 500;">Keep going! You are doing phenomenal in your studies today.</p>
+                <div style="display: flex; gap: 14px; flex-wrap: wrap;">
+                    <div style="background: #1e293b; padding: 14px 18px; border-radius: 16px; border: 1px solid #334155; display: flex; align-items: center; gap: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+                        <span style="font-size: 22px;">🎯</span>
+                        <div>
+                            <div style="font-size: 11px; color: #94a3b8; font-weight: 600;">Today's Goal</div>
+                            <div style="font-size: 15px; font-weight: 800; color: #f8fafc;">2.5 hours</div>
                         </div>
-                        <div style="background: white; padding: 14px 18px; border-radius: 16px; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
-                            <span style="font-size: 22px;">📈</span>
-                            <div>
-                                <div style="font-size: 11px; color: #64748b; font-weight: 600;">Today's Progress</div>
-                                <div style="font-size: 15px; font-weight: 800; color: #0f172a;">72%</div>
-                            </div>
+                    </div>
+                    <div style="background: #1e293b; padding: 14px 18px; border-radius: 16px; border: 1px solid #334155; display: flex; align-items: center; gap: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+                        <span style="font-size: 22px;">📈</span>
+                        <div>
+                            <div style="font-size: 11px; color: #94a3b8; font-weight: 600;">Today's Progress</div>
+                            <div style="font-size: 15px; font-weight: 800; color: #f8fafc;">72%</div>
                         </div>
-                        <div style="background: white; padding: 14px 18px; border-radius: 16px; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
-                            <span style="font-size: 22px;">⏱️</span>
-                            <div>
-                                <div style="font-size: 11px; color: #64748b; font-weight: 600;">Study Time</div>
-                                <div style="font-size: 15px; font-weight: 800; color: #0f172a;">1h 30m</div>
-                            </div>
+                    </div>
+                    <div style="background: #1e293b; padding: 14px 18px; border-radius: 16px; border: 1px solid #334155; display: flex; align-items: center; gap: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+                        <span style="font-size: 22px;">⏱️</span>
+                        <div>
+                            <div style="font-size: 11px; color: #94a3b8; font-weight: 600;">Study Time</div>
+                            <div style="font-size: 15px; font-weight: 800; color: #f8fafc;">1h 30m</div>
                         </div>
                     </div>
                 </div>
             </div>
-        """, unsafe_allow_html=True)
-
-        # Continue Reading Section
-        st.markdown("""
-            <div class="dashboard-card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                    <div>
-                        <h4 style="margin: 0; color: #0f172a; font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 18px;">Continue Reading</h4>
-                        <p style="margin: 0; font-size: 12px; color: #64748b;">You were reading: Mathematics Chapter 3</p>
-                    </div>
-                </div>
-                <div style="display: flex; gap: 20px; align-items: center; background: #f8fafc; padding: 18px; border-radius: 16px; border: 1px solid #e2e8f0;">
-                    <div style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: white; padding: 18px; border-radius: 14px; text-align: center; min-width: 100px; box-shadow: 0 8px 20px rgba(37,99,235,0.25);">
-                        <div style="font-size: 16px; font-weight: 800;">গণিত</div>
-                        <div style="font-size: 10px; opacity: 0.9; font-weight: 500;">শ্রেণি ৭</div>
-                    </div>
-                    <div style="flex-grow: 1;">
-                        <div style="font-weight: 700; color: #1e293b; font-size: 14px; margin-bottom: 4px;">Chapter 3: Linear Equations</div>
-                        <div style="font-size: 12px; color: #64748b; margin-bottom: 12px;">Mathematics Advanced Guide</div>
-                        <div style="background: #e2e8f0; border-radius: 99px; height: 8px; width: 100%; overflow: hidden;">
-                            <div style="background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%); width: 60%; height: 100%; border-radius: 99px;"></div>
-                        </div>
-                    </div>
-                    <div style="text-align: right;">
-                        <div style="font-size: 14px; font-weight: 800; color: #2563eb;">60%</div>
-                    </div>
-                </div>
-                <div style="display: flex; gap: 10px; margin-top: 16px;">
-                    <button style="background: #2563eb; color: white; border: none; padding: 10px 18px; border-radius: 10px; font-size: 12px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(37,99,235,0.2);">Continue</button>
-                    <button style="background: white; color: #475569; border: 1px solid #cbd5e1; padding: 10px 18px; border-radius: 10px; font-size: 12px; font-weight: 600; cursor: pointer;">Read From Start</button>
-                    <button style="background: white; color: #475569; border: 1px solid #cbd5e1; padding: 10px 18px; border-radius: 10px; font-size: 12px; font-weight: 600; cursor: pointer;">Download PDF</button>
-                </div>
-            </div>
+        </div>
         """, unsafe_allow_html=True)
 
         # Quick Feature Cards Grid
         qc1, qc2, qc3, qc4, qc5 = st.columns(5)
         with qc1:
-            if st.button("📚 My Books", use_container_width=True):
+            if st.button("📖 My Books", use_container_width=True):
                 st.session_state.current_page = "My Books"
                 st.rerun()
         with qc2:
-            if st.button("🤖 Ask AI", use_container_width=True):
-                st.session_state.current_page = "AI Assistant"
+            if st.button("📝 Notebook", use_container_width=True):
+                st.session_state.current_page = "Notes"
                 st.rerun()
         with qc3:
-            if st.button("📝 Take Quiz", use_container_width=True):
+            if st.button("💡 Take Quiz", use_container_width=True):
                 st.session_state.current_page = "Quiz & Practice"
                 st.rerun()
         with qc4:
@@ -479,82 +621,86 @@ def render_dashboard():
                 st.session_state.current_page = "Study Planner"
                 st.rerun()
         with qc5:
-            if st.button("📊 Progress", use_container_width=True):
-                st.session_state.current_page = "Progress"
+            if st.button("🏆 Exams", use_container_width=True):
+                st.session_state.current_page = "Exam & Assignment"
                 st.rerun()
 
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # Upcoming Exams & Study Progress Section
+        # Upcoming Exams & Study Progress Hub Section
         col_sub1, col_sub2 = st.columns(2, gap="medium")
         
+        # Upcoming Exams Card
         with col_sub1:
             st.markdown("""
-                <div class="dashboard-card" style="height: 100%;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                        <h4 style="margin: 0; color: #0f172a; font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 16px;">Upcoming Exams</h4>
-                        <span style="font-size: 12px; color: #2563eb; font-weight: 600; cursor: pointer;">View All</span>
-                    </div>
-                    <div style="font-size: 12px; color: #475569;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f1f5f9;">
-                            <span style="font-weight: 600; color: #1e293b;">Mathematics</span><span>15 Oct 2026</span><span style="background: #fee2e2; color: #dc2626; padding: 3px 10px; border-radius: 8px; font-size: 10px; font-weight: 700;">12 Days Left</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f1f5f9;">
-                            <span style="font-weight: 600; color: #1e293b;">Science</span><span>18 Oct 2026</span><span style="background: #fef3c7; color: #d97706; padding: 3px 10px; border-radius: 8px; font-size: 10px; font-weight: 700;">15 Days Left</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f1f5f9;">
-                            <span style="font-weight: 600; color: #1e293b;">English</span><span>25 Oct 2026</span><span style="background: #e0e7ff; color: #4f46e5; padding: 3px 10px; border-radius: 8px; font-size: 10px; font-weight: 700;">22 Days Left</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0;">
-                            <span style="font-weight: 600; color: #1e293b;">ICT</span><span>30 Oct 2026</span><span style="background: #e0e7ff; color: #4f46e5; padding: 3px 10px; border-radius: 8px; font-size: 10px; font-weight: 700;">27 Days Left</span>
-                        </div>
-                    </div>
+            <div class="dashboard-card" style="height: 100%;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h4 style="margin: 0; color: #f8fafc; font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 16px;">Upcoming Exams</h4>
+                    <span style="font-size: 12px; color: #38bdf8; font-weight: 600; cursor: pointer;">View All</span>
                 </div>
-            """, unsafe_allow_html=True)
-
-        with col_sub2:
-            st.markdown("""
-                <div class="dashboard-card" style="height: 100%;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                        <h4 style="margin: 0; color: #0f172a; font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 16px;">Study Progress</h4>
+                <div style="font-size: 12px; color: #94a3b8;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #334155;">
+                        <span style="font-weight: 600; color: #f8fafc; font-size: 13px;">Mathematics</span>
+                        <span style="color: #94a3b8;">15 Oct 2026</span>
+                        <span style="background: rgba(239, 68, 68, 0.2); color: #f87171; padding: 4px 10px; border-radius: 8px; font-size: 10px; font-weight: 700; border: 1px solid rgba(239, 68, 68, 0.3);">12 Days Left</span>
                     </div>
-                    <div style="font-size: 12px; color: #475569;">
-                        <div style="margin-bottom: 6px; display: flex; justify-content: space-between;"><span style="font-weight: 600; color: #1e293b;">Bangla</span><span style="font-weight: 700; color: #10b981;">80%</span></div>
-                        <div style="background: #e2e8f0; height: 8px; border-radius: 99px; margin-bottom: 12px; overflow: hidden;"><div style="background: #10b981; width: 80%; height: 100%; border-radius: 99px;"></div></div>
-                        
-                        <div style="margin-bottom: 6px; display: flex; justify-content: space-between;"><span style="font-weight: 600; color: #1e293b;">English</span><span style="font-weight: 700; color: #3b82f6;">65%</span></div>
-                        <div style="background: #e2e8f0; height: 8px; border-radius: 99px; margin-bottom: 12px; overflow: hidden;"><div style="background: #3b82f6; width: 65%; height: 100%; border-radius: 99px;"></div></div>
-                        
-                        <div style="margin-bottom: 6px; display: flex; justify-content: space-between;"><span style="font-weight: 600; color: #1e293b;">Mathematics</span><span style="font-weight: 700; color: #f97316;">75%</span></div>
-                        <div style="background: #e2e8f0; height: 8px; border-radius: 99px; margin-bottom: 12px; overflow: hidden;"><div style="background: #f97316; width: 75%; height: 100%; border-radius: 99px;"></div></div>
-                        
-                        <div style="margin-bottom: 6px; display: flex; justify-content: space-between;"><span style="font-weight: 600; color: #1e293b;">Science</span><span style="font-weight: 700; color: #8b5cf6;">70%</span></div>
-                        <div style="background: #e2e8f0; height: 8px; border-radius: 99px; overflow: hidden;"><div style="background: #8b5cf6; width: 70%; height: 100%; border-radius: 99px;"></div></div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #334155;">
+                        <span style="font-weight: 600; color: #f8fafc; font-size: 13px;">Science</span>
+                        <span style="color: #94a3b8;">18 Oct 2026</span>
+                        <span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; padding: 4px 10px; border-radius: 8px; font-size: 10px; font-weight: 700; border: 1px solid rgba(245, 158, 11, 0.3);">15 Days Left</span>
                     </div>
-                </div>
-            """, unsafe_allow_html=True)
-
-    with col_ai:
-        # AI Study Assistant Chat & Task Widget Column
-        st.markdown("""
-            <div class="dashboard-card" style="border: 2px solid #2563eb; background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);">
-                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px;">
-                    <div style="background: #2563eb; color: white; padding: 10px; border-radius: 50%; font-size: 16px; box-shadow: 0 4px 12px rgba(37,99,235,0.3);">🤖</div>
-                    <div>
-                        <h4 style="margin: 0; color: #0f172a; font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 16px;">AI Study Assistant</h4>
-                        <p style="margin: 0; font-size: 11px; color: #10b981; font-weight: 600;">🟢 Online & Ready</p>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #334155;">
+                        <span style="font-weight: 600; color: #f8fafc; font-size: 13px;">English</span>
+                        <span style="color: #94a3b8;">25 Oct 2026</span>
+                        <span style="background: rgba(99, 102, 241, 0.2); color: #818cf8; padding: 4px 10px; border-radius: 8px; font-size: 10px; font-weight: 700; border: 1px solid rgba(99, 102, 241, 0.3);">22 Days Left</span>
                     </div>
-                </div>
-                <div style="background: #eff6ff; padding: 14px; border-radius: 12px; font-size: 13px; color: #1e293b; margin-bottom: 14px; border: 1px solid #dbeafe;">
-                    Hi <b>{student_name}</b>!<br>I'm your AI Study Assistant. Ask me anything about your studies!
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0;">
+                        <span style="font-weight: 600; color: #f8fafc; font-size: 13px;">ICT</span>
+                        <span style="color: #94a3b8;">30 Oct 2026</span>
+                        <span style="background: rgba(99, 102, 241, 0.2); color: #818cf8; padding: 4px 10px; border-radius: 8px; font-size: 10px; font-weight: 700; border: 1px solid rgba(99, 102, 241, 0.3);">27 Days Left</span>
+                    </div>
                 </div>
             </div>
-        """.format(student_name=student_name), unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
-        # Quick Prompt Buttons
-        st.markdown("<p style='font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 8px;'>✨ Quick AI Tools:</p>", unsafe_allow_html=True)
-        
-        # নিশ্চিত করুন যে session_state-এ chat_messages ইনিশিয়ালাইজ করা আছে
+        # Study Progress Hub Card
+        with col_sub2:
+            st.markdown("""
+            <div class="dashboard-card" style="height: 100%; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h4 style="margin: 0; color: #f8fafc; font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 16px;">Study Progress Hub</h4>
+                        <span style="font-size: 12px; color: #34d399; font-weight: 600; background: rgba(16, 185, 129, 0.2); padding: 3px 10px; border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.3);">Active: 75%</span>
+                    </div>
+                    <p style="font-size: 13px; color: #94a3b8; line-height: 1.5; margin-bottom: 20px;">
+                        Track your daily chapter mastery, subject-wise completion rates, and overall academic performance in real-time.
+                    </p>
+                </div>
+            """, unsafe_allow_html=True)
+            if st.button("📊 View Complete Study Progress", use_container_width=True):
+                st.session_state.current_page = "Study Planner"
+                st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    # Right Column: AI Assistant Panel & Notifications
+    with col_ai:
+        st.markdown(f"""
+        <div class="dashboard-card" style="border: 2px solid #3b82f6; background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 14px;">
+                <div style="background: #3b82f6; color: white; padding: 10px; border-radius: 50%; font-size: 16px; box-shadow: 0 4px 12px rgba(59,130,246,0.4);">🤖</div>
+                <div>
+                    <h4 style="margin: 0; color: #f8fafc; font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 16px;">AI Study Assistant</h4>
+                    <p style="margin: 0; font-size: 11px; color: #34d399; font-weight: 600;">🟢 Online & Ready</p>
+                </div>
+            </div>
+            <div style="background: rgba(59, 130, 246, 0.1); padding: 14px; border-radius: 12px; font-size: 13px; color: #e2e8f0; margin-bottom: 14px; border: 1px solid rgba(59, 130, 246, 0.3);">
+                Hi <b>{st.session_state.student_name}</b>!<br>I'm your AI Study Assistant. Ask me anything about your studies!
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("<p style='font-size: 13px; font-weight: 700; color: #f8fafc; margin-bottom: 8px;'>⚡ Quick AI Tools:</p>", unsafe_allow_html=True)
+
         if "chat_messages" not in st.session_state:
             st.session_state.chat_messages = []
 
@@ -562,10 +708,10 @@ def render_dashboard():
         with col_p1:
             if st.button("💡 Explain a topic", use_container_width=True):
                 st.session_state.chat_messages.append({"role": "user", "content": "Explain a topic"})
-                st.session_state.chat_messages.append({"role": "assistant", "content": f"Sure, {student_name}! Which subject or topic would you like me to explain for {student_class}?"})
+                st.session_state.chat_messages.append({"role": "assistant", "content": f"Sure, {st.session_state.student_name}! Which subject or topic would you like me to explain for {st.session_state.class_name}?"})
                 st.rerun()
         with col_p2:
-            if st.button("🔢 Solve a problem", use_container_width=True):
+            if st.button("📐 Solve a problem", use_container_width=True):
                 st.session_state.chat_messages.append({"role": "user", "content": "Solve a problem"})
                 st.session_state.chat_messages.append({"role": "assistant", "content": "Please type or paste your math/science problem here and I'll solve it step-by-step."})
                 st.rerun()
@@ -582,164 +728,39 @@ def render_dashboard():
                 st.session_state.chat_messages.append({"role": "assistant", "content": "I can translate between English and Bengali instantly. What would you like translated?"})
                 st.rerun()
 
-        # Interactive Chat Box
         st.markdown("<br>", unsafe_allow_html=True)
+
         for msg in st.session_state.chat_messages[-4:]:
-            bg = "#eff6ff" if msg["role"] == "user" else "#f1f5f9"
+            bg = "rgba(59, 130, 246, 0.15)" if msg["role"] == "user" else "#1e293b"
             align = "right" if msg["role"] == "user" else "left"
-            border_color = "#2563eb" if msg["role"] == "user" else "#cbd5e1"
+            border_color = "#3b82f6" if msg["role"] == "user" else "#475569"
             st.markdown(f"""
-                <div style="background: {bg}; padding: 10px 14px; border-radius: 12px; margin-bottom: 8px; font-size: 12px; text-align: {align}; border-left: 3px solid {border_color};">
-                <b>{'You' if msg['role']=='user' else 'AI Assistant'}:</b> {msg['content']}
-                </div>
+            <div style="background: {bg}; padding: 10px 14px; border-radius: 12px; margin-bottom: 8px; font-size: 12px; text-align: {align}; border-left: 3px solid {border_color}; color: #f8fafc;">
+                <b style="color: #38bdf8;">{'You' if msg['role']=='user' else 'AI Assistant'}:</b> {msg['content']}
+            </div>
             """, unsafe_allow_html=True)
 
         user_input = st.text_input("Ask AI Question", placeholder="Type your question here...", label_visibility="collapsed")
         if st.button("🚀 Send Message", use_container_width=True):
             if user_input:
                 st.session_state.chat_messages.append({"role": "user", "content": user_input})
-                st.session_state.chat_messages.append({"role": "assistant", "content": f"That's a great question regarding '{user_input}'. As your AI tutor for {student_class}, I recommend reviewing chapter notes or practicing related exercises."})
+                st.session_state.chat_messages.append({"role": "assistant", "content": f"That's a great question regarding '{user_input}'. As your AI tutor for {st.session_state.class_name}, I recommend reviewing chapter notes or practicing related exercises."})
                 st.rerun()
 
         # Recent Notifications
         st.markdown("""
-            <div class="dashboard-card" style="margin-top: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: #0f172a;">🔔 Recent Notifications</h4>
-                    <span style="font-size: 11px; color: #2563eb; font-weight: 600; cursor: pointer;">View All</span>
-                </div>
-                <div style="font-size: 12px; color: #475569;">
-                    <div style="padding: 8px 0; border-bottom: 1px solid #f1f5f9;">📌 Tomorrow is your Mathematics exam.<br><span style="font-size: 10px; color: #94a3b8;">2 hours ago</span></div>
-                    <div style="padding: 8px 0; border-bottom: 1px solid #f1f5f9;">📌 You have 2 unfinished chapters.<br><span style="font-size: 10px; color: #94a3b8;">4 hours ago</span></div>
-                    <div style="padding: 8px 0;">🎉 Weekly study goal almost complete!<br><span style="font-size: 10px; color: #94a3b8;">6 hours ago</span></div>
-                </div>
+        <div class="dashboard-card" style="margin-top: 15px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: #f8fafc;">🔔 Recent Notifications</h4>
+                <span style="font-size: 11px; color: #38bdf8; font-weight: 600; cursor: pointer;">View All</span>
             </div>
+            <div style="font-size: 11px; color: #94a3b8;">
+                <div style="padding: 6px 0; border-bottom: 1px solid #334155;">Tomorrow is your Mathematics exam.<br><span style="font-size: 10px; color: #64748b;">2 hours ago</span></div>
+                <div style="padding: 6px 0; border-bottom: 1px solid #334155;">You have 2 unfinished chapters.<br><span style="font-size: 10px; color: #64748b;">4 hours ago</span></div>
+                <div style="padding: 6px 0;">Weekly study goal almost complete!<br><span style="font-size: 10px; color: #64748b;">6 hours ago</span></div>
+            </div>
+        </div>
         """, unsafe_allow_html=True)
-
-
-import streamlit as st
-import os
-import os.path as path
-import base64
-import requests
-import sqlite3
-from datetime import datetime
-
-# ডেটাবেজ ইনিশিয়ালাইজেশন এবং স্বয়ংক্রিয়ভাবে missing column যোগ করার লজিক
-def init_db():
-    conn = sqlite3.connect("subject_notes.db")
-    cursor = conn.cursor()
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS notes (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT,
-        content TEXT,
-        subject TEXT,
-        note_type TEXT
-    )
-    """)
-    try:
-        cursor.execute("SELECT created_at FROM notes LIMIT 1")
-    except sqlite3.OperationalError:
-        cursor.execute("ALTER TABLE notes ADD COLUMN created_at TEXT")
-    
-    conn.commit()
-    conn.close()
-
-init_db()
-
-# পিডিএফ ফাইল মেমোরিতে ফাস্ট লোড করার জন্য ক্যাশিং ফাংশন
-@st.cache_data
-def load_pdf_as_base64(file_path):
-    with open(file_path, "rb") as f:
-        return base64.b64encode(f.read()).decode('utf-8')
-
-def render_my_books():
-    # ১. Gemini API Key
-    GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE"
-
-    def ask_gemini_rest_api(prompt_text):
-        if not GEMINI_API_KEY or GEMINI_API_KEY == "YOUR_GEMINI_API_KEY_HERE":
-            return "API Key সমস্যা হচ্ছে। দয়া করে 'Gemini Chatbot' বাটনে ক্লিক করো।"
-        
-        models_to_try = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"]
-        for model_name in models_to_try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
-            headers = {'Content-Type': 'application/json'}
-            payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
-            try:
-                response = requests.post(url, json=payload, headers=headers, timeout=15)
-                if response.status_code == 200:
-                    data = response.json()
-                    return data['candidates'][0]['content']['parts'][0]['text']
-            except Exception:
-                continue
-        return "API Key সমস্যা হচ্ছে। দয়া করে সঠিক API Key সেট করুন।"
-
-    # ২. প্রিমিয়াম CSS স্টাইল
-    st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css?family=Hind+Siliguri:wght@400;500;600;700&family=Outfit:wght@400;600;800&display=swap');
-    
-    .kids-magic-wrapper {
-        font-family: 'Outfit', 'Hind Siliguri', sans-serif;
-        background: linear-gradient(135deg, #f0fdf4 0%, #eff6ff 50%, #fdf4ff 100%);
-        padding: 25px;
-        border-radius: 24px;
-        border: 2px solid #bae6fd;
-        box-shadow: 0 15px 30px rgba(14, 165, 233, 0.08);
-        color: #1e293b;
-        margin-bottom: 20px;
-    }
-    .kids-banner {
-        background: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%);
-        padding: 18px;
-        border-radius: 16px;
-        color: white;
-        text-align: center;
-        margin-bottom: 20px;
-        box-shadow: 0 8px 20px rgba(56, 189, 248, 0.25);
-    }
-    .motivation-quote-box {
-        background: #ffffff;
-        padding: 14px 18px;
-        border-radius: 14px;
-        border-left: 5px solid #10b981;
-        border: 1px solid #e2e8f0;
-        margin-bottom: 20px;
-        box-shadow: 0 6px 15px rgba(16, 185, 129, 0.06);
-    }
-    .kids-book-card {
-        background: #ffffff;
-        padding: 16px;
-        border-radius: 14px;
-        border: 1px solid #e0f2fe;
-        border-top: 4px solid #0ea5e9;
-        box-shadow: 0 6px 15px rgba(14, 165, 233, 0.06);
-        margin-bottom: 12px;
-        transition: all 0.3s ease;
-    }
-    .kids-book-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 10px 20px rgba(14, 165, 233, 0.15);
-        border-color: #38bdf8;
-    }
-    .stButton button {
-        font-family: 'Outfit', 'Hind Siliguri', sans-serif !important;
-        border-radius: 10px !important;
-        font-weight: 700 !important;
-        background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%) !important;
-        color: white !important;
-        border: none !important;
-        box-shadow: 0 4px 12px rgba(14, 165, 233, 0.25) !important;
-        transition: all 0.3s ease !important;
-    }
-    .stButton button:hover {
-        background: linear-gradient(135deg, #0284c7 0%, #1d4ed8 100%) !important;
-        transform: translateY(-2px);
-    }
-    </style>
-    """, unsafe_allow_html=True)
 
 
 import streamlit as str_lib
@@ -3236,7 +3257,7 @@ import math
 from collections import Counter
 
 # --- পৃষ্ঠা কনফিগারেশন ---
-st.set_page_config(page_title="Smart Study Planner & Syllabus Tracker", layout="wide")
+st.set_page_config(page_title="Virtual Reading Room", layout="wide")
 
 def render_study_planner():
     st.markdown("""
@@ -5034,43 +5055,91 @@ def render_exams():
         st.info("এখনো কোনো পরীক্ষা বা অ্যাসাইনমেন্টের রুটিন যুক্ত করা হয়নি। উপরে ফর্ম থেকে নতুন রুটিন যোগ করো।")
 
 
-import sqlite3
+import os
 import streamlit as st
-from datetime import datetime, date
-
+from datetime import datetime
+import sqlite3
 
 def render_notifications():
+    # কাস্টম গ্লাসমরফিজম ও প্রিমিয়াম ড্যাশবোর্ড স্টাইলিং
     st.markdown("""
-        <h2 style='color: #1E3A8A; font-weight: 700; margin-bottom: 5px;'>🔔 স্মার্ট নোটিফিকেশন ও এআই মেন্টর গাইড</h2>
-        <p style='color: #475569; font-size: 15px;'>তোমার আসন্ন পরীক্ষার প্রস্তুতি, রিমাইন্ডার এবং পড়াশোনার দিকনির্দেশনা এক নজরে দেখে নাও।</p>
+    <style>
+    .vrr-hero-banner {
+        background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #0f172a 100%);
+        padding: 28px;
+        border-radius: 20px;
+        border: 2px solid #3b82f6;
+        box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+        margin-bottom: 24px;
+        color: #ffffff;
+    }
+    .vrr-card {
+        background: #1e293b;
+        padding: 22px;
+        border-radius: 16px;
+        border: 1px solid #334155;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+        margin-bottom: 16px;
+        transition: all 0.3s ease;
+    }
+    .vrr-card:hover {
+        border-color: #3b82f6;
+        transform: translateY(-2px);
+    }
+    .vrr-badge {
+        background: rgba(56, 189, 248, 0.15);
+        border: 1px solid rgba(56, 189, 248, 0.4);
+        padding: 4px 12px;
+        border-radius: 10px;
+        font-size: 12px;
+        color: #38bdf8;
+        font-weight: 600;
+    }
+    </style>
     """, unsafe_allow_html=True)
 
-    # ডেটাবেজ থেকে আসন্ন পরীক্ষাগুলোর ডেটা ফেচ করা
+    # ১. ভার্চুয়াল রিডিং রুম স্মার্ট হিরো ব্যানার
+    st.markdown("""
+    <div class="vrr-hero-banner">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+            <div>
+                <span style="background: rgba(59, 130, 246, 0.3); border: 1px solid #3b82f6; padding: 4px 12px; border-radius: 99px; font-size: 11px; font-weight: 700; color: #60a5fa;">🚀 VIRTUAL READING ROOM - INTELLIGENCE HUB</span>
+                <h2 style="color: #f8fafc; font-weight: 800; margin: 10px 0 6px 0; font-size: 24px; font-family: 'Poppins', sans-serif;">Reminders, Alerts & AI Study Feed</h2>
+                <p style="color: #cbd5e1; font-size: 13.5px; margin: 0; font-family: 'Poppins', sans-serif;">Your central command center for live exam countdowns, module progress, and AI mentor guidance.</p>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <div style="background: rgba(255,255,255,0.08); padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); text-align: center;">
+                    <div style="font-size: 16px;">📚</div>
+                    <div style="font-size: 9px; color: #94a3b8;">Library</div>
+                    <div style="font-size: 11px; color: #34d399; font-weight: 700;">Synced</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.08); padding: 10px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); text-align: center;">
+                    <div style="font-size: 16px;">⚡</div>
+                    <div style="font-size: 9px; color: #94a3b8;">AI Mentor</div>
+                    <div style="font-size: 11px; color: #38bdf8; font-weight: 700;">Active</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ডেটাবেজ থেকে পরীক্ষার ডেটা ফেচ করা
     try:
         conn = sqlite3.connect("exam_schedule.db")
         cursor = conn.cursor()
         cursor.execute("SELECT id, exam_name, exam_type, exam_date, description FROM exams ORDER BY exam_date ASC")
         exams_list = cursor.fetchall()
         conn.close()
-    except sqlite3.OperationalError:
+    except Exception:
         exams_list = []
 
-    today = date.today()
+    today = datetime.today().date()
 
-    # --- ১. শিক্ষকসুলভ এআই মেন্টর ওয়েলকাম ও রিমাইন্ডার কার্ড ---
-    st.markdown("""
-        <div style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); padding: 20px; border-radius: 12px; color: white; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-            <h3 style="margin: 0 0 8px 0; color: #ffffff;">👋 হ্যালো! আমি তোমার এআই স্টাডি গাইড ও মেন্টর</h3>
-            <p style="margin: 0; font-size: 15px; line-height: 1.6;">
-                পড়াশোনা কেমন চলছে? তোমার লক্ষ্য অর্জনে আমি সবসময় তোমার পাশে আছি। নিচে তোমার পরীক্ষার সময়সূচী এবং প্রস্তুতির বর্তমান অবস্থা বিশ্লেষণ করে গুরুত্বপূর্ণ গাইডলাইন দেওয়া হলো। নিয়মিত রিভিশন দাও এবং প্র্যাকটিস করো!
-            </p>
-        </div>
-    """, unsafe_allow_html=True)
+    # ২. লাইভ এক্সাম কাউন্টডাউন ও রিমাইন্ডার সেকশন
+    st.markdown("<h3 style='color: #f8fafc; font-size: 17px; font-family: \'Poppins\', sans-serif; font-weight: 700; margin-bottom: 14px;'>⏳ Live Exam Countdowns & Module Alerts</h3>", unsafe_allow_html=True)
 
-    st.markdown("### ⏰ পরীক্ষার লাইভ কাউন্টডাউন ও রিমাইন্ডার")
-
+    upcoming_found = False
     if exams_list:
-        upcoming_found = False
         for row in exams_list:
             e_id, e_name, e_type, e_date_str, e_desc = row
             try:
@@ -5079,83 +5148,248 @@ def render_notifications():
 
                 if delta_days >= 0:
                     upcoming_found = True
-                    # ডায়নামিক কালার ও ম্যাসেজ সেট করা
                     if delta_days == 0:
-                        urgency_color = "#991b1b" # লাল (আজকেই পরীক্ষা)
-                        time_msg = "⚠️ আজকেই তোমার পরীক্ষা! শেষ মুহূর্তের রিভিশন দ্রুত শেষ করো।"
+                        urgency_color = "#ef4444"
+                        time_msg = "🔥 Exam is TODAY! Focus on final revision."
                     elif delta_days <= 3:
-                        urgency_color = "#c2410c" # কমলা (খুব কাছে)
-                        time_msg = f"🔥 আর মাত্র **{delta_days} দিন** বাকি! প্রস্তুতি জোরদার করো।"
+                        urgency_color = "#f59e0b"
+                        time_msg = f"⚠️ Only **{delta_days} days** left! Intensify your preparation."
                     else:
-                        urgency_color = "#1e3a8a" # নীল
-                        time_msg = f"⏳ পরীক্ষার বাকি আছে **{delta_days} দিন**। পরিকল্পনা অনুযায়ী পড়াশোনা চালিয়ে যাও।"
+                        urgency_color = "#3b82f6"
+                        time_msg = f"⏳ **{delta_days} days** remaining. Maintain your daily study routine."
 
                     st.markdown(f"""
-                        <div style="background-color: #ffffff; border: 1px solid #cbd5e1; border-left: 6px solid {urgency_color}; padding: 15px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
-                            <h4 style="color: #1E3A8A; margin: 0 0 5px 0;">📌 {e_name} ({e_type})</h4>
-                            <p style="margin: 0 0 5px 0; color: #334155; font-size: 14px;">
-                                <b>তারিখ:</b> {e_date_str} | <b>সিলেবাস/নোট:</b> {e_desc if e_desc else "নির্দিষ্ট সিলেবাস নেই"}
-                            </p>
-                            <p style="margin: 5px 0 0 0; color: {urgency_color}; font-size: 14px; font-weight: 600;">
-                                {time_msg}
-                            </p>
+                    <div class="vrr-card" style="border-left: 6px solid {urgency_color};">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <h4 style="color: #f8fafc; margin: 0; font-size: 15px; font-family: 'Poppins', sans-serif; font-weight: 700;">{e_name} <span class="vrr-badge" style="font-size: 11px; padding: 2px 8px; margin-left: 6px;">{e_type}</span></h4>
+                            <span style="font-size: 12px; color: #94a3b8; background: #0f172a; padding: 4px 10px; border-radius: 8px; border: 1px solid #334155;">📅 {e_date_str}</span>
                         </div>
+                        <p style="margin: 0 0 8px 0; color: #cbd5e1; font-size: 13px;">
+                            <b>Syllabus & Notes:</b> {e_desc if e_desc else "General curriculum preparation"}
+                        </p>
+                        <div style="color: {urgency_color}; font-size: 13px; font-weight: 600;">
+                            {time_msg}
+                        </div>
+                    </div>
                     """, unsafe_allow_html=True)
-            except ValueError:
+            except Exception:
                 continue
-        
-        if not upcoming_found:
-            st.info("🎉 তোমার কোনো আসন্ন পরীক্ষা নেই। নতুন পরীক্ষার রুটিন শিডিউল অপশন থেকে যুক্ত করতে পারো।")
-    else:
-        st.info("📌 এখনো কোনো পরীক্ষার রুটিন যোগ করা হয়নি। এক্সাম শিডিউল অপশন থেকে রুটিন যুক্ত করলে এখানে লাইভ কাউন্টডাউন দেখতে পাবে।")
 
-    st.markdown("---")
+    if not upcoming_found:
+        st.markdown("""
+        <div class="vrr-card" style="text-align: center; color: #94a3b8; padding: 20px;">
+            <p style="margin: 0; font-size: 13.5px;">💡 কোনো আসন্ন পরীক্ষার শিডিউল পাওয়া যায়নি। এক্সাম শিডিউল অপশন থেকে নতুন রুটিন যুক্ত করলে এখানে রিয়েল-টাইম কাউন্টডাউন দেখতে পাবেন।</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-    # --- ২. সিলেবাস প্রোগ্রেস ও মেন্টরের পরামর্শ ---
-    st.markdown("### 📊 মেন্টর এনালিসিস ও প্রিপারেশন গাইডলাইন")
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ৩. অ্যাপস ফিচার ও কুইক অ্যাকশন নেভিগেশন গ্রিড (Interactive Shortcut Buttons)
+    st.markdown("<h3 style='color: #f8fafc; font-size: 17px; font-family: \'Poppins\', sans-serif; font-weight: 700; margin-bottom: 14px;'>⚡ Quick Access to App Modules</h3>", unsafe_allow_html=True)
     
-    col_m1, col_m2 = st.columns(2)
-    with col_m1:
+    qa1, qa2, qa3, qa4 = st.columns(4, gap="small")
+    with qa1:
+        if st.button("📖 Books & Reading", use_container_width=True):
+            st.session_state.current_page = "My Books"
+            st.rerun()
+    with qa2:
+        if st.button("📝 Notebook", use_container_width=True):
+            st.session_state.current_page = "Notes"
+            st.rerun()
+    with qa3:
+        if st.button("💡 Practice & Quiz", use_container_width=True):
+            st.session_state.current_page = "Quiz & Practice"
+            st.rerun()
+    with qa4:
+        if st.button("🎯 Study & Syllabus", use_container_width=True):
+            st.session_state.current_page = "Study Planner"
+            st.rerun()
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ৪. গ্রিড ব্লক: AI Mentor Analytics & Strategic Guidance
+    st.markdown("<h3 style='color: #f8fafc; font-size: 17px; font-family: \'Poppins\', sans-serif; font-weight: 700; margin-bottom: 14px;'>🎯 AI Mentor Analytics & Preparation Strategy</h3>", unsafe_allow_html=True)
+    
+    col_g1, col_g2 = st.columns(2, gap="medium")
+    
+    with col_g1:
         st.markdown("""
-            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px;">
-                <p style="color: #1E3A8A; font-weight: bold; margin-bottom: 8px;">📖 দৈনিক স্টাডি গোল ও টার্গেট</p>
-                <p style="color: #475569; font-size: 13.5px; line-height: 1.5; margin: 0;">
-                    • প্রতিদিন অন্তত <b>৩ থেকে ৪ ঘণ্টা</b> ফোকাসড স্টাডি করো।<br>
-                    • কঠিন বিষয়গুলো সকালের দিকে পড়ার চেষ্টা করো।<br>
-                    • প্রতি ১ ঘণ্টা পড়ার পর ১০ মিনিট বিশ্রাম নাও।
-                </p>
+        <div class="vrr-card" style="height: 100%;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                <span style="font-size: 18px;">🎯</span>
+                <h4 style="margin: 0; color: #38bdf8; font-size: 14.5px; font-weight: 700; font-family: 'Poppins', sans-serif;">Daily Study Goals & Targets</h4>
             </div>
+            <p style="color: #cbd5e1; font-size: 13px; line-height: 1.6; margin: 0;">
+                • প্রতিদিন অন্তত <b>৩ থেকে ৪ ঘণ্টা</b> গভীর মনোযোগ দিয়ে পড়াশোনা করো।<br><br>
+                • তুলনামূলক কঠিন বিষয়গুলো সকালে পড়ার অভ্যাস করো, তখন কনসেন্ট্রেশন ভালো থাকে।<br><br>
+                • প্রতি ১ ঘণ্টা পড়ার পর অন্তত ১০ মিনিট রিলাক্সেশন বা ব্রেইক নাও।
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    with col_g2:
+        st.markdown("""
+        <div class="vrr-card" style="height: 100%;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                <span style="font-size: 18px;">💡</span>
+                <h4 style="margin: 0; color: #38bdf8; font-size: 14.5px; font-weight: 700; font-family: 'Poppins', sans-serif;">Smart Practice & Guidance</h4>
+            </div>
+            <p style="color: #cbd5e1; font-size: 13px; line-height: 1.6; margin: 0;">
+                • শুধু রিডিং পড়ে নয়, গুরুত্বপূর্ণ ফর্মুলা ও সংজ্ঞা খাতায় লিখে প্র্যাকটিস করো।<br><br>
+                • নিজের প্রস্তুতি যাচাই করতে নিয়মিত মডেল টেস্ট ও কুইজ সলভ করো।<br><br>
+                • কোনো টপিক বুঝতে সমস্যা হলে এআই অ্যাসিস্ট্যান্টের ইনস্ট্যান্ট সাহায্য নাও।
+            </p>
+        </div>
         """, unsafe_allow_html=True)
 
-    with col_m2:
-        st.markdown("""
-            <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px;">
-                <p style="color: #1E3A8A; font-weight: bold; margin-bottom: 8px;">🎯 শিক্ষকসুলভ পরামর্শ ও প্র্যাকটিস</p>
-                <p style="color: #475569; font-size: 13.5px; line-height: 1.5; margin: 0;">
-                    • শুধু পড়ালেখা করলেই হবে না, যা পড়েছ তা খাতায় নোট করো বা লিখে প্র্যাকটিস করো।<br>
-                    • প্রস্তুতি যাচাই করতে নিজে নিজে মক টেস্ট বা কুইজ দাও।<br>
-                    • কোনো টপিক বুঝতে সমস্যা হলে নোট খাতা বা এআই অ্যাসিস্ট্যান্টের সাহায্য নাও।
-                </p>
-            </div>
-        """, unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- ৩. শিক্ষক ও সিস্টেমের সাম্প্রতিক নোটিশ বোর্ড ---
-    st.markdown("---")
-    st.markdown("### 📢 শিক্ষক ও সিস্টেম অ্যানাউন্সমেন্ট")
-    st.markdown("- **[৫ মিনিট আগে]** এআই মেন্টর: আসন্ন গণিত ও বিজ্ঞান পরীক্ষার জন্য রিভিশন শিট দ্রুত সম্পন্ন করো।")
-    st.markdown("- **[২ ঘণ্টা আগে]** নোটিশ: পাঠাগারে নতুন রেফারেন্স বুক ও মডেল টেস্ট পেপার যুক্ত করা হয়েছে।")
-    st.markdown("- **[১ দিন আগে]** সিস্টেম আপডেট: নোট এডিটর থেকে সরাসরি পিডিএফ ও ওয়ার্ড ফাইল ডাউনলোডের ফিচার সক্রিয় রয়েছে।")
+    # ৫. সিস্টেম ও মেন্টর অ্যানাউন্সমেন্ট ফেসটুন ব্লক
+    st.markdown("<h3 style='color: #f8fafc; font-size: 17px; font-family: \'Poppins\', sans-serif; font-weight: 700; margin-bottom: 14px;'>🔔 System & Mentor Announcements</h3>", unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div class="vrr-card">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #334155; color: #cbd5e1; font-size: 13px;">
+            <span>🤖 <b>AI Mentor:</b> আসন্ন গণিত ও বিজ্ঞান পরীক্ষার রিভিশন শিট দ্রুত সম্পন্ন করো।</span>
+            <span style="font-size: 10px; color: #64748b; background: #0f172a; padding: 2px 6px; border-radius: 4px;">5 mins ago</span>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #334155; color: #cbd5e1; font-size: 13px;">
+            <span>📚 <b>Notice:</b> পাঠাগারে নতুন রেফারেন্স বুক ও মডেল টেস্ট পেপার যুক্ত করা হয়েছে।</span>
+            <span style="font-size: 10px; color: #64748b; background: #0f172a; padding: 2px 6px; border-radius: 4px;">2 hours ago</span>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 0; color: #cbd5e1; font-size: 13px;">
+            <span>⚙️ <b>System Update:</b> নোট এডিটর থেকে সরাসরি পিডিএফ ও ওয়ার্ড ফাইল ডাউনলোডের ফিচার সক্রিয় রয়েছে।</span>
+            <span style="font-size: 10px; color: #64748b; background: #0f172a; padding: 2px 6px; border-radius: 4px;">1 day ago</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+import streamlit as st
+import base64
 
 def render_settings():
-    st.markdown("## ⚙️ Profile & Settings")
-    with st.form("settings_form"):
-        st.text_input("Student Name", value=st.session_state.student_name)
-        st.text_input("School Name", value=st.session_state.school_name)
-        st.selectbox("Class", ["Class 6", "Class 7", "Class 8", "Class 9", "Class 10"], index=1)
-        st.text_input("Roll Number", value=st.session_state.roll_number)
-        submitted = st.form_submit_button("Update Profile")
-        if submitted:
-            st.success("Profile updated successfully!")
+    # সেশন স্টেট ইনিশিয়ালাইজেশন
+    if "student_name" not in st.session_state:
+        st.session_state.student_name = "লাবিব বিন লালন"
+    if "school_name" not in st.session_state:
+        st.session_state.school_name = "শামসুল হক খান স্কুল অ্যান্ড কলেজ, ডেমরা, ঢাকা"
+    if "class_name" not in st.session_state:
+        st.session_state.class_name = "সপ্তম শ্রেণি"
+    if "roll_number" not in st.session_state:
+        st.session_state.roll_number = "১২০"
+    if "profile_img_b64" not in st.session_state:
+        st.session_state.profile_img_b64 = None
+    if "dark_mode" not in st.session_state:
+        st.session_state.dark_mode = True
+    if "exam_notifications" not in st.session_state:
+        st.session_state.exam_notifications = True
+
+    # প্রিমিয়াম ডার্ক থিম ও মডার্ন CSS স্টাইলিং
+    st.markdown("""
+    <style>
+    .settings-hero-box {
+        background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #0f172a 100%);
+        padding: 28px;
+        border-radius: 20px;
+        border: 2px solid #8b5cf6;
+        box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+        margin-bottom: 24px;
+        color: #ffffff;
+    }
+    .settings-content-card {
+        background: #1e293b;
+        padding: 24px;
+        border-radius: 16px;
+        border: 1px solid #334155;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        margin-bottom: 20px;
+        color: #f8fafc;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ১. মডার্ন হিরো ব্যানার
+    st.markdown("""
+    <div class="settings-hero-box">
+        <span style="background: rgba(139, 92, 246, 0.3); border: 1px solid #8b5cf6; padding: 4px 12px; border-radius: 99px; font-size: 11px; font-weight: 700; color: #c084fc;">⚙️ ACCOUNT & PERSONALIZATION HUB</span>
+        <h2 style="color: #f8fafc; font-weight: 800; margin: 10px 0 6px 0; font-size: 24px; font-family: 'Poppins', sans-serif;">Profile & System Settings</h2>
+        <p style="color: #cbd5e1; font-size: 13.5px; margin: 0; font-family: 'Poppins', sans-serif;">Customize your personal profile credentials, update avatar picture, and configure app preferences instantly.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ২. ট্যাব ভিত্তিক মডার্ন সেটিংস লেআউট
+    tab1, tab2, tab3 = st.tabs(["👤 Profile Credentials", "🖼️ Avatar & Picture", "🎨 App Preferences"])
+
+    # ট্যাব ১: স্টুডেন্ট তথ্য ও ক্রডেনশিয়াল আপডেট
+    with tab1:
+        st.markdown('<div class="settings-content-card">', unsafe_allow_html=True)
+        st.markdown("<h4 style='color: #f8fafc; margin-bottom: 15px; font-size: 16px;'>Personal Information</h4>", unsafe_allow_html=True)
+        
+        with st.form("profile_update_form"):
+            col_u1, col_u2 = st.columns(2)
+            with col_u1:
+                new_name = st.text_input("Student Full Name", value=st.session_state.student_name)
+                new_class = st.selectbox("Class Level", ["সপ্তম শ্রেণি", "ষষ্ঠ শ্রেণি", "অষ্টম শ্রেণি", "নবম শ্রেণি", "দশম শ্রেণি"], index=0)
+            with col_u2:
+                new_school = st.text_input("School / Institution Name", value=st.session_state.school_name)
+                new_roll = st.text_input("Roll / ID Number", value=st.session_state.roll_number)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            submitted = st.form_submit_button("💾 Save Profile Changes", use_container_width=True)
+            if submitted:
+                st.session_state.student_name = new_name
+                st.session_state.class_name = new_class
+                st.session_state.school_name = new_school
+                st.session_state.roll_number = new_roll
+                st.success("প্রোফাইল তথ্য সফলভাবে আপডেট এবং সংরক্ষিত হয়েছে!")
+                st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # ট্যাব ২: প্রোফাইল পিকচার ও এভাটার আপলোড (রিয়েল-টাইম পার্সিস্টেন্ট আপডেট)
+    with tab2:
+        st.markdown('<div class="settings-content-card">', unsafe_allow_html=True)
+        st.markdown("<h4 style='color: #f8fafc; margin-bottom: 15px; font-size: 16px;'>Profile Picture Management</h4>", unsafe_allow_html=True)
+        
+        col_p1, col_p2 = st.columns([1, 2], gap="large")
+        with col_p1:
+            st.markdown("<p style='color: #94a3b8; font-size: 12px; margin-bottom: 8px;'>Current Avatar Preview:</p>", unsafe_allow_html=True)
+            if st.session_state.profile_img_b64:
+                st.markdown(f'''
+                <div style="width: 110px; height: 110px; border-radius: 50%; overflow: hidden; border: 3px solid #38bdf8; box-shadow: 0 6px 16px rgba(0,0,0,0.4);">
+                    <img src="data:image/png;base64,{st.session_state.profile_img_b64}" style="width: 100%; height: 100%; object-fit: cover;" />
+                </div>
+                ''', unsafe_allow_html=True)
+            else:
+                st.markdown('''
+                <div style="width: 110px; height: 110px; border-radius: 50%; border: 3px solid #38bdf8; background: #2563eb; display: flex; align-items: center; justify-content: center; color: white; font-size: 36px; font-weight: bold; box-shadow: 0 6px 16px rgba(0,0,0,0.4);">
+                    ল
+                </div>
+                ''', unsafe_allow_html=True)
+        with col_p2:
+            uploaded_pic = st.file_uploader("Upload new profile photo (PNG, JPG, JPEG)", type=["png", "jpg", "jpeg"])
+            if uploaded_pic is not None:
+                bytes_data = uploaded_pic.getvalue()
+                st.session_state.profile_img_b64 = base64.b64encode(bytes_data).decode('utf-8')
+                st.success("প্রোফাইল ছবি সফলভাবে আপলোড হয়েছে এবং ড্যাশবোর্ডে স্থায়ীভাবে সেট করা হয়েছে!")
+                st.rerun()
+            st.markdown("<p style='color: #94a3b8; font-size: 12px; margin-top: 10px;'>アップলোড করার পর ছবিটি আপনার ড্যাশবোর্ডের হেডার ও প্রোফাইল কার্ডে স্বয়ংক্রিয়ভাবে প্রদর্শিত হবে।</p>", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # ট্যাব ৩: অ্যাপ প্রেফারেন্স ও থিম কন্ট্রোল
+    with tab3:
+        st.markdown('<div class="settings-content-card">', unsafe_allow_html=True)
+        st.markdown("<h4 style='color: #f8fafc; margin-bottom: 15px; font-size: 16px;'>Theme & Notification Preferences</h4>", unsafe_allow_html=True)
+        
+        dark_mode_val = st.toggle("🌙 Dark Metaverse Theme (Active)", value=st.session_state.dark_mode)
+        exam_notif_val = st.toggle("🔔 Live Exam Reminders & Alerts", value=st.session_state.exam_notifications)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("⚙️ Update System Preferences", use_container_width=True):
+            st.session_state.dark_mode = dark_mode_val
+            st.session_state.exam_notifications = exam_notif_val
+            st.success("সিস্টেম প্রেফারেন্স এবং থিম সফলভাবে কনফিগার করা হয়েছে!")
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
 if not st.session_state.authenticated:
     render_login_page()
@@ -5220,5 +5454,3 @@ else:
         render_notifications()
     elif page == "Profile / Settings":
         render_settings()
-
-
