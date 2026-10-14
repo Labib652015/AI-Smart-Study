@@ -528,28 +528,42 @@ def render_dashboard():
             st.markdown(f"""
             <div>
                 <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(56, 189, 248, 0.2); border: 1px solid rgba(56, 189, 248, 0.5); padding: 4px 12px; border-radius: 99px; font-size: 11px; color: #38bdf8; font-weight: 700; margin-bottom: 8px;">
-                    ✨ IMMERSIVE METAVERSE STUDY CHAMBER
+                    ✨ এখন বন্ধুদের সাথে আড্ডা হবে লেখা-পড়া নিয়ে!
                 </div>
-                <h2 class="banner-title-updated">Virtual Study & Research Chamber</h2>
+                <h2 class="banner-title-updated">Group Study & Research</h2>
                 <p style="color: #f1f5f9; font-family: 'Poppins', sans-serif; font-size: 13px; margin: 0; line-height: 1.6; font-weight: 400; text-shadow: 0 1px 2px rgba(0,0,0,0.5);">
-                    Quiet night, glowing table lamp, and deep focus. Welcome to your digital sanctuary, <b>{st.session_state.student_name}</b>! Dive into immersive reading and AI research.
+                Hi, <b>{st.session_state.student_name}</b>! Welcome to your Virtual Reading Room. Now, dive into immersive reading and AI research.
                 </p>
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <div style="background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); padding: 10px 16px; border-radius: 14px; text-align: center;">
+    <div style="font-size: 18px;">💻</div>
+    <div style="font-size: 10px; color: #cbd5e1; font-weight: 600; margin-top: 2px;">Coding Lab</div>
+    <a href="https://www.w3schools.com" target="_blank" style="text-decoration: none;">
+        <div style="font-size: 11px; color: #38bdf8; font-weight: 800; cursor: pointer;">Go to Link ↗</div>
+    </a>
+</div>
                     <div style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); padding: 8px 14px; border-radius: 12px; text-align: center;">
-                        <div style="font-size: 15px;">💻</div>
-                        <div style="font-size: 9px; color: #e2e8f0; font-weight: 600;">Coding Lab</div>
-                        <div style="font-size: 10px; color: #38bdf8; font-weight: 700;">Active</div>
-                    </div>
+    <div style="font-size: 15px;">🤖</div>
+    <div style="font-size: 9px; color: #e2e8f0; font-weight: 600;">Research with AI</div>
+    <a href="https://gemini.google.com" target="_blank" style="text-decoration: none;">
+        <div style="font-size: 10px; color: #f59e0b; font-weight: 700; cursor: pointer;">Go to Link ↗</div>
+    </a>
+</div>
                     <div style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); padding: 8px 14px; border-radius: 12px; text-align: center;">
-                        <div style="font-size: 15px;">🤖</div>
-                        <div style="font-size: 9px; color: #e2e8f0; font-weight: 600;">AI Research</div>
-                        <div style="font-size: 10px; color: #f59e0b; font-weight: 700;">Online</div>
-                    </div>
-                    <div style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); padding: 8px 14px; border-radius: 12px; text-align: center;">
-                        <div style="font-size: 15px;">📖</div>
-                        <div style="font-size: 9px; color: #e2e8f0; font-weight: 600;">Smart Library</div>
-                        <div style="font-size: 10px; color: #34d399; font-weight: 700;">Synced</div>
-                    </div>
+    <div style="font-size: 15px;">📖</div>
+    <div style="font-size: 9px; color: #e2e8f0; font-weight: 600;">Open Library</div>
+    <a href="https://openlibrary.org" target="_blank" style="text-decoration: none;">
+        <div style="font-size: 10px; color: #34d399; font-weight: 700; cursor: pointer;">Go to Link ↗</div>
+    </a>
+</div>
+
+<div style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); padding: 8px 14px; border-radius: 12px; text-align: center;">
+    <div style="font-size: 15px;">📖</div>
+    <div style="font-size: 9px; color: #e2e8f0; font-weight: 600;">Your School Website</div>
+    <a href="https://shksc.edu.bd" target="_blank" style="text-decoration: none;">
+        <div style="font-size: 10px; color: #34d399; font-weight: 700; cursor: pointer;">Go to Link ↗</div>
+    </a>
+</div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
